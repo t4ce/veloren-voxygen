@@ -32,3 +32,6 @@ hashbrown = { version = "0.17", default-features = false, features = ["rayon", "
 test = false
 doctest = false
 bench = false
+
+[target.'cfg(target_os = "trueos")'.dependencies]
+trueos = { path = "../../../TRUEOS-Blueprints/api" }

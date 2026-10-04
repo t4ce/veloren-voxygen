@@ -12,12 +12,13 @@ replicatable = false
 CARGO_WORKSPACE_DIR = ".."
 
 [features]
-trueos-blueprint = ["voxygen/headless"]
+trueos-blueprint = ["voxygen/headless", "noaudio"]
+noaudio = ["voxygen/noaudio"]
 default = ["trueos-blueprint"]
 
 [dependencies]
 voxygen = { package = "veloren-voxygen", path = "..", default-features = false }
-trueos = { path = "../../TRUEOS-Blueprints/api", features = ["tokio-net-probe"] }
+trueos = { path = "../../TRUEOS-Blueprints/api", features = ["tokio-net-probe", "ui4-scene"] }
 
 [[bin]]
 name = "voxygen-headless"

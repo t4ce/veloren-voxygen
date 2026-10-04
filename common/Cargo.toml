@@ -57,7 +57,6 @@ uuid = { version = "1.4.1", default-features = false, features = [
 ] }
 rand = { version = "0.10", features = ["alloc"] }
 fxhash = "0.2.1"
-thread-priority = "3.0.0"
 
 # Assets
 common-assets = { package = "veloren-common-assets", path = "assets" }
@@ -100,3 +99,9 @@ regex = "1"
 test = false
 doctest = false
 bench = false
+
+[target.'cfg(not(target_os = "trueos"))'.dependencies]
+thread-priority = "3.0.0"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("trueos"))'] }

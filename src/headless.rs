@@ -7,15 +7,21 @@ use common::{
     comp::{ControllerInputs, InputKind},
     util::Dir,
 };
+#[cfg(not(target_os = "trueos"))]
+use std::num::NonZeroU32;
 use std::{
     collections::{BTreeSet, HashSet},
-    num::NonZeroU32,
     sync::{Arc, mpsc},
     time::{Duration, Instant},
 };
 use tokio::runtime::Runtime;
 use tracing::{info, warn};
 use vek::{Vec2, Vec3};
+#[cfg(target_os = "trueos")]
+mod ui4;
+#[cfg(target_os = "trueos")]
+use ui4::KeyCode;
+#[cfg(not(target_os = "trueos"))]
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, ElementState, Ime, MouseButton, WindowEvent},
@@ -29,7 +35,14 @@ const FRAME: Duration = Duration::from_nanos(16_666_667);
 #[derive(Parser)]
 #[command(about = "Non-rendering Voxygen: type your password in the blank window and press Enter")]
 struct Args {
-    #[arg(long, default_value = "localhost:14004")]
+    #[cfg_attr(
+        target_os = "trueos",
+        arg(long, default_value = "192.168.179.111:14004")
+    )]
+    #[cfg_attr(
+        not(target_os = "trueos"),
+        arg(long, default_value = "localhost:14004")
+    )]
     server: String,
     #[arg(long, default_value = "t4ce")]
     username: String,
@@ -44,7 +57,10 @@ struct Args {
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(not(target_os = "trueos"))]
     let args = Args::parse();
+    #[cfg(target_os = "trueos")]
+    let args = Args::parse_from(["voxygen-headless"]);
     let _logs = common_frontend::init_stdout(None);
     let runtime = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
@@ -52,25 +68,37 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             .enable_all()
             .build()?,
     );
-    let event_loop = EventLoop::new()?;
-    let mut app = App::new(args, runtime);
-    event_loop.run_app(&mut app)?;
-    Ok(())
+    let app = App::new(args, runtime);
+    #[cfg(not(target_os = "trueos"))]
+    {
+        let event_loop = EventLoop::new()?;
+        let mut app = app;
+        event_loop.run_app(&mut app)?;
+        Ok(())
+    }
+    #[cfg(target_os = "trueos")]
+    ui4::run(app)
 }
 
 struct App {
     args: Args,
     runtime: Arc<Runtime>,
+    #[cfg(not(target_os = "trueos"))]
     surface: Option<softbuffer::Surface<Arc<Window>, Arc<Window>>>,
+    #[cfg(not(target_os = "trueos"))]
     window: Option<Arc<Window>>,
+    #[cfg(target_os = "trueos")]
+    window: Option<trueos::ui4_scene::Frame>,
     password: String,
     pending: Option<mpsc::Receiver<Result<Client, String>>>,
     client: Option<Client>,
     input: Input,
     captured: bool,
     character_requested: bool,
+    #[cfg(not(target_os = "trueos"))]
     next_tick: Instant,
     last_tick: Instant,
+    #[cfg(not(target_os = "trueos"))]
     ime_active: bool,
 }
 
@@ -121,6 +149,7 @@ impl App {
         Self {
             args,
             runtime,
+            #[cfg(not(target_os = "trueos"))]
             surface: None,
             window: None,
             password: String::new(),
@@ -129,13 +158,24 @@ impl App {
             input: Input::default(),
             captured: false,
             character_requested: false,
+            #[cfg(not(target_os = "trueos"))]
             next_tick: Instant::now(),
             last_tick: Instant::now(),
+            #[cfg(not(target_os = "trueos"))]
             ime_active: false,
         }
     }
 
     fn prompt(&self, message: &str) {
+        #[cfg(target_os = "trueos")]
+        trueos::logl::log(
+            trueos::logl::level::INFO,
+            format_args!(
+                "Voxygen {} @ {}: {}",
+                self.args.username, self.args.server, message
+            ),
+        );
+        #[cfg(not(target_os = "trueos"))]
         if let Some(window) = &self.window {
             window.set_title(&format!(
                 "Voxygen headless — {} @ {} — {message}",
@@ -145,6 +185,14 @@ impl App {
     }
 
     fn capture(&mut self, capture: bool) {
+        #[cfg(target_os = "trueos")]
+        {
+            self.captured = self
+                .window
+                .as_mut()
+                .is_some_and(|frame| frame.set_center_snapped_mouse(capture).is_ok() && capture);
+        }
+        #[cfg(not(target_os = "trueos"))]
         if let Some(window) = &self.window {
             self.captured = if capture {
                 window
@@ -369,6 +417,7 @@ impl App {
     }
 }
 
+#[cfg(not(target_os = "trueos"))]
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {

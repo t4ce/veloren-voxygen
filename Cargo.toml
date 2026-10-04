@@ -10,7 +10,11 @@ autobenches = false
 autotests = false
 
 [features]
+default = ["audio"]
+audio = ["dep:kira", "dep:cpal"]
 headless = ["dep:softbuffer"]
+# Cargo features are additive: select this with default features disabled.
+noaudio = ["headless"]
 
 [dependencies]
 authc = { git = "https://gitlab.com/veloren/auth.git", rev = "ae0e16783a9f9041951296885f082308e155db79" }
@@ -19,7 +23,6 @@ rustls = { version = "0.23", default-features = false, features = ["std"] }
 quinn = { version = "0.11", features = ["rustls"] }
 byteorder = "1.3.2"
 network = { package = "veloren-network", path = "network", features = ["compression", "quic"], default-features = false }
-mumble-link = "0.2.0"
 common = { package = "veloren-common", path = "common", features = ["no-assets"] }
 common-base = { package = "veloren-common-base", path = "common/base" }
 common-ecs = { package = "veloren-common-ecs", path = "common/ecs" }
@@ -28,37 +31,14 @@ common-i18n = { package = "veloren-common-i18n", path = "common/i18n" }
 common-net = { package = "veloren-common-net", path = "common/net" }
 common-state = { package = "veloren-common-state", path = "common/state" }
 common-systems = { package = "veloren-common-systems", path = "common/systems" }
-anim = { package = "veloren-voxygen-anim", path = "anim" }
-i18n = { package = "veloren-client-i18n", path = "common/client-i18n" }
-i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
-winit = { version = "0.30.12", features = ["serde"] }
-softbuffer = { version = "0.4.8", optional = true }
-wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", features = ["spirv"] }
-wgpu-profiler = "0.28"
-bytemuck = { version = "1.7", features = ["derive"] }
-conrod_core = { path = "vendor/conrod/conrod_core" }
-euc = { path = "vendor/euc" }
-iced = { package = "iced_native", git = "https://github.com/Imberflur/iced", tag = "veloren-winit-0.28" }
-glyph_brush = "0.7.0"
 specs = { version = "0.20", features = ["nightly", "serde", "storage-event-control", "derive"] }
 vek = { version = "0.17.0", features = ["serde", "mint"] }
-gilrs = { version = "0.11.0", features = ["serde-serialize"] }
 clap = { version = "4.2", features = ["derive", "env"] }
 chrono = { version = "0.4.24", default-features = false, features = ["clock", "std", "serde"] }
-chumsky = { version = "0.13", default-features = false, features = ["std"] }
 crossbeam-utils = "0.8.7"
 crossbeam-channel = "0.5.15"
 directories-next = "2.0"
-dot_vox = "5.1"
-guillotiere = "0.7.0"
 hashbrown = { version = "0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
-image = { version = "0.25", default-features = false, features = ["png", "ico"] }
-kira = { version = "0.12", default-features = false, features = [
-    "cpal",
-    "symphonia",
-    "ogg",
-    "vorbis",
-] }
 lazy_static = "1.4.0"
 num-traits = { version = "0.2" }
 num-integer = "0.1"
@@ -73,15 +53,44 @@ serde_with = { version = "3", features = ["hashbrown_0_17"] }
 slab = "0.4.2"
 strum = { version = "0.28", features = ["derive"] }
 tracing = { version = "0.1" }
-treeculler = "0.4"
 tokio = { version = "=1.52.3", default-features = false, features = ["rt", "rt-multi-thread"] }
-inline_tweak = "1.0.8"
 itertools = "0.14"
 sha2 = "0.11"
 bitflags = { version = "2.2.1", features = ["serde"] }
+image = { version = "0.25", default-features = false, features = ["png", "ico"] }
+
+[target.'cfg(target_os = "trueos")'.dependencies]
+trueos = { path = "../TRUEOS-Blueprints/api", features = ["ui4-scene", "tokio-net-probe"] }
+
+[target.'cfg(not(target_os = "trueos"))'.dependencies]
+mumble-link = "0.2.0"
+anim = { package = "veloren-voxygen-anim", path = "anim" }
+i18n = { package = "veloren-client-i18n", path = "common/client-i18n" }
+i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
+winit = { version = "0.30.12", features = ["serde"] }
+softbuffer = { version = "0.4.8", optional = true }
+wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", features = ["spirv"] }
+wgpu-profiler = "0.28"
+bytemuck = { version = "1.7", features = ["derive"] }
+conrod_core = { path = "vendor/conrod/conrod_core" }
+euc = { path = "vendor/euc" }
+iced = { package = "iced_native", git = "https://github.com/Imberflur/iced", tag = "veloren-winit-0.28" }
+glyph_brush = "0.7.0"
+gilrs = { version = "0.11.0", features = ["serde-serialize"] }
+chumsky = { version = "0.13", default-features = false, features = ["std"] }
+dot_vox = "5.1"
+guillotiere = "0.7.0"
+kira = { version = "0.12", optional = true, default-features = false, features = [
+    "cpal",
+    "symphonia",
+    "ogg",
+    "vorbis",
+] }
+treeculler = "0.4"
+inline_tweak = "1.0.8"
 open = "5.3.2"
 enum-map = "2.4"
-cpal = "0.18"
+cpal = { version = "0.18", optional = true }
 
 [[bin]]
 test = false
@@ -98,8 +107,8 @@ strip = "symbols"
 opt-level = 2
 
 [patch.crates-io]
-rusttype = { path = "vendor/rusttype-0.8.3" }
 wgpu = { path = "../wgpu/wgpu" }
+rusttype = { path = "vendor/rusttype-0.8.3" }
 tynm = { path = "vendor/tynm-0.1.10" }
 wavefront = { path = "vendor/wavefront-0.2.3" }
 lz-fear = { path = "vendor/lz-fear-0.2.0" }
@@ -116,3 +125,6 @@ indexmap = { path = "vendor/indexmap" }
 test = false
 doctest = false
 bench = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("trueos"))'] }
