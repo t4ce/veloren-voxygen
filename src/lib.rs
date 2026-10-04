@@ -14,28 +14,49 @@ extern crate alloc;
 /// Fixed processor budget for this client.
 pub const CPU_COUNT: usize = 4;
 #[macro_use]
+#[cfg(not(feature = "headless"))]
 pub mod ui;
+#[cfg(not(feature = "headless"))]
 pub mod audio;
+#[cfg(not(feature = "headless"))]
 pub mod cli;
 pub mod client;
+#[cfg(not(feature = "headless"))]
 pub mod cmd;
+#[cfg(not(feature = "headless"))]
 mod credits;
+#[cfg(not(feature = "headless"))]
 mod ecs;
+#[cfg(not(feature = "headless"))]
 pub mod error;
+#[cfg(not(feature = "headless"))]
 pub mod game_input;
+#[cfg(not(feature = "headless"))]
 pub mod hud;
+#[cfg(not(feature = "headless"))]
 pub mod key_state;
+#[cfg(not(feature = "headless"))]
 pub mod menu;
+#[cfg(not(feature = "headless"))]
 pub mod mesh;
+#[cfg(not(feature = "headless"))]
 pub mod panic_handler;
+#[cfg(not(feature = "headless"))]
 pub mod profile;
+#[cfg(not(feature = "headless"))]
 pub mod render;
+#[cfg(not(feature = "headless"))]
 pub mod run;
+#[cfg(not(feature = "headless"))]
 pub mod scene;
+#[cfg(not(feature = "headless"))]
 pub mod session;
+#[cfg(not(feature = "headless"))]
 pub mod settings;
+#[cfg(not(feature = "headless"))]
 pub mod window;
 
+#[cfg(not(feature = "headless"))]
 use crate::{
     audio::AudioFrontend,
     profile::Profile,
@@ -43,15 +64,22 @@ use crate::{
     settings::Settings,
     window::{Event, Window},
 };
+#[cfg(not(feature = "headless"))]
 use common::clock::Clock;
+#[cfg(not(feature = "headless"))]
 use common_base::span;
+#[cfg(not(feature = "headless"))]
 use i18n::LocalizationHandle;
+#[cfg(not(feature = "headless"))]
 use std::path::PathBuf;
 
+#[cfg(not(feature = "headless"))]
 use alloc::sync::Arc;
+#[cfg(not(feature = "headless"))]
 use tokio::runtime::Runtime;
 
 /// A type used to store state that is shared between all play states.
+#[cfg(not(feature = "headless"))]
 pub struct GlobalState {
     pub userdata_dir: PathBuf,
     pub config_dir: PathBuf,
@@ -74,6 +102,7 @@ pub struct GlobalState {
     pub args: crate::cli::Args,
 }
 
+#[cfg(not(feature = "headless"))]
 impl GlobalState {
     /// Called after a change in play state has occurred (usually used to
     /// reverse any temporary effects a state may have made).
@@ -91,6 +120,7 @@ impl GlobalState {
 }
 
 // TODO: appears to be currently unused by playstates
+#[cfg(not(feature = "headless"))]
 pub enum Direction {
     Forwards,
     Backwards,
@@ -98,6 +128,7 @@ pub enum Direction {
 
 /// States can either close (and revert to a previous state), push a new state
 /// on top of themselves, or switch to a totally different state.
+#[cfg(not(feature = "headless"))]
 pub enum PlayStateResult {
     /// Keep running this play state.
     Continue,
@@ -113,6 +144,7 @@ pub enum PlayStateResult {
 
 /// A trait representing a playable game state. This may be a menu, a game
 /// session, the title screen, etc.
+#[cfg(not(feature = "headless"))]
 pub trait PlayState {
     /// Called when entering this play state from another
     fn enter(&mut self, global_state: &mut GlobalState, direction: Direction);
@@ -133,4 +165,8 @@ pub trait PlayState {
 }
 
 #[allow(dead_code)]
+#[cfg(not(feature = "headless"))]
 mod debug_overlay;
+
+#[cfg(feature = "headless")]
+pub mod headless;

@@ -9,6 +9,9 @@ autoexamples = false
 autobenches = false
 autotests = false
 
+[features]
+headless = ["dep:softbuffer"]
+
 [dependencies]
 authc = { git = "https://gitlab.com/veloren/auth.git", rev = "ae0e16783a9f9041951296885f082308e155db79" }
 hickory-resolver = { version = "0.26.1", features = ["system-config", "tokio"] }
@@ -29,6 +32,7 @@ anim = { package = "veloren-voxygen-anim", path = "anim" }
 i18n = { package = "veloren-client-i18n", path = "common/client-i18n" }
 i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
 winit = { version = "0.30.12", features = ["serde"] }
+softbuffer = { version = "0.4.8", optional = true }
 wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", features = ["spirv"] }
 wgpu-profiler = "0.28"
 bytemuck = { version = "1.7", features = ["derive"] }

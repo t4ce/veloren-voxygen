@@ -4,11 +4,14 @@
 extern crate alloc;
 #[cfg(target_os = "windows")]
 #[global_allocator]
+#[cfg(not(feature = "headless"))]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 // Allow profiling allocations with Tracy
 
+#[cfg(not(feature = "headless"))]
 use i18n::{self, LocalizationHandle};
+#[cfg(not(feature = "headless"))]
 use veloren_voxygen::{
     GlobalState,
     audio::AudioFrontend,
@@ -20,14 +23,21 @@ use veloren_voxygen::{
     window::Window,
 };
 
+#[cfg(not(feature = "headless"))]
 use chrono::Utc;
+#[cfg(not(feature = "headless"))]
 use common::clock::Clock;
+#[cfg(not(feature = "headless"))]
 use std::panic;
+#[cfg(not(feature = "headless"))]
 use std::path::PathBuf;
+#[cfg(not(feature = "headless"))]
 use tracing::{info, warn};
 
+#[cfg(not(feature = "headless"))]
 use wgpu::{Backends, Instance};
 
+#[cfg(not(feature = "headless"))]
 fn main() {
     // Process CLI arguments
     use clap::Parser;
@@ -218,4 +228,12 @@ fn main() {
     };
 
     run::run(global_state, event_loop).unwrap();
+}
+
+#[cfg(feature = "headless")]
+fn main() {
+    if let Err(error) = veloren_voxygen::headless::run() {
+        eprintln!("Headless client: {error}");
+        std::process::exit(1);
+    }
 }

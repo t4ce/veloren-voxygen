@@ -3525,7 +3525,7 @@ impl Drop for Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use client_i18n::LocalizationHandle;
+    use i18n::LocalizationHandle;
 
     #[test]
     /// THIS TEST VERIFIES THE CONSTANT API.
@@ -3536,7 +3536,7 @@ mod tests {
     /// CONTACT @Core Developer BEFORE MERGING CHANGES TO THIS TEST
     fn constant_api_test() {
         use common::clock::Clock;
-        use voxygen_i18n_helpers::localize_chat_message;
+        use i18n_helpers::localize_chat_message;
 
         const SPT: f64 = 1.0 / 60.0;
 
