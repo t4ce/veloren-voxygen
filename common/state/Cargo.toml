@@ -8,9 +8,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[lints]
-workspace = true
-
 [features]
 simd = ["vek/platform_intrinsics"]
 plugins = ["common-assets/plugins", "toml", "wasmtime", "wasmtime-wasi", "tar", "bincode", "serde", "dep:sha2", "dep:hex", "dep:atomic_refcell"]

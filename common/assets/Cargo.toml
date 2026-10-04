@@ -9,9 +9,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[lints]
-workspace = true
-
 [dependencies]
 lazy_static = { workspace = true }
 assets_manager = { version = "0.13", features = [

@@ -9,9 +9,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[lints]
-workspace = true
-
 [dependencies]
 common-net = {package = "veloren-common-net", path = "../../common/net"}
 common = {package = "veloren-common", path = "../../common"}
