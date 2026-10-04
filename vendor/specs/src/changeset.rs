@@ -1,6 +1,6 @@
 //! Provides a changeset that can be collected from an iterator.
-
-use std::{iter::FromIterator, ops::AddAssign};
+ use core::iter::FromIterator;
+ use core::ops::AddAssign;
 
 use crate::{
     join::RepeatableLendGet,

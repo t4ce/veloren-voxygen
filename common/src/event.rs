@@ -25,7 +25,9 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use specs::Entity as EcsEntity;
-use std::{collections::VecDeque, sync::Mutex, time::Duration};
+use alloc::collections::VecDeque;
+use std::sync::Mutex;
+use core::time::Duration;
 use uuid::Uuid;
 use vek::*;
 

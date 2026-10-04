@@ -23,7 +23,8 @@ use common_i18n::Content;
 use rand::{RngExt, seq::IteratorRandom};
 use serde::{Deserialize, Serialize};
 use specs::Component;
-use std::{collections::VecDeque, sync::Arc};
+use alloc::collections::VecDeque;
+use alloc::sync::Arc;
 use strum::{EnumIter, IntoEnumIterator};
 use vek::*;
 

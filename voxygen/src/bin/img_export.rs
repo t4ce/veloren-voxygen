@@ -1,5 +1,6 @@
 extern crate alloc;
-use std::{fs, path::Path};
+use std::fs;
+use std::path::Path;
 use alloc::sync::Arc;
 
 use anim::{

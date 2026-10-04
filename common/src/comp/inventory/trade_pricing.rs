@@ -18,7 +18,8 @@ use crate::{
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
 use serde::Deserialize;
-use std::{borrow::Cow, cmp::Ordering};
+use alloc::borrow::Cow;
+use core::cmp::Ordering;
 use tracing::{error, info, warn};
 
 use super::item::{Material, ToolKind};

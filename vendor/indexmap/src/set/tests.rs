@@ -1,5 +1,5 @@
 use super::*;
-use std::string::String;
+use alloc::string::String;
 
 #[test]
 fn it_works() {

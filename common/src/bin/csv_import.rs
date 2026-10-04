@@ -6,7 +6,10 @@ use clap::Parser;
 use hashbrown::HashMap;
 use ron::ser::{PrettyConfig, to_string_pretty};
 use serde::Serialize;
-use std::{borrow::Cow, error::Error, fs::File, io::Write};
+use alloc::borrow::Cow;
+use std::error::Error;
+use std::fs::File;
+use std::io::Write;
 
 use veloren_common::{
     assets::ASSETS_PATH,

@@ -1,4 +1,5 @@
-use std::{io, path::Path};
+use std::io;
+use std::path::Path;
 
 #[cfg(target_os = "trueos")]
 #[path = "trueos_fs.rs"]
@@ -195,7 +196,8 @@ pub(super) fn list_children(path: &Path) -> io::Result<Vec<(std::path::PathBuf, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{fs, path::Path};
+    use std::fs;
+    use std::path::Path;
 
     pub(super) enum FsNode<'a> {
         File(&'a str, &'a str),

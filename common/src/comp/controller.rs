@@ -16,7 +16,8 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use specs::Component;
-use std::{collections::BTreeMap, num::NonZeroU32};
+use alloc::collections::BTreeMap;
+use core::num::NonZeroU32;
 use vek::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

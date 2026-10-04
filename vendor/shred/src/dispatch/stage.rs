@@ -33,7 +33,7 @@
 //! running times of the groups of this stage get closer to each other (called
 //! balanced in code).
 
-use std::fmt;
+use core::fmt;
 
 use ahash::AHashMap as HashMap;
 use arrayvec::ArrayVec;

@@ -5080,7 +5080,7 @@ mod test_map {
     use rand::{Rng, SeedableRng, rngs::SmallRng};
     use alloc::borrow::ToOwned;
     use core::cell::RefCell;
-    use std::vec::Vec;
+    use alloc::vec::Vec;
     use stdalloc::string::String;
     use stdalloc::sync::Arc;
 
@@ -5337,7 +5337,7 @@ mod test_map {
 
     #[test]
     fn test_empty_entry_ref() {
-        let mut m: HashMap<std::string::String, bool> = HashMap::new();
+        let mut m: HashMap<alloc::string::String, bool> = HashMap::new();
         match m.entry_ref("poneyland") {
             EntryRef::Occupied(_) => panic!(),
             EntryRef::Vacant(_) => {}
@@ -5982,7 +5982,7 @@ mod test_map {
     fn test_entry_ref_take_doesnt_corrupt() {
         #![expect(deprecated)] //rand
         // Test for #19292
-        fn check(m: &HashMap<std::string::String, ()>) {
+        fn check(m: &HashMap<alloc::string::String, ()>) {
             for k in m.keys() {
                 assert!(m.contains_key(k), "{k} is in keys() but not in the map?");
             }
@@ -5997,13 +5997,13 @@ mod test_map {
 
         // Populate the map with some items.
         for _ in 0..50 {
-            let mut x = std::string::String::with_capacity(1);
+            let mut x = alloc::string::String::with_capacity(1);
             x.push(rng.gen_range('a'..='z'));
             m.insert(x, ());
         }
 
         for _ in 0..1000 {
-            let mut x = std::string::String::with_capacity(1);
+            let mut x = alloc::string::String::with_capacity(1);
             x.push(rng.gen_range('a'..='z'));
             match m.entry_ref(x.as_str()) {
                 EntryRef::Vacant(_) => {}
@@ -6144,7 +6144,7 @@ mod test_map {
 
     #[test]
     fn test_vacant_entry_ref_key() {
-        let mut a: HashMap<std::string::String, &str> = HashMap::new();
+        let mut a: HashMap<alloc::string::String, &str> = HashMap::new();
         let key = "hello there";
         let value = "value goes here";
 
@@ -6360,7 +6360,7 @@ mod test_map {
             }
         }
 
-        const EMPTY_MAP: HashMap<u32, std::string::String, MyHasher> =
+        const EMPTY_MAP: HashMap<u32, alloc::string::String, MyHasher> =
             HashMap::with_hasher(MyHasher);
 
         let mut map = EMPTY_MAP;

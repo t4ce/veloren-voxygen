@@ -2546,7 +2546,7 @@ mod test_set {
     use super::{Equivalent, HashSet};
     use crate::DefaultHashBuilder;
     use crate::map::make_hash;
-    use std::vec::Vec;
+    use alloc::vec::Vec;
 
     #[test]
     fn test_zero_capacities() {

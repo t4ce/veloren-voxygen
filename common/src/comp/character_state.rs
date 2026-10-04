@@ -17,7 +17,8 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage};
-use std::{collections::BTreeMap, time::Duration};
+use alloc::collections::BTreeMap;
+use core::time::Duration;
 use strum::Display;
 
 /// Data returned from character behavior fn's to Character Behavior System.

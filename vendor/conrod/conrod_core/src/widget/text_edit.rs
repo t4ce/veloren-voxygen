@@ -435,7 +435,7 @@ impl<'a> Widget for TextEdit<'a> {
                            infos: &[text::line::Info],
                            font: &text::Font,
                            display_text: Option<&str>|
-         -> Option<(String, Cursor, std::vec::Vec<text::line::Info>)> {
+         -> Option<(String, Cursor, alloc::vec::Vec<text::line::Info>)> {
             let string_char_count = string.chars().count();
 
             // Construct the new text with the new string inserted at the cursor.

@@ -1,5 +1,6 @@
 use crate::system::CpuTimeline;
-use std::{collections::HashMap, sync::Mutex};
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 #[derive(Default)]
 pub struct SysMetrics {

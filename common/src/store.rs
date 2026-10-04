@@ -1,10 +1,14 @@
 use tokio_parallel::prelude::*;
-use std::{
-    cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
-    fmt, hash,
-    marker::PhantomData,
-    ops::{Index, IndexMut},
-};
+use core::cmp::Eq;
+use core::cmp::Ord;
+use core::cmp::Ordering;
+use core::cmp::PartialEq;
+use core::cmp::PartialOrd;
+use core::fmt;
+use core::marker::PhantomData;
+use core::ops::Index;
+use core::ops::IndexMut;
+use std::hash;
 
 // NOTE: We use u64 to make sure we are consistent across all machines.  We
 // assume that usize fits into 8 bytes.

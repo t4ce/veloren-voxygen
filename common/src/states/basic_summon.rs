@@ -25,11 +25,9 @@ use crate::{
 use common_i18n::Content;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
-use std::{
-    f32::consts::{PI, TAU},
-    ops::Sub,
-    time::Duration,
-};
+use std::f32::consts::{PI, TAU};
+use core::ops::Sub;
+use core::time::Duration;
 use vek::*;
 
 /// Separated out to condense update portions of character state

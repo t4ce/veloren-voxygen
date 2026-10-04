@@ -8,7 +8,7 @@
 
 use crate::error::Error;
 use crate::result::Result;
-use std::fmt;
+use core::fmt;
 
 /// The Argon2 version.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]

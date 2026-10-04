@@ -2577,7 +2577,7 @@ fn assert_covariance() {
 mod test_set {
     use super::{make_hash, Equivalent, HashSet};
     use crate::DefaultHashBuilder;
-    use std::vec::Vec;
+    use alloc::vec::Vec;
 
     #[test]
     fn test_zero_capacities() {

@@ -102,7 +102,8 @@ use crate::{chunk, encoder, DecodingError, EncodingError};
 use fdeflate::BoundedDecompressionError;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
-use std::{convert::TryFrom, io::Write};
+use core::convert::TryFrom;
+use std::io::Write;
 
 /// Default decompression limit for compressed text chunks.
 pub const DECOMPRESSION_LIMIT: usize = 2097152; // 2 MiB

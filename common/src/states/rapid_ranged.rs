@@ -16,7 +16,8 @@ use crate::{
 };
 use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
-use std::{f32::consts::TAU, time::Duration};
+use std::f32::consts::TAU;
+use core::time::Duration;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 /// Separated out to condense update portions of character state

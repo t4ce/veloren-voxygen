@@ -3,7 +3,8 @@ use petgraph::{
     Graph,
     dot::{Config, Dot},
 };
-use std::{fs::File, io::Write};
+use std::fs::File;
+use std::io::Write;
 use veloren_common::{
     comp::item::ItemDesc,
     recipe::{RecipeBookManifest, RecipeInput},

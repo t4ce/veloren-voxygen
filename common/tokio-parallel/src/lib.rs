@@ -7,8 +7,8 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
-extern crate alloc;
 
+extern crate alloc;
 #[macro_use]
 mod delegate;
 

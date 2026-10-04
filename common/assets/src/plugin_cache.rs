@@ -1,4 +1,5 @@
-use std::{path::PathBuf, sync::RwLock};
+use std::path::PathBuf;
+use std::sync::RwLock;
 
 use super::{ASSETS_PATH, Concatenate, fs::FileSystem};
 use assets_manager::{

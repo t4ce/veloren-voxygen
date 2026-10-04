@@ -1,10 +1,9 @@
 use hashbrown::HashMap;
 use tokio_parallel::ThreadPool;
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use alloc::collections::VecDeque;
+use alloc::sync::Arc;
+use std::sync::Mutex;
+use std::time::Instant;
 use tracing::{error, warn};
 
 /// Provides a Wrapper around rayon threadpool to execute slow-jobs.
@@ -405,13 +404,11 @@ impl SlowJobPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        sync::{
+    use std::sync::{
             Barrier,
             atomic::{AtomicBool, AtomicU64, Ordering},
-        },
-        time::Duration,
-    };
+        };
+    use core::time::Duration;
 
     fn mock_pool(
         pool_threads: usize,

@@ -1,4 +1,5 @@
-use std::{panic, panic::PanicHookInfo, path::PathBuf};
+use std::{panic, panic::PanicHookInfo};
+use std::path::PathBuf;
 use tracing::error;
 
 pub fn set_panic_hook(log_filename: String, logs_dir: PathBuf) {

@@ -7,14 +7,17 @@
 //! run.
 #[allow(missing_debug_implementations)]
 mod implementation {
-    use std::{
-        any::Any,
-        cell::RefCell,
-        collections::VecDeque,
-        marker::PhantomData,
-        panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
-        sync::{Arc, Condvar, Mutex, OnceLock},
-    };
+    use core::any::Any;
+    use core::cell::RefCell;
+    use core::marker::PhantomData;
+    use alloc::collections::VecDeque;
+    use alloc::sync::Arc;
+    use std::panic::AssertUnwindSafe;
+    use std::panic::catch_unwind;
+    use std::panic::resume_unwind;
+    use std::sync::Condvar;
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
     use tokio::runtime::{Builder, Runtime};
 
     type Panic = Box<dyn Any + Send + 'static>;

@@ -1,4 +1,5 @@
-use std::{collections::hash_map::Entry, fmt};
+use std::collections::hash_map::Entry;
+use core::fmt;
 
 use ahash::AHashMap as HashMap;
 

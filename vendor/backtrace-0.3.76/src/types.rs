@@ -3,10 +3,10 @@
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {
         use alloc::borrow::Cow;
-        use std::fmt;
+        use core::fmt;
         use std::path::PathBuf;
         use std::prelude::v1::*;
-        use std::str;
+        use core::str;
     }
 }
 

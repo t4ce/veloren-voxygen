@@ -51,8 +51,8 @@
 //!
 //! [`core::any::type_name`]: https://doc.rust-lang.org/std/any/fn.type_name.html
 
-extern crate alloc;
 
+extern crate alloc;
 use alloc::string::String;
 
 pub use crate::{

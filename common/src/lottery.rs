@@ -25,8 +25,8 @@
 // Example drop chance calculation
 // Cheese drop rate = 3/X = 29.6%
 // Coconut drop rate = 1/X = 9.85%
-
-use std::{borrow::Cow, hash::Hash};
+ use alloc::borrow::Cow;
+ use std::hash::Hash;
 
 use crate::{
     assets::{AssetExt, BoxedError, FileAsset, load_ron},

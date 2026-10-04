@@ -1,11 +1,10 @@
 use super::packet::{CompPacket, CompUpdateKind};
 use common::uid::Uid;
 use specs::{BitSet, Component, Entity, Join, ReadStorage, World, WorldExt};
-use std::{
-    convert::{TryFrom, TryInto},
-    marker::PhantomData,
-    num::NonZeroU64,
-};
+use core::convert::TryFrom;
+use core::convert::TryInto;
+use core::marker::PhantomData;
+use core::num::NonZeroU64;
 
 pub struct UpdateTracker<C: Component> {
     reader_id: specs::ReaderId<specs::storage::ComponentEvent>,

@@ -1,4 +1,3 @@
-extern crate alloc;
 use alloc::borrow::Cow;
 
 use common::{

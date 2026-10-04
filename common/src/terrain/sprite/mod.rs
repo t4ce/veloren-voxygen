@@ -54,11 +54,10 @@ use hashbrown::HashMap;
 use lazy_static::lazy_static;
 use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
-use std::{
-    borrow::Cow,
-    convert::{Infallible, TryFrom},
-    fmt,
-};
+use alloc::borrow::Cow;
+use core::convert::Infallible;
+use core::convert::TryFrom;
+use core::fmt;
 use strum::EnumIter;
 use vek::*;
 

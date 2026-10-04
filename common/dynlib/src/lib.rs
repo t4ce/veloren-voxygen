@@ -1,18 +1,18 @@
+extern crate alloc;
 use libloading::Library;
 use notify::{EventKind, RecursiveMode, Watcher, recommended_watcher};
-use std::{
-    process::{Command, Stdio},
-    sync::{Mutex, mpsc},
-    time::Duration,
-};
+use std::process::Command;
+use std::process::Stdio;
+use std::sync::Mutex;
+use std::sync::mpsc;
+use core::time::Duration;
 
 use find_folder::Search;
-use std::{
-    env,
-    env::consts::{DLL_PREFIX, DLL_SUFFIX},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::env;
+use std::env::consts::{DLL_PREFIX, DLL_SUFFIX};
+use std::path::Path;
+use std::path::PathBuf;
+use alloc::sync::Arc;
 use tracing::{debug, error, info};
 
 // Re-exports

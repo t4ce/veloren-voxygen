@@ -1,8 +1,8 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+use core::borrow::Borrow;
+use core::borrow::BorrowMut;
+use core::marker::PhantomData;
+use core::ops::Deref;
+use core::ops::DerefMut;
 
 use hibitset::BitSet;
 use shred::Fetch;

@@ -3,10 +3,9 @@ use crate::{
     terrain::{Block, BlockKind},
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    cmp::Ordering,
-    ops::{Mul, Sub},
-};
+use core::cmp::Ordering;
+use core::ops::Mul;
+use core::ops::Sub;
 use strum::{EnumIter, IntoEnumIterator};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]

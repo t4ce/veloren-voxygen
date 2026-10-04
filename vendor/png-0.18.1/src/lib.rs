@@ -60,7 +60,6 @@
 //!
 
 #![forbid(unsafe_code)]
-extern crate alloc;
 // Silence certain clippy warnings until our MSRV is higher.
 //
 // The #[default] attribute was stabilized in Rust 1.62.0.
@@ -69,6 +68,7 @@ extern crate alloc;
 #![allow(clippy::uninlined_format_args)]
 #![cfg_attr(feature = "unstable", feature(portable_simd))]
 
+extern crate alloc;
 mod adam7;
 pub mod chunk;
 mod common;

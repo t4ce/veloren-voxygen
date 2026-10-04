@@ -1,6 +1,7 @@
 use crate::metrics::SysMetrics;
 use specs::{ReadExpect, RunNow};
-use std::{collections::HashMap, time::Instant};
+use std::collections::HashMap;
+use std::time::Instant;
 
 /// measuring the level of threads a unit of code ran on. Use Tokio when it ran
 /// on their threadpool. Use Exact when you know on how many threads your code

@@ -1,6 +1,9 @@
 use common_assets::{Walk, walk_tree};
 use serde::{Serialize, de::DeserializeOwned};
-use std::{fs, io, io::Write, path::Path};
+use std::fs;
+use std::io;
+use std::io::Write;
+use std::path::Path;
 
 // If you want to migrate assets.
 // 1) Copy-paste old asset type to own module

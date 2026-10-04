@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::block::Block;
-use std::fmt;
+use core::fmt;
 use core::fmt::Debug;
 use core::ops::{Index, IndexMut};
 

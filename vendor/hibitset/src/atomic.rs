@@ -2,7 +2,7 @@ use core::default::Default;
 use core::fmt::{Debug, Error as FormatError, Formatter};
 use core::iter::repeat;
 use core::marker::PhantomData;
-use std::ptr;
+use core::ptr;
 use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 use util::*;

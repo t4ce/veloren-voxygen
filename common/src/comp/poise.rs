@@ -10,7 +10,8 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage, VecStorage};
-use std::{ops::Mul, time::Duration};
+use core::ops::Mul;
+use core::time::Duration;
 use vek::*;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

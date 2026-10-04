@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, convert::TryFrom};
+use core::cmp::Ordering;
+use core::convert::TryFrom;
 
 use crate::comp::inventory::{
     item::{ItemKind, armor, armor::ArmorKind, tool},

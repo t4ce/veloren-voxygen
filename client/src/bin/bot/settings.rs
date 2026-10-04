@@ -1,5 +1,6 @@
 use super::BotCreds;
-use std::{fs, path::PathBuf};
+use std::fs;
+use std::path::PathBuf;
 use tracing::warn;
 
 pub fn data_dir() -> PathBuf {

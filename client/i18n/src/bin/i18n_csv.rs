@@ -1,6 +1,6 @@
-extern crate alloc;
 use common_assets::find_root;
-use std::{fs, io::Write, path::Path};
+use std::{fs, io::Write};
+use std::path::Path;
 use veloren_client_i18n::{
     REFERENCE_LANG,
     analysis::{Language, ReferenceLanguage},

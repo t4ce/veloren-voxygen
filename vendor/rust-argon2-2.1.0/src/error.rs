@@ -5,8 +5,8 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
-use std::{error, fmt};
+ use std::error;
+ use core::fmt;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

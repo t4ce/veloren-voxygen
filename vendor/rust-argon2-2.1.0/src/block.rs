@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::common;
-use std::fmt;
+use core::fmt;
 use core::fmt::Debug;
 use core::ops::{BitXorAssign, Index, IndexMut};
 

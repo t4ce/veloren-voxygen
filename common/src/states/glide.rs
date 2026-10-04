@@ -13,7 +13,8 @@ use crate::{
     util::{Dir, Plane, Projection},
 };
 use serde::{Deserialize, Serialize};
-use std::{f32::consts::PI, time::Duration};
+use std::f32::consts::PI;
+use core::time::Duration;
 use vek::*;
 
 const PITCH_SLOW_TIME: f32 = 0.5;

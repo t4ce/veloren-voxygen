@@ -1,6 +1,7 @@
 use common::{grid::Grid, map::Marker, terrain::TerrainChunk, trade::Good};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use alloc::sync::Arc;
 use vek::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

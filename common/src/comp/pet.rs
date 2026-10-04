@@ -1,7 +1,8 @@
 use crate::comp::{body::Body, quadruped_medium};
 use crossbeam_utils::atomic::AtomicCell;
 use specs::Component;
-use std::{num::NonZeroU64, sync::Arc};
+use core::num::NonZeroU64;
+use alloc::sync::Arc;
 
 use super::Mass;
 

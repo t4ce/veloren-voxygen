@@ -1,7 +1,13 @@
 use borrow::Cow;
 use io::{Read, Write};
 use ops::{Deref, DerefMut};
-use std::{borrow, error, fmt, io, mem, ops, result};
+use std::borrow;
+use std::error;
+use std::io;
+use core::fmt;
+use core::mem;
+use core::ops;
+use core::result;
 
 use crc32fast::Hasher as Crc32;
 use flate2::write::ZlibEncoder;
@@ -1784,7 +1790,7 @@ mod tests {
 
     use io::BufReader;
     use rand::{rng, Rng};
-    use std::cmp;
+    use core::cmp;
     use std::fs::File;
     use std::io::Cursor;
 

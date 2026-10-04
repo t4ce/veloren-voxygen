@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage, SystemData};
-use std::{
-    any::Any,
-    ops::Deref,
-    sync::{Arc, Weak},
-};
+use core::any::Any;
+use core::ops::Deref;
+use alloc::sync::Arc;
+use alloc::sync::Weak;
 
 pub trait Link: Sized + Send + Sync + 'static {
     type Error;

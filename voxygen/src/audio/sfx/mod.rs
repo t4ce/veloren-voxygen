@@ -1105,7 +1105,8 @@ mod tests {
     use super::*;
     use chumsky::container::Seq;
     use common::assets::{self, AssetExt, Ron};
-    use std::{fs, path::PathBuf};
+    use std::fs;
+    use std::path::PathBuf;
 
     #[test]
     fn test_load_sfx_triggers() { let _ = SfxTriggers::load_expect("voxygen.audio.sfx"); }

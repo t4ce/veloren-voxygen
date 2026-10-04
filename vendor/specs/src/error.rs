@@ -3,12 +3,12 @@
 //! There are specific types for errors (e.g. `WrongGeneration`)
 //! and additionally one `Error` type that can represent them all.
 //! Each error in this module has an `Into<Error>` implementation.
-
-use std::{
-    convert::Infallible,
-    error::Error as StdError,
-    fmt::{Debug, Display, Formatter, Result as FmtResult},
-};
+ use core::convert::Infallible;
+ use core::fmt::Debug;
+ use core::fmt::Display;
+ use core::fmt::Formatter;
+ use core::fmt::Result as FmtResult;
+ use std::error::Error as StdError;
 
 use crate::world::{Entity, Generation};
 

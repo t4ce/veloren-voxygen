@@ -1,7 +1,7 @@
 use byteorder::{LE, WriteBytesExt};
 use core::hash::Hasher;
 use std::io::{self, Read, Write, Seek, SeekFrom, ErrorKind};
-use std::mem;
+use core::mem;
 use twox_hash::XxHash32;
 use thiserror::Error;
 use culpa::{throws};

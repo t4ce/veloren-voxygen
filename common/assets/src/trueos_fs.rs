@@ -3,11 +3,9 @@
 //! `Source` is synchronous. The API's cooperative `block_on` only waits for
 //! kernel-owned jobs; it does not construct a Tokio runtime or perform storage
 //! work on this Blueprint lane.
-
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+ use std::io;
+ use std::path::Path;
+ use std::path::PathBuf;
 
 use assets_manager::source::{DirEntry, FileContent, Source};
 use trueos::async_fs::{self, NodeKind};

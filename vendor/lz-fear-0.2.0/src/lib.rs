@@ -17,7 +17,7 @@ pub use framed::{LZ4FrameReader, CompressionSettings};
 
 #[cfg(test)]
 mod tests {
-    use std::str;
+    use core::str;
     use crate::raw::compress2;
     use crate::raw::test::decompress;
 

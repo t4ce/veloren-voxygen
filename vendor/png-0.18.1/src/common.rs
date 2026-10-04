@@ -4,7 +4,10 @@ use crate::text_metadata::{ITXtChunk, TEXtChunk, ZTXtChunk};
 use crate::Filter;
 use crate::{chunk, encoder};
 use io::Write;
-use std::{borrow::Cow, convert::TryFrom, fmt, io};
+use alloc::borrow::Cow;
+use core::convert::TryFrom;
+use core::fmt;
+use std::io;
 
 /// Describes how a pixel is encoded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

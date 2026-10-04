@@ -11,7 +11,8 @@ use crate::{
 use enum_map::EnumMap;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage, Entity as EcsEntity};
-use std::{collections::VecDeque, fmt};
+use alloc::collections::VecDeque;
+use core::fmt;
 use vek::*;
 
 use super::{Group, Pos};

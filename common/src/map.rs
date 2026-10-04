@@ -1,7 +1,8 @@
 use crate::trade::SiteId;
 use common_i18n::Content;
 use serde::{Deserialize, Serialize};
-use std::{any::Any, hash::Hash};
+use core::any::Any;
+use std::hash::Hash;
 use vek::*;
 
 bitflags::bitflags! {

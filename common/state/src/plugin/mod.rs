@@ -5,12 +5,13 @@ pub mod module;
 use bincode::error::DecodeError;
 use common::{assets::ASSETS_PATH, event::PluginHash, uid::Uid};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    io::{Read, Write},
-    path::{Path, PathBuf},
-};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fs;
+use std::io::Read;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
 use tracing::{error, info};
 
 use self::{

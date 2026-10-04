@@ -19,7 +19,8 @@ use rand::{
 };
 #[cfg(feature = "rrt_pathfinding")]
 use std::f32::consts::PI;
-use std::{collections::VecDeque, iter::FromIterator};
+use alloc::collections::VecDeque;
+use core::iter::FromIterator;
 use vek::*;
 
 // Path
@@ -46,7 +47,7 @@ impl<T> FromIterator<T> for Path<T> {
 }
 
 impl<T> IntoIterator for Path<T> {
-    type IntoIter = std::vec::IntoIter<T>;
+    type IntoIter = alloc::vec::IntoIter<T>;
     type Item = T;
 
     fn into_iter(self) -> Self::IntoIter { self.nodes.into_iter() }

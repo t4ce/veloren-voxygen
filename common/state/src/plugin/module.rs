@@ -1,10 +1,10 @@
-use std::{
-    io,
-    num::NonZeroU64,
-    pin::Pin,
-    sync::{Arc, Mutex},
-    task::{Context, Poll},
-};
+use std::io;
+use std::sync::Mutex;
+use std::task::Context;
+use std::task::Poll;
+use core::num::NonZeroU64;
+use core::pin::Pin;
+use alloc::sync::Arc;
 
 use super::{
     CommandResults,

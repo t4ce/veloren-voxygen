@@ -1,5 +1,5 @@
-use std::mem;
-use std::cmp;
+use core::mem;
+use core::cmp;
 use std::io::Write;
 use core::convert::{TryInto, TryFrom};
 use byteorder::{ByteOrder, NativeEndian, WriteBytesExt, LE};

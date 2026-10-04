@@ -1,11 +1,12 @@
 // INSERT_README_VIA_MAKE
+extern crate core;
 #[cfg(unix)]
 extern crate rustix;
 extern crate tempfile;
 
 use core::convert::AsRef;
 use core::error::Error as ErrorTrait;
-use std::fmt;
+use core::fmt;
 use std::fs;
 use std::io;
 use std::path;
@@ -174,7 +175,9 @@ mod imp {
     use super::safe_parent;
 
     use rustix::fs::AtFlags;
-    use std::{fs, io, path};
+    use std::fs;
+    use std::io;
+    use std::path;
 
     pub fn replace_atomic(src: &path::Path, dst: &path::Path) -> io::Result<()> {
         let src_parent_path = safe_parent(src).unwrap();
@@ -295,7 +298,8 @@ mod imp {
 
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
-    use std::{io, path};
+    use std::io;
+    use std::path;
 
     macro_rules! call {
         ($e: expr) => {

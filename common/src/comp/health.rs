@@ -2,7 +2,8 @@ use crate::{DamageSource, combat::DamageContributor, comp, resources::Time, uid:
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage};
-use std::{convert::TryFrom, ops::Mul};
+use core::convert::TryFrom;
+use core::ops::Mul;
 
 /// Specifies what and how much changed current health
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]

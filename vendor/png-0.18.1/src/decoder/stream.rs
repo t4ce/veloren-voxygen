@@ -1,8 +1,9 @@
 use core::convert::TryInto;
 use core::error;
-use std::fmt;
+use core::fmt;
 use std::io;
-use std::{borrow::Cow, cmp::min};
+use alloc::borrow::Cow;
+use core::cmp::min;
 
 use crc32fast::Hasher as Crc32;
 
@@ -2025,7 +2026,7 @@ mod tests {
     use std::io::Cursor;
     use std::io::Seek;
     use std::io::{BufReader, ErrorKind, Read, Write};
-    use std::rc::Rc;
+    use alloc::rc::Rc;
 
     #[test]
     fn image_gamma() -> Result<(), ()> {

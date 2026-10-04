@@ -2,11 +2,10 @@
 #![expect(deprecated)] // since item i18n
 
 use clap::Parser;
-use std::{
-    error::Error,
-    io::Write,
-    ops::{Div, Mul},
-};
+use std::error::Error;
+use std::io::Write;
+use core::ops::Div;
+use core::ops::Mul;
 
 use veloren_common::{
     assets::{self, AssetExt, Ron},

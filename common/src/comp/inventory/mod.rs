@@ -2,7 +2,11 @@ use core::ops::Not;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage};
-use std::{cmp::Ordering, convert::TryFrom, mem, num::NonZeroU32, ops::Range};
+use core::cmp::Ordering;
+use core::convert::TryFrom;
+use core::mem;
+use core::num::NonZeroU32;
+use core::ops::Range;
 use tracing::{debug, trace, warn};
 use vek::Vec3;
 

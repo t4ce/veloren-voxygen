@@ -99,8 +99,8 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-extern crate alloc;
 
+extern crate alloc;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate std;

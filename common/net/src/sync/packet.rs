@@ -2,12 +2,11 @@ use super::track::UpdateTracker;
 use common::{resources::Time, uid::Uid};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use specs::{Component, Entity, Join, ReadStorage, World, WorldExt, storage::AccessMut};
-use std::{
-    convert::{TryFrom, TryInto},
-    fmt::Debug,
-    marker::PhantomData,
-    num::NonZeroU64,
-};
+use core::convert::TryFrom;
+use core::convert::TryInto;
+use core::fmt::Debug;
+use core::marker::PhantomData;
+use core::num::NonZeroU64;
 use tracing::error;
 
 // TODO: apply_{insert,modify,remove} all take the entity and call

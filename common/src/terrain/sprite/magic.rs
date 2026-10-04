@@ -234,10 +234,9 @@ macro_rules! sprites {
         const _: () = {
             mod __priv {
                 use super::{SpriteKind, StructureSpriteKind, categories};
-                use std::{
-                    fmt::{self, Formatter},
-                    marker::PhantomData,
-                };
+                use core::fmt;
+                use core::fmt::Formatter;
+                use core::marker::PhantomData;
                 use serde::{de, Deserialize, Deserializer};
 
                 impl<'de> Deserialize<'de> for StructureSpriteKind {

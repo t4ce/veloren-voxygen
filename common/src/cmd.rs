@@ -16,11 +16,10 @@ use common_i18n::Content;
 use hashbrown::{HashMap, HashSet};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::{self, Display},
-    num::NonZeroU64,
-    str::FromStr,
-};
+use core::fmt;
+use core::fmt::Display;
+use core::num::NonZeroU64;
+use core::str::FromStr;
 use strum::{AsRefStr, EnumIter, EnumString, IntoEnumIterator, VariantNames};
 use tracing::warn;
 

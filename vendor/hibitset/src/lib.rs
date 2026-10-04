@@ -45,6 +45,7 @@
 
 #![deny(missing_docs)]
 
+extern crate core;
 extern crate alloc;
 #[cfg(test)]
 extern crate rand;

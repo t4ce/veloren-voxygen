@@ -33,7 +33,8 @@ use veloren_voxygen::{
 
 use chrono::Utc;
 use common::clock::Clock;
-use std::{panic, path::PathBuf};
+use std::panic;
+use std::path::PathBuf;
 use tracing::{info, warn};
 #[cfg(feature = "egui-ui")]
 use veloren_voxygen::ui::egui::EguiState;

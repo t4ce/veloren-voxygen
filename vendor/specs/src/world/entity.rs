@@ -1,8 +1,6 @@
-use std::{
-    fmt,
-    num::NonZeroI32,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use core::fmt;
+use core::num::NonZeroI32;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use hibitset::{AtomicBitSet, BitSet, BitSetOr};
 use shred::Read;

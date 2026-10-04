@@ -8,7 +8,8 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specs::{Component, DerefFlaggedStorage};
-use std::{collections::BTreeSet, hash::Hash};
+use alloc::collections::BTreeSet;
+use std::hash::Hash;
 use tracing::{trace, warn};
 
 pub mod skills;

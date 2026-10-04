@@ -5,12 +5,11 @@ pub use self::{
     entry::Entry,
     setup::{DefaultProvider, PanicHandler, SetupHandler},
 };
-
-use std::{
-    any::{Any, TypeId},
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+ use core::any::Any;
+ use core::any::TypeId;
+ use core::marker::PhantomData;
+ use core::ops::Deref;
+ use core::ops::DerefMut;
 
 use ahash::AHashMap as HashMap;
 

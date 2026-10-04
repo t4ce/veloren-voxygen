@@ -1,7 +1,7 @@
 use byteorder::{LE, ReadBytesExt};
 use core::hash::Hasher;
 use std::io::{self, Read, BufRead, ErrorKind};
-use std::cmp;
+use core::cmp;
 use core::convert::TryInto;
 use twox_hash::XxHash32;
 use thiserror::Error;

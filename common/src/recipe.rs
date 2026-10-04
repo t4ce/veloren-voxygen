@@ -16,7 +16,8 @@ use crate::{
 };
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, sync::Arc};
+use alloc::borrow::Cow;
+use alloc::sync::Arc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RecipeInput {

@@ -5,7 +5,9 @@ use crate::{
     volumes::dyna::DynaError,
 };
 use hashbrown::{HashMap, hash_map};
-use std::{fmt::Debug, ops::Deref, sync::Arc};
+use core::fmt::Debug;
+use core::ops::Deref;
+use alloc::sync::Arc;
 use vek::*;
 
 #[derive(Copy, Clone, Debug)]

@@ -31,10 +31,8 @@ use specs::{
     Entities, Entity as EcsEntity, Join, Read, ReadExpect, ReadStorage, SystemData, WriteStorage,
     shred,
 };
-use std::{
-    f32::consts::{PI, TAU},
-    time::Duration,
-};
+use std::f32::consts::{PI, TAU};
+use core::time::Duration;
 use vek::*;
 
 use common::terrain::TerrainGrid;

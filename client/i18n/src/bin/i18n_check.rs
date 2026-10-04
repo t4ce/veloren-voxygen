@@ -1,4 +1,3 @@
-extern crate alloc;
 use clap::{Arg, Command};
 use common_assets::find_root;
 use veloren_client_i18n::{

@@ -1,4 +1,4 @@
-use std::fmt;
+use core::fmt;
 
 use serde::{Deserialize, Serialize};
 use vek::{Lerp, Vec2, Vec3};

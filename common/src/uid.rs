@@ -3,7 +3,8 @@ use core::hash::Hash;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use specs::{Component, Entity, FlaggedStorage, VecStorage};
-use std::{fmt, num::NonZeroU64};
+use core::fmt;
+use core::num::NonZeroU64;
 use tracing::error;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]

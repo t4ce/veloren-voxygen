@@ -1,4 +1,6 @@
-use std::{any::TypeId, collections::hash_map::Entry, marker::PhantomData};
+use core::any::TypeId;
+use core::marker::PhantomData;
+use std::collections::hash_map::Entry;
 
 use ahash::AHashMap as HashMap;
 

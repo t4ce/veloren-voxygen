@@ -1,16 +1,15 @@
-extern crate alloc;
 //#![warn(clippy::pedantic)]
 //! Load assets (images or voxel data) from files
 
+extern crate alloc;
 use image::DynamicImage;
 use lazy_static::lazy_static;
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    hash::{BuildHasher, Hash},
-    path::PathBuf,
-    sync::Arc,
-};
+use alloc::borrow::Cow;
+use alloc::sync::Arc;
+use std::collections::HashMap;
+use std::hash::BuildHasher;
+use std::hash::Hash;
+use std::path::PathBuf;
 
 pub use assets_manager::{
     Asset, AssetCache, BoxedError, Error, FileAsset, SharedString,
@@ -421,7 +420,8 @@ lazy_static! {
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::OsStr, fs::File};
+    use std::ffi::OsStr;
+    use std::fs::File;
     use walkdir::WalkDir;
 
     #[test]

@@ -1,7 +1,7 @@
-use std::{
-    borrow::Borrow,
-    sync::{mpsc, Arc, RwLock},
-};
+use core::borrow::Borrow;
+use std::sync::mpsc;
+use std::sync::RwLock;
+use alloc::sync::Arc;
 
 use crate::{
     dispatch::{

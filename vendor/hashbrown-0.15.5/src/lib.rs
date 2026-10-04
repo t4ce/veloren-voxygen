@@ -11,6 +11,7 @@
 
 #![no_std]
 #![cfg_attr(
+extern crate alloc;
     feature = "nightly",
     feature(
         test,
@@ -61,7 +62,6 @@ extern crate std;
 
 #[cfg_attr(test, macro_use)]
 #[cfg_attr(feature = "rustc-dep-of-std", allow(unused_extern_crates))]
-extern crate alloc;
 
 #[cfg(feature = "nightly")]
 #[cfg(doctest)]

@@ -1,4 +1,5 @@
-use std::{marker::PhantomData, ops::Deref};
+use core::marker::PhantomData;
+use core::ops::Deref;
 
 use crate::{ResourceId, World};
 

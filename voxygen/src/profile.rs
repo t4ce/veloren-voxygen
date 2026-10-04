@@ -2,7 +2,9 @@ use crate::hud;
 use common::{character::CharacterId, uuid::Uuid};
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path, path::PathBuf};
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
 use tracing::warn;
 
 /// Represents a character in the profile.

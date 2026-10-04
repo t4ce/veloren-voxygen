@@ -129,7 +129,8 @@ mod map_test {
 }
 
 mod test {
-    use std::{convert::AsMut, fmt::Debug};
+    use core::convert::AsMut;
+    use core::fmt::Debug;
 
     use super::*;
     use crate::{world::Builder, World};
@@ -727,7 +728,8 @@ mod test {
     fn par_restricted_storage() {
         use crate::join::ParJoin;
         use tokio_parallel::iter::ParallelIterator;
-        use std::{collections::HashSet, sync::Mutex};
+        use std::collections::HashSet;
+        use std::sync::Mutex;
 
         let mut w = World::new();
         w.register::<Cvec>();

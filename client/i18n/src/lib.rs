@@ -1,4 +1,3 @@
-extern crate alloc;
 mod error;
 mod raw;
 

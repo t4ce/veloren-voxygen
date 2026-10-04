@@ -597,7 +597,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::string::String;
+    use alloc::string::String;
 
     #[test]
     fn insert_order() {

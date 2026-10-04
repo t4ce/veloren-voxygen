@@ -1,6 +1,6 @@
 extern crate ron;
-
-use std::{convert::Infallible, hash::Hash};
+ use core::convert::Infallible;
+ use std::hash::Hash;
 
 use super::*;
 use crate::{error::Error, prelude::*};

@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{
-    cmp::{Eq, Ord, PartialEq, PartialOrd},
-    fmt,
-    marker::PhantomData,
-};
+use core::cmp::Eq;
+use core::cmp::Ord;
+use core::cmp::PartialEq;
+use core::cmp::PartialOrd;
+use core::fmt;
+use core::marker::PhantomData;
 
 /// Type safe index into Depot
 #[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -11,11 +11,11 @@ use hashbrown::HashMap;
 use image::{ImageBuffer, ImageDecoder, ImageEncoder, Pixel};
 use num_traits::cast::FromPrimitive;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Debug,
-    io::{Cursor, Read, Write},
-    marker::PhantomData,
-};
+use core::fmt::Debug;
+use core::marker::PhantomData;
+use std::io::Cursor;
+use std::io::Read;
+use std::io::Write;
 use tracing::warn;
 use vek::*;
 

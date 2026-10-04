@@ -1,11 +1,10 @@
 //! Provides `Marker` and `MarkerAllocator` traits
-
-use std::{
-    collections::HashMap,
-    fmt::{self, Debug},
-    hash::{Hash, Hasher},
-    marker::PhantomData,
-};
+ use std::collections::HashMap;
+ use std::hash::Hash;
+ use std::hash::Hasher;
+ use core::fmt;
+ use core::fmt::Debug;
+ use core::marker::PhantomData;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 

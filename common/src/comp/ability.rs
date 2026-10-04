@@ -37,7 +37,8 @@ use crate::{
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage};
-use std::{borrow::Cow, time::Duration};
+use alloc::borrow::Cow;
+use core::time::Duration;
 
 pub const BASE_ABILITY_LIMIT: usize = 5;
 

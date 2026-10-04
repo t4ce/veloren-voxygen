@@ -1,7 +1,8 @@
 use common_i18n::Content;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage};
-use std::{error::Error, fmt};
+use std::error::Error;
+use core::fmt;
 
 use crate::{
     combat::{AttackEffect, AttackedModification, CombatRequirement, StatEffect},

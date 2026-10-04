@@ -39,10 +39,8 @@ use specs::{
     shred::{Fetch, FetchMut, SendDispatcher},
     storage::{MaskedStorage as EcsMaskedStorage, Storage as EcsStorage},
 };
-use std::{
-    sync::Arc,
-    time::Instant,
-};
+use alloc::sync::Arc;
+use std::time::Instant;
 use timer_queue::TimerQueue;
 use vek::*;
 

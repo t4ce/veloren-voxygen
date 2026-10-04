@@ -9,7 +9,8 @@ use common_i18n::Content;
 use dot_vox::DotVoxData;
 use hashbrown::HashMap;
 use serde::Deserialize;
-use std::{num::NonZeroU8, sync::Arc};
+use core::num::NonZeroU8;
+use alloc::sync::Arc;
 use vek::*;
 
 make_case_elim!(

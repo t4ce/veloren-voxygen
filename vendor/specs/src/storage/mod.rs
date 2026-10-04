@@ -16,12 +16,11 @@ pub use self::{
     },
     track::{ComponentEvent, Tracked},
 };
-
-use std::{
-    self,
-    marker::PhantomData,
-    ops::{Deref, DerefMut, Not},
-};
+ use std;
+ use core::marker::PhantomData;
+ use core::ops::Deref;
+ use core::ops::DerefMut;
+ use core::ops::Not;
 
 use hibitset::{BitSet, BitSetLike, BitSetNot};
 use shred::{CastFrom, Fetch};

@@ -12,7 +12,8 @@ use hashbrown::HashMap;
 use lazy_static::lazy_static;
 use rand::{RngExt, prelude::IndexedRandom};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, sync::Arc};
+use alloc::borrow::Cow;
+use alloc::sync::Arc;
 
 // Macro instead of constant to work with concat! macro.
 // DO NOT CHANGE. THIS PREFIX AFFECTS PERSISTENCE AND IF CHANGED A MIGRATION

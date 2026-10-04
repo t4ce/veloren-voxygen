@@ -4,10 +4,9 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage};
-use std::{
-    ops::Add,
-    time::{Duration, Instant},
-};
+use core::ops::Add;
+use core::time::Duration;
+use std::time::Instant;
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct LootOwner {

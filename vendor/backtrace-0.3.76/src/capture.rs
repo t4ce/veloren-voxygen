@@ -5,7 +5,7 @@ use crate::resolve;
 use crate::PrintFmt;
 use crate::{resolve_frame, trace, BacktraceFmt, Symbol, SymbolName};
 use core::ffi::c_void;
-use std::fmt;
+use core::fmt;
 use std::path::{Path, PathBuf};
 use std::prelude::v1::*;
 

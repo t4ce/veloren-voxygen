@@ -20,8 +20,8 @@
 
 #![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
 
-extern crate alloc;
 
+extern crate alloc;
 use core::{
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
@@ -33,12 +33,12 @@ use alloc::{
 };
 
 #[cfg(feature = "std")]
-use std::{
-    io::{self, Read, Write},
-    path::Path,
-    fs::File,
-    error,
-};
+use std::io;
+use std::io::Read;
+use std::io::Write;
+use std::path::Path;
+use std::fs::File;
+use std::error;
 use hashbrown::HashMap;
 
 /// A number used to index into vertex attribute arrays.

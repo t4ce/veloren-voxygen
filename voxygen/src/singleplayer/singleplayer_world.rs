@@ -1,4 +1,6 @@
-use std::{fs, io::BufReader, io::Read, path::Path, path::PathBuf};
+use std::{fs, io::BufReader, io::Read};
+use std::path::Path;
+use std::path::PathBuf;
 
 use common::{assets::ASSETS_PATH, consts::DAY_LENGTH_DEFAULT};
 use serde::{Deserialize, Serialize};

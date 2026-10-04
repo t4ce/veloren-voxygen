@@ -1,7 +1,7 @@
-use std::{
-    fmt::{self, Display, Formatter},
-    marker::PhantomData,
-};
+use core::fmt;
+use core::fmt::Display;
+use core::fmt::Formatter;
+use core::marker::PhantomData;
 
 use serde::de::{
     self, Deserialize, DeserializeOwned, DeserializeSeed, Deserializer, SeqAccess, Visitor,

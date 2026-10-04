@@ -1,7 +1,6 @@
 #![deny(unsafe_code)]
 #![expect(incomplete_features)]
 #![expect(
-extern crate alloc;
     clippy::identity_op,
     clippy::option_map_unit_fn,
     clippy::needless_pass_by_ref_mut //until we find a better way for specs
@@ -10,6 +9,7 @@ extern crate alloc;
 #![feature(generic_const_exprs)]
 #![recursion_limit = "2048"]
 
+extern crate alloc;
 #[macro_use]
 pub mod ui;
 pub mod audio;
