@@ -2,8 +2,6 @@ pub(crate) mod client_init;
 mod ui;
 
 use super::{char_selection::CharSelectionState, dummy_scene::Scene, server_info::ServerInfoState};
-#[cfg(feature = "singleplayer")]
-use crate::singleplayer::SingleplayerState;
 use crate::{
     Direction, GlobalState, PlayState, PlayStateResult, hud,
     render::{Drawer, GlobalsBindGroup},
@@ -24,9 +22,7 @@ use common_net::msg::ClientType;
 #[cfg(feature = "plugins")]
 use common_state::plugin::PluginMgr;
 use i18n::{LocalizationGuard, LocalizationHandle, fluent_args};
-#[cfg(feature = "singleplayer")]
-use server::ServerInitStage;
-#[cfg(any(feature = "singleplayer", feature = "plugins"))]
+#[cfg(feature = "plugins")]
 use specs::WorldExt;
 use core::cell::RefCell;
 use std::path::Path;
@@ -39,10 +35,6 @@ pub use ui::rand_bg_image_spec;
 
 #[derive(Debug)]
 pub enum DetailedInitializationStage {
-    #[cfg(feature = "singleplayer")]
-    Singleplayer,
-    #[cfg(feature = "singleplayer")]
-    SingleplayerServer(ServerInitStage),
     StartingMultiplayer,
     Client(ClientInitStage),
     CreatingRenderPipeline(usize, usize),
@@ -90,12 +82,6 @@ impl PlayState for MainMenuState {
             global_state.audio.play_title_music();
         }
 
-        // Reset singleplayer server if it was running already
-        #[cfg(feature = "singleplayer")]
-        {
-            global_state.singleplayer = SingleplayerState::None;
-        }
-
         // Updated localization in case the selected language was changed
         self.main_menu_ui
             .update_language(global_state.i18n, &global_state.settings);
@@ -111,97 +97,6 @@ impl PlayState for MainMenuState {
         // Pull in localizations
         let localized_strings = &global_state.i18n.read();
 
-        // Poll server creation
-        #[cfg(feature = "singleplayer")]
-        {
-            if let Some(singleplayer) = global_state.singleplayer.as_running() {
-                if let Ok(stage_update) = singleplayer.init_stage_receiver.try_recv() {
-                    self.main_menu_ui.update_stage(
-                        DetailedInitializationStage::SingleplayerServer(stage_update),
-                    );
-                }
-
-                match singleplayer.receiver.try_recv() {
-                    Ok(Ok(())) => {
-                        // Attempt login after the server is finished initializing
-                        attempt_login(
-                            &mut global_state.info_message,
-                            "singleplayer".to_owned(),
-                            "".to_owned(),
-                            ConnectionArgs::Mpsc(14004),
-                            &mut self.init,
-                            &global_state.tokio_runtime,
-                            global_state.settings.language.send_to_server.then_some(
-                                global_state.settings.language.selected_language.clone(),
-                            ),
-                            &global_state.i18n,
-                            &global_state.config_dir,
-                            global_state.args.client_type.0,
-                        );
-                    },
-                    Ok(Err(e)) => {
-                        error!(?e, "Could not start server");
-                        global_state.singleplayer = SingleplayerState::None;
-                        self.init = InitState::None;
-                        self.main_menu_ui.cancel_connection();
-                        let server_err = match e {
-                            server::Error::NetworkErr(e) => localized_strings
-                                .get_msg_ctx("main-servers-network_error", &i18n::fluent_args! {
-                                    "raw_error" => e.to_string()
-                                })
-                                .into_owned(),
-                            server::Error::ParticipantErr(e) => localized_strings
-                                .get_msg_ctx(
-                                    "main-servers-participant_error",
-                                    &i18n::fluent_args! {
-                                        "raw_error" => e.to_string()
-                                    },
-                                )
-                                .into_owned(),
-                            server::Error::StreamErr(e) => localized_strings
-                                .get_msg_ctx("main-servers-stream_error", &i18n::fluent_args! {
-                                    "raw_error" => e.to_string()
-                                })
-                                .into_owned(),
-                            server::Error::DatabaseErr(e) => localized_strings
-                                .get_msg_ctx("main-servers-database_error", &i18n::fluent_args! {
-                                    "raw_error" => e.to_string()
-                                })
-                                .into_owned(),
-                            server::Error::PersistenceErr(e) => localized_strings
-                                .get_msg_ctx(
-                                    "main-servers-persistence_error",
-                                    &i18n::fluent_args! {
-                                        "raw_error" => e.to_string()
-                                    },
-                                )
-                                .into_owned(),
-                            server::Error::RtsimError(e) => localized_strings
-                                .get_msg_ctx("main-servers-rtsim_error", &i18n::fluent_args! {
-                                    "raw_error" => e.to_string(),
-                                })
-                                .into_owned(),
-                            server::Error::Other(e) => localized_strings
-                                .get_msg_ctx("main-servers-other_error", &i18n::fluent_args! {
-                                    "raw_error" => e,
-                                })
-                                .into_owned(),
-                        };
-                        global_state.info_message = Some(
-                            localized_strings
-                                .get_msg_ctx(
-                                    "main-servers-singleplayer_error",
-                                    &i18n::fluent_args! {
-                                        "sp_error" => server_err
-                                    },
-                                )
-                                .into_owned(),
-                        );
-                    },
-                    Err(_) => (),
-                }
-            }
-        }
         // Handle window events.
         for event in events {
             // Pass all events to the ui first.
@@ -464,10 +359,6 @@ impl PlayState for MainMenuState {
                     // init contains InitState::Client(ClientInit), which spawns a thread which
                     // contains a TcpStream::connect() call This call is
                     // blocking TODO fix when the network rework happens
-                    #[cfg(feature = "singleplayer")]
-                    {
-                        global_state.singleplayer = SingleplayerState::None;
-                    }
                     self.init = InitState::None;
                     self.main_menu_ui.cancel_connection();
                 },
@@ -482,35 +373,6 @@ impl PlayState for MainMenuState {
                         .set_english_fallback(global_state.settings.language.use_english_fallback);
                     self.main_menu_ui
                         .update_language(global_state.i18n, &global_state.settings);
-                },
-                #[cfg(feature = "singleplayer")]
-                MainMenuEvent::StartSingleplayer => {
-                    global_state.singleplayer.run(
-                        &global_state.tokio_runtime,
-                        &global_state.settings.language.selected_language,
-                        &global_state.i18n,
-                    );
-                },
-                #[cfg(feature = "singleplayer")]
-                MainMenuEvent::InitSingleplayer => {
-                    global_state.singleplayer = SingleplayerState::init();
-                },
-                #[cfg(feature = "singleplayer")]
-                MainMenuEvent::SinglePlayerChange(change) => {
-                    if let SingleplayerState::Init(ref mut init) = global_state.singleplayer {
-                        match change {
-                            ui::WorldsChange::SetActive(world) => init.current = world,
-                            ui::WorldsChange::Delete(world) => init.remove(world),
-                            ui::WorldsChange::Regenerate(world) => init.delete_map_file(world),
-                            ui::WorldsChange::AddNew => init.new_world(),
-                            ui::WorldsChange::CurrentWorldChange(change) => {
-                                if let Some(world) = init.current.map(|i| &mut init.worlds[i]) {
-                                    change.apply(world);
-                                    init.save_current_meta();
-                                }
-                            },
-                        }
-                    }
                 },
                 MainMenuEvent::Quit => return PlayStateResult::Shutdown,
                 // Note: Keeping in case we re-add the disclaimer

@@ -538,14 +538,6 @@ impl Controls {
                     *info_content = None;
                 }
 
-                #[cfg(feature = "singleplayer")]
-                let server_name =
-                    if client.server_info().name == server::settings::SINGLEPLAYER_SERVER_NAME {
-                        &i18n.get_msg("common-singleplayer").to_string()
-                    } else {
-                        &client.server_info().name
-                    };
-                #[cfg(not(feature = "singleplayer"))]
                 let server_name = &client.server_info().name;
 
                 let server = Container::new(
@@ -2099,13 +2091,6 @@ impl CharSelectionUi {
 
         let fonts = Fonts::load(i18n.fonts(), &mut ui).expect("Impossible to load fonts");
 
-        #[cfg(feature = "singleplayer")]
-        let default_name = match global_state.singleplayer.is_running() {
-            true => String::new(),
-            false => global_state.settings.networking.username.clone(),
-        };
-
-        #[cfg(not(feature = "singleplayer"))]
         let default_name = global_state.settings.networking.username.clone();
 
         let controls = Controls::new(

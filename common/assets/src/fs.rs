@@ -5,11 +5,7 @@ use std::path::Path;
 #[path = "trueos_fs.rs"]
 mod native;
 #[cfg(not(target_os = "trueos"))]
-use assets_manager::{
-    BoxedError,
-    hot_reloading::{EventSender, FsWatcherBuilder},
-    source::FileSystem as RawFs,
-};
+use assets_manager::source::FileSystem as RawFs;
 #[cfg(target_os = "trueos")]
 use native::FileSystem as RawFs;
 
@@ -159,18 +155,6 @@ impl Source for FileSystem {
             || self.default.exists(entry)
     }
 
-    #[cfg(not(target_os = "trueos"))]
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
-        let mut builder = FsWatcherBuilder::new()?;
-
-        if let Some(dir) = &self.override_dir {
-            builder.watch(dir.root().to_owned())?;
-        }
-        builder.watch(self.default.root().to_owned())?;
-
-        builder.build(events);
-        Ok(())
-    }
 }
 
 pub(super) fn is_dir(path: &Path) -> bool {

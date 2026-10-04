@@ -17,8 +17,6 @@ static GLOBAL: common_base::tracy_client::ProfiledAllocator<std::alloc::System> 
     common_base::tracy_client::ProfiledAllocator::new(std::alloc::System, 128);
 
 use i18n::{self, LocalizationHandle};
-#[cfg(feature = "singleplayer")]
-use veloren_voxygen::singleplayer::SingleplayerState;
 use veloren_voxygen::{
     GlobalState,
     audio::AudioFrontend,
@@ -146,7 +144,6 @@ fn main() {
     {
         anim::init();
     }
-    
 
     // Setup audio
     let mut audio = match settings.audio.output {
@@ -215,9 +212,6 @@ fn main() {
 
     let lazy_init = SpriteRenderContext::new(window.renderer_mut());
 
-    
-
-
     let global_state = GlobalState {
         userdata_dir,
         config_dir,
@@ -225,15 +219,13 @@ fn main() {
         profile,
         window,
         tokio_runtime,
-        
+
         lazy_init,
         clock: Clock::new(core::time::Duration::from_secs_f64(
             1.0 / get_fps(settings.graphics.max_fps) as f64,
         )),
         settings,
         info_message: None,
-        #[cfg(feature = "singleplayer")]
-        singleplayer: SingleplayerState::None,
         i18n,
         clipboard,
         clear_shadows_next_frame: false,

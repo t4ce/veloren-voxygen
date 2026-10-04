@@ -1128,19 +1128,15 @@ impl Show {
     fn toggle_settings(&mut self, global_state: &GlobalState) {
         match self.open_windows {
             Windows::Settings => {
-                #[cfg(feature = "singleplayer")]
-                global_state.unpause();
 
                 self.settings(false);
             },
             _ => {
-                #[cfg(feature = "singleplayer")]
-                global_state.pause();
 
                 self.settings(true)
             },
         };
-        #[cfg(not(feature = "singleplayer"))]
+
         let _global_state = global_state;
     }
 
@@ -1173,18 +1169,12 @@ impl Show {
             self.open_windows = Windows::None;
             self.want_grab = true;
 
-            // Unpause the game if we are on singleplayer
-            #[cfg(feature = "singleplayer")]
-            global_state.unpause();
         } else {
             self.esc_menu = true;
             self.want_grab = false;
 
-            // Pause the game if we are on singleplayer
-            #[cfg(feature = "singleplayer")]
-            global_state.pause();
         }
-        #[cfg(not(feature = "singleplayer"))]
+
         let _global_state = global_state;
     }
 
@@ -3756,9 +3746,7 @@ impl Hud {
                 match event {
                     settings_window::Event::ChangeTab(tab) => self.show.open_setting_tab(tab),
                     settings_window::Event::Close => {
-                        // Unpause the game if we are on singleplayer so that we can logout
-                        #[cfg(feature = "singleplayer")]
-                        global_state.unpause();
+
                         self.show.want_grab = true;
                         self.force_ungrab = false;
 
@@ -4035,22 +4023,13 @@ impl Hud {
                     self.show.want_grab = true;
                     self.force_ungrab = false;
 
-                    // Unpause the game if we are on singleplayer
-                    #[cfg(feature = "singleplayer")]
-                    global_state.unpause();
                 },
                 Some(esc_menu::Event::Logout) => {
-                    // Unpause the game if we are on singleplayer so that we can logout
-                    #[cfg(feature = "singleplayer")]
-                    global_state.unpause();
 
                     events.push(Event::Logout);
                 },
                 Some(esc_menu::Event::Quit) => events.push(Event::Quit),
                 Some(esc_menu::Event::CharacterSelection) => {
-                    // Unpause the game if we are on singleplayer so that we can logout
-                    #[cfg(feature = "singleplayer")]
-                    global_state.unpause();
 
                     events.push(Event::CharacterSelection)
                 },
@@ -5090,7 +5069,7 @@ impl Hud {
                             !global_state.settings.interface.toggle_debug;
                         true
                     },
-                    
+
                     GameInput::ToggleChat if state => {
                         global_state.settings.interface.toggle_chat =
                             !global_state.settings.interface.toggle_chat;

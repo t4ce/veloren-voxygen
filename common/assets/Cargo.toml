@@ -28,7 +28,6 @@ serde = { version = "1.0.118", features = ["derive"], optional = true }
 
 
 [features]
-hot-reloading = ["assets_manager/hot-reloading"]
 plugins = ["dep:serde", "assets_manager/tar"]
 
 

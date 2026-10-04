@@ -14,8 +14,6 @@ use client::ClientInitStage;
 use common::assets::{self, AssetExt, Ron};
 use i18n::Localization;
 use iced::{Align, Column, Container, Length, Row, Space, Text, button};
-#[cfg(feature = "singleplayer")]
-use server::{ServerInitStage, WorldCivStage, WorldGenerateStage, WorldSimStage};
 
 struct LoadingAnimation {
     speed_factor: f32,
@@ -131,89 +129,6 @@ impl Screen {
 
                 let stage = {
                     let stage_message = match init_stage {
-                        #[cfg(feature = "singleplayer")]
-                        DetailedInitializationStage::Singleplayer => {
-                            i18n.get_msg("hud-init-stage-singleplayer")
-                        },
-                        #[cfg(feature = "singleplayer")]
-                        DetailedInitializationStage::SingleplayerServer(server_stage) => {
-                            match server_stage {
-                                ServerInitStage::DbMigrations => {
-                                    i18n.get_msg("hud-init-stage-server-db-migrations")
-                                },
-                                ServerInitStage::DbVacuum => {
-                                    i18n.get_msg("hud-init-stage-server-db-vacuum")
-                                },
-                                ServerInitStage::WorldGen(worldgen_stage) => match worldgen_stage {
-                                    WorldGenerateStage::WorldSimGenerate(worldsim_stage) => {
-                                        match worldsim_stage {
-                                            WorldSimStage::Erosion { progress, estimate } => {
-                                                let mut msg = i18n
-                                                .get_msg_ctx(
-                                                    "hud-init-stage-server-worldsim-erosion",
-                                                    &i18n::fluent_args! { "percentage" => format!("{progress:.0}") }
-                                                ).into_owned();
-                                                if let Some(estimate) = estimate {
-                                                    let (attr, duration) =
-                                                        chrono::Duration::from_std(*estimate)
-                                                            .map(|dur| {
-                                                                let days = dur.num_days();
-                                                                if days > 0 {
-                                                                    return ("days", days);
-                                                                }
-                                                                let hours = dur.num_hours();
-                                                                if hours > 0 {
-                                                                    return ("hours", hours);
-                                                                }
-                                                                let minutes = dur.num_minutes();
-                                                                if minutes > 0 {
-                                                                    return ("minutes", minutes);
-                                                                }
-
-                                                                ("seconds", dur.num_seconds())
-                                                            })
-                                                            .unwrap_or(("days", i64::MAX));
-                                                    msg.push(' ');
-                                                    msg.push('(');
-                                                    msg.push_str(&i18n.get_attr_ctx(
-                                                        "hud-init-stage-server-worldsim-erosion_time_left",
-                                                        attr,
-                                                        &i18n::fluent_args! { "n" => duration }
-                                                    ));
-                                                    msg.push(')');
-                                                }
-
-                                                alloc::borrow::Cow::Owned(msg)
-                                            },
-                                        }
-                                    },
-                                    WorldGenerateStage::WorldCivGenerate(worldciv_stage) => {
-                                        match worldciv_stage {
-                                            WorldCivStage::CivCreation(generated, total) => i18n
-                                                .get_msg_ctx(
-                                                    "hud-init-stage-server-worldciv-civcreate",
-                                                    &i18n::fluent_args! {
-                                                        "generated" => generated.to_string(),
-                                                        "total" => total.to_string(),
-                                                    },
-                                                ),
-                                            WorldCivStage::SiteGeneration => {
-                                                i18n.get_msg("hud-init-stage-server-worldciv-site")
-                                            },
-                                        }
-                                    },
-                                    WorldGenerateStage::EconomySimulation => {
-                                        i18n.get_msg("hud-init-stage-server-economysim")
-                                    },
-                                    WorldGenerateStage::SpotGeneration => {
-                                        i18n.get_msg("hud-init-stage-server-spotgen")
-                                    },
-                                },
-                                ServerInitStage::StartingSystems => {
-                                    i18n.get_msg("hud-init-stage-server-starting")
-                                },
-                            }
-                        },
                         DetailedInitializationStage::StartingMultiplayer => {
                             i18n.get_msg("hud-init-stage-multiplayer")
                         },

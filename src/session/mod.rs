@@ -63,7 +63,6 @@ use interactable::{BlockInteraction, EntityInteraction, Interactable, get_intera
 use settings_change::Language::ChangeLanguage;
 use target::targets_under_cursor;
 
-
 /** The zoom scroll delta that is considered an "intent"
     to zoom, rather than the accidental zooming that Zoom Lock
     is supposed to help.
@@ -596,7 +595,6 @@ impl PlayState for SessionState {
             let player_entity = client.entity();
 
             let dt = global_state.clock.real_dt().as_secs_f32();
-
 
             if global_state.settings.gameplay.bow_zoom {
                 let mut fov_scaling = 1.0;
@@ -1597,8 +1595,8 @@ impl PlayState for SessionState {
 
             let mut outcomes = Vec::new();
 
-            // Runs if either in a multiplayer server or the singleplayer server is unpaused
-            if !global_state.paused() {
+            // Update the multiplayer client.
+            {
                 // Perform an in-game tick.
                 match self.tick(global_state.clock.game_dt(), global_state, &mut outcomes) {
                     Ok(TickAction::Continue) => {}, // Do nothing
@@ -1720,7 +1718,6 @@ impl PlayState for SessionState {
                 },
                 inverted_interactable_map,
             );
-            
 
             // Look for changes in the localization files
             if global_state.i18n.reloaded() {
@@ -2204,8 +2201,8 @@ impl PlayState for SessionState {
                     wind_vel: self.scene.wind_vel,
                 };
 
-                // Runs if either in a multiplayer server or the singleplayer server is unpaused
-                if !global_state.paused() {
+                // Update the multiplayer client.
+                {
                     self.scene.maintain(
                         global_state.window.renderer_mut(),
                         &mut global_state.audio,

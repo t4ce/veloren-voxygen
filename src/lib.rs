@@ -30,14 +30,7 @@ pub mod run;
 pub mod scene;
 pub mod session;
 pub mod settings;
-#[cfg(feature = "singleplayer")]
-pub mod singleplayer;
 pub mod window;
-
-#[cfg(feature = "singleplayer")]
-use crate::singleplayer::Singleplayer;
-#[cfg(feature = "singleplayer")]
-use crate::singleplayer::SingleplayerState;
 
 use crate::{
     audio::AudioFrontend,
@@ -62,13 +55,11 @@ pub struct GlobalState {
     pub profile: Profile,
     pub window: Window,
     pub tokio_runtime: Arc<Runtime>,
-    
+
     pub lazy_init: scene::terrain::SpriteRenderContextLazy,
     pub audio: AudioFrontend,
     pub info_message: Option<String>,
     pub clock: Clock,
-    #[cfg(feature = "singleplayer")]
-    pub singleplayer: SingleplayerState,
     // TODO: redo this so that the watcher doesn't have to exist for reloading to occur
     pub i18n: LocalizationHandle,
     pub clipboard: ui::ice::Clipboard,
@@ -93,21 +84,6 @@ impl GlobalState {
         self.window.renderer().maintain()
     }
 
-    #[cfg(feature = "singleplayer")]
-    pub fn paused(&self) -> bool {
-        self.singleplayer
-            .as_running()
-            .is_some_and(Singleplayer::is_paused)
-    }
-
-    #[cfg(not(feature = "singleplayer"))]
-    pub fn paused(&self) -> bool { false }
-
-    #[cfg(feature = "singleplayer")]
-    pub fn unpause(&self) { self.singleplayer.as_running().map(|s| s.pause(false)); }
-
-    #[cfg(feature = "singleplayer")]
-    pub fn pause(&self) { self.singleplayer.as_running().map(|s| s.pause(true)); }
 }
 
 // TODO: appears to be currently unused by playstates

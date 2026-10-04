@@ -9,21 +9,8 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 default-run = "veloren-voxygen"
 
-[package.metadata.nix]
-build = true
-app = true
-desktopFile = "./assets/voxygen/net.veloren.veloren.desktop"
-longDescription = """
-Veloren is a multiplayer voxel RPG written in Rust.
-It is inspired by games such as Cube World, Legend of Zelda: Breath of the Wild, Dwarf Fortress and Minecraft.
-
-This package includes the official client, Voxygen.
-"""
-
 [features]
 hot-anim = ["anim/use-dyn-lib"]
-hot-reloading = ["common/hot-reloading"]
-singleplayer = []
 simd = ["vek/platform_intrinsics"]
 tracy = ["common-frontend/tracy", "client/tracy", "wgpu-profiler/tracy"]
 # enables heap profiling with tracy
@@ -49,22 +36,15 @@ common-i18n = { package = "veloren-common-i18n", path = "common/i18n" }
 common-net = { package = "veloren-common-net", path = "common/net" }
 common-state = { package = "veloren-common-state", path = "common/state" }
 common-systems = { package = "veloren-common-systems", path = "common/systems" }
-
 anim = { package = "veloren-voxygen-anim", path = "anim" }
 i18n = { package = "veloren-client-i18n", path = "client/i18n" }
 i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
-
-# Graphics
 winit = { version = "0.30.12", features = ["serde"] }
 wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", features = ["spirv"] }
 wgpu-profiler = "0.28"
 bytemuck = { version = "1.7", features = ["derive"] }
-
-# Ui
 conrod_core = { path = "vendor/conrod/conrod_core" }
 euc = { path = "vendor/euc" }
-# We should probably migrate to a more recent version at some point, but this is significant amount of work.
-# Note: this does not depend on the version of `winit` anymore, all dependent code was moved into Voxygen
 iced = { package = "iced_native", git = "https://github.com/Imberflur/iced", tag = "veloren-winit-0.28" }
 glyph_brush = "0.7.0"
 
@@ -77,7 +57,6 @@ vek = { version = "0.17.0", features = ["serde", "mint"] }
 # Controller
 gilrs = { version = "0.11.0", features = ["serde-serialize"] }
 
-# Singleplayer
 
 # CLI
 clap = { version = "4.2", features = ["derive", "env"] }
@@ -145,7 +124,6 @@ lz-fear = { path = "vendor/lz-fear-0.2.0" }
 png = { path = "vendor/png-0.18.1" }
 hashbrown_015 = { package = "hashbrown", path = "vendor/hashbrown-0.15.5" }
 rust-argon2 = { path = "vendor/rust-argon2-2.1.0" }
-sha2 = { path = "vendor/sha2-0.10.9" }
 specs = { path = "vendor/specs" }
 shred = { path = "vendor/shred" }
 hibitset = { path = "vendor/hibitset" }

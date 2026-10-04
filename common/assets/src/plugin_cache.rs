@@ -5,7 +5,6 @@ use super::{ASSETS_PATH, Concatenate, fs::FileSystem};
 use assets_manager::{
     Asset, AssetCache, BoxedError, Storable,
     asset::DirLoadable,
-    hot_reloading::EventSender,
     source::{FileContent, Source, Tar},
 };
 
@@ -115,10 +114,6 @@ impl Source for CombinedSource {
                 .any(|plugin| plugin.cache.source().exists(entry))
     }
 
-    // TODO: Enable hot reloading for plugins
-    fn configure_hot_reloading(&self, events: EventSender) -> Result<(), BoxedError> {
-        self.fs.configure_hot_reloading(events)
-    }
 }
 
 /// A cache combining filesystem and plugin assets
