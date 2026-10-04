@@ -24,7 +24,9 @@ impl Locals {
 }
 
 impl Default for Locals {
-    fn default() -> Self { Self::new(Vec3::zero(), Vec3::zero(), 0.0) }
+    fn default() -> Self {
+        Self::new(Vec3::zero(), Vec3::zero(), 0.0)
+    }
 }
 
 pub type BoundLocals = Bound<Consts<Locals>>;

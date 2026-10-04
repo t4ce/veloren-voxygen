@@ -87,7 +87,9 @@ impl<'a> ManualScope<'a> {
         }
     }
 
-    fn encoder(&mut self) -> &mut wgpu::CommandEncoder { self.encoder.as_mut().unwrap() }
+    fn encoder(&mut self) -> &mut wgpu::CommandEncoder {
+        self.encoder.as_mut().unwrap()
+    }
 
     #[must_use]
     #[track_caller]
@@ -233,7 +235,9 @@ impl<'frame> Drawer<'frame> {
     }
 
     /// Get the pipeline modes.
-    pub fn pipeline_modes(&self) -> &super::PipelineModes { self.borrow.pipeline_modes }
+    pub fn pipeline_modes(&self) -> &super::PipelineModes {
+        self.borrow.pipeline_modes
+    }
 
     /// Returns None if the rain occlusion renderer is not enabled at some
     /// level, the pipelines are not available yet or clouds are disabled.
@@ -279,23 +283,24 @@ impl<'frame> Drawer<'frame> {
         }
 
         if let ShadowMap::Enabled(ref shadow_renderer) = self.borrow.shadow?.map {
-            let mut render_pass =
-                self.encoder
-                    .scoped_render_pass("shadow_pass", wgpu::RenderPassDescriptor {
-                        label: Some("shadow pass"),
-                        color_attachments: &[],
-                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                            view: &shadow_renderer.directed_depth.view,
-                            depth_ops: Some(wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(1.0),
-                                store: wgpu::StoreOp::Store,
-                            }),
-                            stencil_ops: None,
+            let mut render_pass = self.encoder.scoped_render_pass(
+                "shadow_pass",
+                wgpu::RenderPassDescriptor {
+                    label: Some("shadow pass"),
+                    color_attachments: &[],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &shadow_renderer.directed_depth.view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
                         }),
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                        multiview_mask: None,
-                    });
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                },
+            );
 
             render_pass.set_bind_group(0, &self.globals.bind_group, &[]);
 
@@ -316,42 +321,43 @@ impl<'frame> Drawer<'frame> {
         // are not enabled
         let shadow = self.borrow.shadow?;
 
-        let mut render_pass =
-            self.encoder
-                .scoped_render_pass("first_pass", wgpu::RenderPassDescriptor {
-                    label: Some("first pass"),
-                    color_attachments: &[
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.borrow.views.tgt_color,
-                            depth_slice: None,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        }),
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.borrow.views.tgt_mat,
-                            depth_slice: None,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        }),
-                    ],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.borrow.views.tgt_depth,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(0.0),
+        let mut render_pass = self.encoder.scoped_render_pass(
+            "first_pass",
+            wgpu::RenderPassDescriptor {
+                label: Some("first pass"),
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &self.borrow.views.tgt_color,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                             store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
+                        },
                     }),
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &self.borrow.views.tgt_mat,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                ],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.borrow.views.tgt_depth,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            },
+        );
 
         render_pass.set_bind_group(0, &self.globals.bind_group, &[]);
         render_pass.set_bind_group(1, &shadow.bind.bind_group, &[]);
@@ -369,24 +375,25 @@ impl<'frame> Drawer<'frame> {
         let pipelines = &self.borrow.pipelines.all()?;
         let shadow = self.borrow.shadow?;
 
-        let mut render_pass =
-            self.encoder
-                .scoped_render_pass("volumetric_pass", wgpu::RenderPassDescriptor {
-                    label: Some("volumetric pass (clouds)"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &self.borrow.views.tgt_color_pp,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
+        let mut render_pass = self.encoder.scoped_render_pass(
+            "volumetric_pass",
+            wgpu::RenderPassDescriptor {
+                label: Some("volumetric pass (clouds)"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.borrow.views.tgt_color_pp,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            },
+        );
 
         render_pass.set_bind_group(0, &self.globals.bind_group, &[]);
         render_pass.set_bind_group(1, &shadow.bind.bind_group, &[]);
@@ -403,31 +410,32 @@ impl<'frame> Drawer<'frame> {
         let pipelines = &self.borrow.pipelines.all()?;
         let shadow = self.borrow.shadow?;
 
-        let mut render_pass =
-            self.encoder
-                .scoped_render_pass("transparent_pass", wgpu::RenderPassDescriptor {
-                    label: Some("transparent pass (trails)"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &self.borrow.views.tgt_color_pp,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.borrow.views.tgt_depth,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
+        let mut render_pass = self.encoder.scoped_render_pass(
+            "transparent_pass",
+            wgpu::RenderPassDescriptor {
+                label: Some("transparent pass (trails)"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.borrow.views.tgt_color_pp,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.borrow.views.tgt_depth,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
                     }),
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            },
+        );
 
         render_pass.set_bind_group(0, &self.globals.bind_group, &[]);
         render_pass.set_bind_group(1, &shadow.bind.bind_group, &[]);
@@ -463,22 +471,25 @@ impl<'frame> Drawer<'frame> {
 
         let mut run_bloom_pass = |bind, view, label: String, pipeline, load| {
             let pass_label = format!("bloom {} pass", label);
-            let mut render_pass = encoder.scoped_render_pass(&label, wgpu::RenderPassDescriptor {
-                label: Some(&pass_label),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    depth_slice: None,
-                    resolve_target: None,
-                    view,
-                    ops: wgpu::Operations {
-                        store: wgpu::StoreOp::Store,
-                        load,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut render_pass = encoder.scoped_render_pass(
+                &label,
+                wgpu::RenderPassDescriptor {
+                    label: Some(&pass_label),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        depth_slice: None,
+                        resolve_target: None,
+                        view,
+                        ops: wgpu::Operations {
+                            store: wgpu::StoreOp::Store,
+                            load,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                },
+            );
 
             render_pass.set_bind_group(0, bind, &[]);
             render_pass.set_pipeline(pipeline);
@@ -550,24 +561,25 @@ impl<'frame> Drawer<'frame> {
             prof_span!("ui premultiply pass");
             let profile_name = format!("{UI_PREMULTIPLY_PASS} {i}");
             let label = format!("ui premultiply pass {i}");
-            let mut render_pass =
-                self.encoder
-                    .scoped_render_pass(&profile_name, wgpu::RenderPassDescriptor {
-                        label: Some(&label),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &target_texture.view,
-                            depth_slice: None,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                        multiview_mask: None,
-                    });
+            let mut render_pass = self.encoder.scoped_render_pass(
+                &profile_name,
+                wgpu::RenderPassDescriptor {
+                    label: Some(&label),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &target_texture.view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                },
+            );
             render_pass.set_pipeline(&premultiply_alpha.pipeline);
             for upload in &uploads {
                 let (source_bind_group, push_constant_data) = upload.draw_data(&target_texture);
@@ -586,29 +598,30 @@ impl<'frame> Drawer<'frame> {
     pub fn third_pass(&mut self) -> ThirdPassDrawer<'_> {
         self.run_ui_premultiply_passes();
 
-        let mut render_pass =
-            self.encoder
-                .scoped_render_pass("third_pass", wgpu::RenderPassDescriptor {
-                    label: Some("third pass (postprocess + ui)"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        // If a screenshot was requested render to that as an intermediate texture
-                        // instead
-                        view: self
-                            .taking_screenshot
-                            .as_ref()
-                            .map_or(&self.surface_view, |s| s.texture_view()),
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
+        let mut render_pass = self.encoder.scoped_render_pass(
+            "third_pass",
+            wgpu::RenderPassDescriptor {
+                label: Some("third pass (postprocess + ui)"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    // If a screenshot was requested render to that as an intermediate texture
+                    // instead
+                    view: self
+                        .taking_screenshot
+                        .as_ref()
+                        .map_or(&self.surface_view, |s| s.texture_view()),
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            },
+        );
 
         render_pass.set_bind_group(0, &self.globals.bind_group, &[]);
 
@@ -732,8 +745,9 @@ impl<'frame> Drawer<'frame> {
                         });
 
                 let label = format!("point shadow face-{} pass", face);
-                let mut render_pass =
-                    encoder.scoped_render_pass(&label, wgpu::RenderPassDescriptor {
+                let mut render_pass = encoder.scoped_render_pass(
+                    &label,
+                    wgpu::RenderPassDescriptor {
                         label: Some(&label),
                         color_attachments: &[],
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -747,7 +761,8 @@ impl<'frame> Drawer<'frame> {
                         timestamp_writes: None,
                         occlusion_query_set: None,
                         multiview_mask: None,
-                    });
+                    },
+                );
 
                 render_pass.set_pipeline(&shadow_renderer.point_pipeline.pipeline);
                 set_quad_index_buffer::<terrain::Vertex>(&mut render_pass, &self.borrow);
@@ -820,9 +835,9 @@ impl<'frame> Drawer<'frame> {
                         });
 
                 let label = format!("clear point shadow face-{} pass", face);
-                let _ = self
-                    .encoder
-                    .scoped_render_pass(&label, wgpu::RenderPassDescriptor {
+                let _ = self.encoder.scoped_render_pass(
+                    &label,
+                    wgpu::RenderPassDescriptor {
                         label: Some(&label),
                         color_attachments: &[],
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -836,7 +851,8 @@ impl<'frame> Drawer<'frame> {
                         timestamp_writes: None,
                         occlusion_query_set: None,
                         multiview_mask: None,
-                    });
+                    },
+                );
             }
         }
     }
@@ -1217,7 +1233,8 @@ impl<'pass_ref, 'pass: 'pass_ref> TerrainDrawer<'pass_ref, 'pass> {
 
         let submodel = model.submodel(index_range);
 
-        if self.atlas_textures
+        if self
+            .atlas_textures
             // Check if we are still using the same atlas texture as the previous drawn
             // chunk
             .filter(|current_atlas_textures| Arc::ptr_eq(current_atlas_textures, atlas_textures))
@@ -1254,8 +1271,12 @@ impl<'pass_ref, 'pass: 'pass_ref> ParticleDrawer<'pass_ref, 'pass> {
             self.render_pass
                 .set_vertex_buffer(1, instances.buf().slice(..));
             self.render_pass
-            // TODO: since we cast to u32 maybe this should returned by the len/count functions?
-            .draw_indexed(0..model.len() as u32 / 4 * 6, 0, 0..instances.count() as u32);
+                // TODO: since we cast to u32 maybe this should returned by the len/count functions?
+                .draw_indexed(
+                    0..model.len() as u32 / 4 * 6,
+                    0,
+                    0..instances.count() as u32,
+                );
         }
     }
 }

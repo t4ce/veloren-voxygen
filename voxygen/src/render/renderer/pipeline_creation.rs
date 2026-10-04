@@ -1,16 +1,9 @@
-use crate::render::{
-    pipelines::rain_occlusion,
-    renderer::compiler::ShaderStage,
-};
-#[cfg(not(feature = "precompiled-shaders"))]
-use super::compiler::{ShaderCCompiler, WgpuCompiler};
-#[cfg(not(feature = "precompiled-shaders"))]
-use super::super::ExperimentalShader;
+use crate::render::{pipelines::rain_occlusion, renderer::compiler::ShaderStage};
 
 use super::{
     super::{
-        AaMode, BloomMode, CloudMode, FluidMode, LightingMode, PipelineModes,
-        ReflectionMode, RenderError, ShadowMode,
+        AaMode, BloomMode, CloudMode, FluidMode, LightingMode, PipelineModes, ReflectionMode,
+        RenderError, ShadowMode,
         pipelines::{
             blit, bloom, clouds, debug, figure, fluid, lod_object, lod_terrain, particle,
             postprocess, rope, shadow, skybox, sprite, terrain, trail, ui,
@@ -267,7 +260,7 @@ impl ShaderModules {
                     config.factor.fraction(),
                     config.uniform_blur,
                 )
-            },
+            }
         };
 
         let anti_alias = shaders
@@ -290,10 +283,6 @@ impl ShaderModules {
             })
             .unwrap();
 
-        #[cfg(not(feature = "precompiled-shaders"))]
-        let shaderc_opts = !pipeline_modes
-            .experimental_shaders
-            .contains(&ExperimentalShader::DisableShadercOptimization);
         let fetch_include = move |name: &str, shader_name: &str| -> Result<String, String> {
             Ok(match name {
                 "constants.glsl" => constants.clone(),
@@ -314,22 +303,14 @@ impl ShaderModules {
                         "Include {} in {} is not defined",
                         other, shader_name
                     ));
-                },
+                }
             })
         };
 
-        #[cfg(feature = "precompiled-shaders")]
-        let mut compiler: Box<dyn super::compiler::Compiler> =
-            Box::new(super::compiler::PrecompiledCompiler::new(fetch_include)?);
-        #[cfg(not(feature = "precompiled-shaders"))]
-        let mut compiler: Box<dyn super::compiler::Compiler> = if pipeline_modes.enable_naga {
-            Box::new(WgpuCompiler::new(fetch_include)?)
-        } else {
-            Box::new(ShaderCCompiler::new(shaderc_opts, fetch_include)?)
-        };
+        let mut compiler = super::compiler::PrecompiledCompiler::new(fetch_include)?;
 
         let mut create_shader = move |name, stage| {
-            tracing::info!("Compiling {name}");
+            tracing::info!("Loading precompiled shader {name}");
             let glsl = &shaders
                 .get(name)
                 .unwrap_or_else(|| panic!("Can't retrieve shader: {}", name))
@@ -337,10 +318,13 @@ impl ShaderModules {
             compiler.create_shader_module(device, glsl, stage, name)
         };
 
-        let selected_fluid_shader = ["fluid-frag.", match pipeline_modes.fluid {
-            FluidMode::Low => "cheap",
-            _ => "shiny",
-        }]
+        let selected_fluid_shader = [
+            "fluid-frag.",
+            match pipeline_modes.fluid {
+                FluidMode::Low => "cheap",
+                _ => "shiny",
+            },
+        ]
         .concat();
 
         Ok(Self {
@@ -1041,7 +1025,7 @@ pub(super) fn recreate_pipelines(
                 Err(err) => {
                     result_send.send(Err(err)).expect("Channel disconnected");
                     return;
-                },
+                }
             };
         drop(guard);
 
@@ -1110,7 +1094,9 @@ struct Progress {
 }
 
 impl Progress {
-    fn new() -> Self { Self::default() }
+    fn new() -> Self {
+        Self::default()
+    }
 
     /// Creates a task incrementing the total number of tasks
     /// NOTE: all tasks should be created as upfront as possible so that the
@@ -1144,7 +1130,9 @@ impl<'a> Task<'a> {
 }
 
 impl Drop for Task<'_> {
-    fn drop(&mut self) { self.progress.complete.fetch_add(1, Ordering::Relaxed); }
+    fn drop(&mut self) {
+        self.progress.complete.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 pub struct PipelineCreation<T> {
@@ -1179,7 +1167,7 @@ impl<T> PipelineCreation<T> {
                 panic!(
                     "Background thread panicked or dropped the sender without sending anything!"
                 );
-            },
+            }
         }
     }
 }

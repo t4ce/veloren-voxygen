@@ -12,7 +12,9 @@ pub struct Locals {
 }
 
 impl Default for Locals {
-    fn default() -> Self { Self::new(Mat4::identity(), Mat4::identity()) }
+    fn default() -> Self {
+        Self::new(Mat4::identity(), Mat4::identity())
+    }
 }
 
 impl Locals {

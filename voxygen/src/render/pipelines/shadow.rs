@@ -22,7 +22,9 @@ impl Locals {
 }
 
 impl Default for Locals {
-    fn default() -> Self { Self::new(Mat4::identity(), Mat4::identity()) }
+    fn default() -> Self {
+        Self::new(Mat4::identity(), Mat4::identity())
+    }
 }
 
 pub type BoundLocals = Bound<Consts<Locals>>;
@@ -72,11 +74,15 @@ impl ShadowLayout {
 pub struct PointLightMatrix([[f32; 4]; 4]);
 
 impl PointLightMatrix {
-    pub fn new(shadow_mat: Mat4<f32>) -> Self { Self(shadow_mat.into_col_arrays()) }
+    pub fn new(shadow_mat: Mat4<f32>) -> Self {
+        Self(shadow_mat.into_col_arrays())
+    }
 }
 
 impl Default for PointLightMatrix {
-    fn default() -> Self { Self::new(Mat4::identity()) }
+    fn default() -> Self {
+        Self::new(Mat4::identity())
+    }
 }
 
 pub struct ShadowFigurePipeline {

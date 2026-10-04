@@ -87,11 +87,15 @@ impl TakeScreenshot {
 
     /// Get the texture view for the screenshot
     /// This can then be used as a render attachment
-    pub fn texture_view(&self) -> &wgpu::TextureView { &self.view }
+    pub fn texture_view(&self) -> &wgpu::TextureView {
+        &self.view
+    }
 
     /// Get the bind group used for blitting the screenshot to the current
     /// swapchain image
-    pub fn bind_group(&self) -> &wgpu::BindGroup { &self.bind_group.bind_group }
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group.bind_group
+    }
 
     /// Call this after rendering to the screenshot texture
     ///
@@ -162,7 +166,7 @@ impl TakeScreenshot {
                     "map_async never send the result for the screenshot mapping"
                 );
                 return;
-            },
+            }
         };
         let padded_buffer;
         let buffer_slice = buffer2.slice(..);
@@ -174,14 +178,14 @@ impl TakeScreenshot {
                     Err(err) => {
                         error!(?err, "Failed to access mapped screenshot buffer");
                         return;
-                    },
+                    }
                 };
                 padded_buffer
                     .chunks(padded_bytes_per_row as usize)
                     .map(|padded_chunk| {
                         &padded_chunk[..self.width as usize * self.bytes_per_pixel as usize]
                     })
-            },
+            }
             // Error
             Err(err) => {
                 error!(
@@ -189,7 +193,7 @@ impl TakeScreenshot {
                     "Failed to map buffer for downloading a screenshot from the GPU"
                 );
                 return;
-            },
+            }
         };
 
         // Note: we don't use bytes_per_pixel here since we expect only certain formats
@@ -214,7 +218,7 @@ impl TakeScreenshot {
                 });
 
                 Ok(pixel_bytes)
-            },
+            }
             wgpu::TextureFormat::Rgba8UnormSrgb => {
                 prof_span!("copy image");
                 rows.for_each(|row| {
@@ -230,7 +234,7 @@ impl TakeScreenshot {
                 });
 
                 Ok(pixel_bytes)
-            },
+            }
             format => Err(format!(
                 "Unhandled format for screenshot texture: {:?}",
                 format,

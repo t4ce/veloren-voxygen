@@ -17,22 +17,34 @@ impl<V: Vertex> Clone for Mesh<V> {
 impl<V: Vertex> Mesh<V> {
     #[expect(clippy::new_without_default)]
     /// Create a new `Mesh`.
-    pub fn new() -> Self { Self { verts: Vec::new() } }
+    pub fn new() -> Self {
+        Self { verts: Vec::new() }
+    }
 
     /// Clear vertices, allows reusing allocated memory of the underlying Vec.
-    pub fn clear(&mut self) { self.verts.clear(); }
+    pub fn clear(&mut self) {
+        self.verts.clear();
+    }
 
     /// Get a slice referencing the vertices of this mesh.
-    pub fn vertices(&self) -> &[V] { &self.verts }
+    pub fn vertices(&self) -> &[V] {
+        &self.verts
+    }
 
     /// Get a mutable slice referencing the vertices of this mesh.
-    pub fn vertices_mut(&mut self) -> &mut [V] { &mut self.verts }
+    pub fn vertices_mut(&mut self) -> &mut [V] {
+        &mut self.verts
+    }
 
     /// Get a mutable vec referencing the vertices of this mesh.
-    pub fn vertices_mut_vec(&mut self) -> &mut Vec<V> { &mut self.verts }
+    pub fn vertices_mut_vec(&mut self) -> &mut Vec<V> {
+        &mut self.verts
+    }
 
     /// Push a new vertex onto the end of this mesh.
-    pub fn push(&mut self, vert: V) { self.verts.push(vert); }
+    pub fn push(&mut self, vert: V) {
+        self.verts.push(vert);
+    }
 
     /// Push a new polygon onto the end of this mesh.
     pub fn push_tri(&mut self, tri: Tri<V>) {
@@ -90,7 +102,9 @@ impl<V: Vertex> Mesh<V> {
     }
 
     /// Push the vertices of another mesh onto the end of this mesh.
-    pub fn push_mesh(&mut self, other: &Mesh<V>) { self.verts.extend_from_slice(other.vertices()); }
+    pub fn push_mesh(&mut self, other: &Mesh<V>) {
+        self.verts.extend_from_slice(other.vertices());
+    }
 
     /// Map and push the vertices of another mesh onto the end of this mesh.
     pub fn push_mesh_map<F: FnMut(V) -> V>(&mut self, other: &Mesh<V>, mut f: F) {
@@ -103,23 +117,31 @@ impl<V: Vertex> Mesh<V> {
         }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, V> { self.verts.iter() }
+    pub fn iter(&self) -> std::slice::Iter<'_, V> {
+        self.verts.iter()
+    }
 
     /// NOTE: Panics if vertex_range is out of bounds of vertices.
     pub fn iter_mut(&mut self, vertex_range: Range<usize>) -> std::slice::IterMut<'_, V> {
         self.verts[vertex_range].iter_mut()
     }
 
-    pub fn len(&self) -> usize { self.verts.len() }
+    pub fn len(&self) -> usize {
+        self.verts.len()
+    }
 
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl<V: Vertex> IntoIterator for Mesh<V> {
     type IntoIter = std::vec::IntoIter<V>;
     type Item = V;
 
-    fn into_iter(self) -> Self::IntoIter { self.verts.into_iter() }
+    fn into_iter(self) -> Self::IntoIter {
+        self.verts.into_iter()
+    }
 }
 
 impl<V: Vertex> FromIterator<Tri<V>> for Mesh<V> {
@@ -157,7 +179,9 @@ pub struct Tri<V: Vertex> {
 }
 
 impl<V: Vertex> Tri<V> {
-    pub fn new(a: V, b: V, c: V) -> Self { Self { a, b, c } }
+    pub fn new(a: V, b: V, c: V) -> Self {
+        Self { a, b, c }
+    }
 }
 
 /// Represents a quad stored on the CPU.
@@ -169,7 +193,9 @@ pub struct Quad<V: Vertex> {
 }
 
 impl<V: Vertex> Quad<V> {
-    pub fn new(a: V, b: V, c: V, d: V) -> Self { Self { a, b, c, d } }
+    pub fn new(a: V, b: V, c: V, d: V) -> Self {
+        Self { a, b, c, d }
+    }
 
     #[must_use]
     pub fn rotated_by(self, n: usize) -> Self {

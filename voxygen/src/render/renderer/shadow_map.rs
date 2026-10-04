@@ -286,5 +286,7 @@ impl ShadowMap {
         }
     }
 
-    pub fn is_enabled(&self) -> bool { matches!(self, Self::Enabled(_)) }
+    pub fn is_enabled(&self) -> bool {
+        matches!(self, Self::Enabled(_))
+    }
 }

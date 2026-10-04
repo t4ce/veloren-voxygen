@@ -231,7 +231,9 @@ pub struct ShadowMapMode {
 }
 
 impl Default for ShadowMapMode {
-    fn default() -> Self { Self { resolution: 1.0 } }
+    fn default() -> Self {
+        Self { resolution: 1.0 }
+    }
 }
 
 /// Shadow modes
@@ -252,7 +254,9 @@ pub enum ShadowMode {
 }
 
 impl Default for ShadowMode {
-    fn default() -> Self { ShadowMode::Map(Default::default()) }
+    fn default() -> Self {
+        ShadowMode::Map(Default::default())
+    }
 }
 
 impl TryFrom<ShadowMode> for ShadowMapMode {
@@ -269,7 +273,9 @@ impl TryFrom<ShadowMode> for ShadowMapMode {
 }
 
 impl ShadowMode {
-    pub fn is_map(&self) -> bool { matches!(self, Self::Map(_)) }
+    pub fn is_map(&self) -> bool {
+        matches!(self, Self::Map(_))
+    }
 }
 
 /// Upscale mode settings.
@@ -280,7 +286,9 @@ pub struct UpscaleMode {
 }
 
 impl Default for UpscaleMode {
-    fn default() -> Self { Self { factor: 1.0 } }
+    fn default() -> Self {
+        Self { factor: 1.0 }
+    }
 }
 
 /// Present modes
@@ -379,7 +387,9 @@ impl Default for BloomMode {
 }
 
 impl BloomMode {
-    fn is_on(&self) -> bool { matches!(self, BloomMode::On(_)) }
+    fn is_on(&self) -> bool {
+        matches!(self, BloomMode::On(_))
+    }
 }
 
 /// Render modes
@@ -405,8 +415,6 @@ pub struct RenderMode {
     pub upscale_mode: UpscaleMode,
     pub present_mode: PresentMode,
     pub profiler_enabled: bool,
-    #[serde(skip)]
-    pub enable_naga: bool,
 }
 
 impl Default for RenderMode {
@@ -427,7 +435,6 @@ impl Default for RenderMode {
             upscale_mode: UpscaleMode::default(),
             present_mode: PresentMode::default(),
             profiler_enabled: false,
-            enable_naga: std::env::var("VELOREN_DISABLE_NAGA_SHADERS").is_err(),
         }
     }
 }
@@ -448,7 +455,6 @@ impl RenderMode {
                 point_glow: self.point_glow,
                 flashing_lights_enabled: self.flashing_lights_enabled,
                 experimental_shaders: self.experimental_shaders,
-                enable_naga: self.enable_naga,
             },
             OtherModes {
                 upscale_mode: self.upscale_mode,
@@ -459,7 +465,7 @@ impl RenderMode {
     }
 }
 
-/// Render modes that require pipeline recreation (e.g. shader recompilation)
+/// Render modes that require pipeline recreation
 /// when changed
 #[derive(PartialEq, Clone, Debug)]
 pub struct PipelineModes {
@@ -475,7 +481,6 @@ pub struct PipelineModes {
     point_glow: f32,
     flashing_lights_enabled: bool,
     experimental_shaders: HashSet<ExperimentalShader>,
-    enable_naga: bool,
 }
 
 impl PipelineModes {
@@ -586,13 +591,6 @@ pub enum ExperimentalShader {
     Cinematic,
     /// Glittering snow.
     SnowGlitter,
-    /// Enables optimizations when shaderc is processing shaders (currently on
-    /// by default, but keep this for now in case we have to switch back to
-    /// being off by default).
-    EnableShadercOptimization,
-    /// Disables optimizations when shaderc is processing shaders (has priority
-    /// over `EnableShadercOptimization`).
-    DisableShadercOptimization,
     /// Switches some transparency rendering to use discarding.
     DiscardTransparency,
     /// Display chunk borders for easier debugging.

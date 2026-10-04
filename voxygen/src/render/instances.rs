@@ -18,7 +18,9 @@ impl<'a, T: Copy + Pod> SubInstances<'a, T> {
         self.buf.slice(start..end)
     }
 
-    pub fn count(&self) -> u32 { self.inst_range.end - self.inst_range.start }
+    pub fn count(&self) -> u32 {
+        self.inst_range.end - self.inst_range.start
+    }
 }
 
 /// Represents a mesh that has been sent to the GPU.
@@ -46,11 +48,15 @@ impl<T: Copy + Pod> Instances<T> {
     }
 
     // TODO: count vs len naming scheme??
-    pub fn count(&self) -> usize { self.buf.len() }
+    pub fn count(&self) -> usize {
+        self.buf.len()
+    }
 
     pub fn update(&mut self, queue: &wgpu::Queue, vals: &[T], offset: usize) {
         self.buf.update(queue, vals, offset)
     }
 
-    pub fn buf(&self) -> &wgpu::Buffer { &self.buf.buf }
+    pub fn buf(&self) -> &wgpu::Buffer {
+        &self.buf.buf
+    }
 }

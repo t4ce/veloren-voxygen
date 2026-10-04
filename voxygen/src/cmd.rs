@@ -77,7 +77,7 @@ impl ClientChatCommand {
         match self {
             ClientChatCommand::Clear => {
                 cmd(Vec::new(), Content::localized("command-clear-desc"), None)
-            },
+            }
             ClientChatCommand::ExperimentalShader => cmd(
                 vec![Enum(
                     "Shader",
@@ -107,7 +107,7 @@ impl ClientChatCommand {
             ),
             ClientChatCommand::Waypoint => {
                 cmd(vec![], Content::localized("command-waypoint-desc"), None)
-            },
+            }
             ClientChatCommand::Wiki => cmd(
                 vec![Any("topic", Optional)],
                 Content::localized("command-wiki-desc"),
@@ -147,10 +147,13 @@ impl ClientChatCommand {
             .collect::<Vec<_>>()
             .join(" ");
 
-        Content::localized_with_args("command-help-template", [
-            ("usage", Content::Plain(usage)),
-            ("description", data.description),
-        ])
+        Content::localized_with_args(
+            "command-help-template",
+            [
+                ("usage", Content::Plain(usage)),
+                ("description", data.description),
+            ],
+        )
     }
 
     /// Produce an iterator over all the available commands
@@ -284,12 +287,12 @@ fn preproccess_command(
                             command_start = i + j + 1;
                             break;
                         }
-                    },
+                    }
 
                     ArgumentSpec::AssetPath(_, prefix, _, _) => {
                         *arg = prefix.to_string() + arg;
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
 
                 if matches!(arg_spec.requirement(), Requirement::Required) {
@@ -315,10 +318,13 @@ fn preproccess_command(
                         .map(|t| t.keyword().to_string())
                         .collect::<Vec<String>>()
                         .join("/");
-                    Content::localized_with_args("command-preprocess-target-error", [
-                        ("expected_list", LocalizationArg::from(expected_list)),
-                        ("target", LocalizationArg::from(target_str)),
-                    ])
+                    Content::localized_with_args(
+                        "command-preprocess-target-error",
+                        [
+                            ("expected_list", LocalizationArg::from(expected_list)),
+                            ("target", LocalizationArg::from(target_str)),
+                        ],
+                    )
                 })?;
             let uid = match target {
                 ClientEntityTarget::Target => session_state
@@ -356,7 +362,7 @@ fn preproccess_command(
                     } else {
                         return Err(Content::localized("command-preprocess-no-player-entity"));
                     }
-                },
+                }
                 ClientEntityTarget::Rider => {
                     if let Some(player) = player {
                         ecs.read_storage::<Is<Mount>>()
@@ -366,7 +372,7 @@ fn preproccess_command(
                     } else {
                         return Err(Content::localized("command-preprocess-no-player-entity"));
                     }
-                },
+                }
                 ClientEntityTarget::TargetSelf => player
                     .and_then(|e| ecs.uid_from_entity(e))
                     .ok_or(Content::localized("command-preprocess-no-player-entity"))?,
@@ -406,7 +412,7 @@ pub fn run_command(
                 .send_command(cmd.keyword().into(), args);
             Ok(None) // The server will provide a response when the command is
             // run
-        },
+        }
         ChatCommandKind::Client(cmd) => run_client_command(session_state, global_state, cmd, args),
     }
 }
@@ -432,24 +438,27 @@ fn invalid_command_message(client: &Client, user_entered_invalid_command: String
     let commands_with_same_prefix = usable_commands
         .filter(|cmd| cmd.starts_with(&user_entered_invalid_command) && cmd != &most_similar_cmd);
 
-    Content::localized_with_args("command-invalid-command-message", [
-        (
-            "invalid-command",
-            LocalizationArg::from(user_entered_invalid_command.clone()),
-        ),
-        (
-            "most-similar-command",
-            LocalizationArg::from(String::from("/") + most_similar_cmd),
-        ),
-        (
-            "commands-with-same-prefix",
-            LocalizationArg::from(
-                commands_with_same_prefix
-                    .map(|cmd| format!("/{cmd}"))
-                    .collect::<String>(),
+    Content::localized_with_args(
+        "command-invalid-command-message",
+        [
+            (
+                "invalid-command",
+                LocalizationArg::from(user_entered_invalid_command.clone()),
             ),
-        ),
-    ])
+            (
+                "most-similar-command",
+                LocalizationArg::from(String::from("/") + most_similar_cmd),
+            ),
+            (
+                "commands-with-same-prefix",
+                LocalizationArg::from(
+                    commands_with_same_prefix
+                        .map(|cmd| format!("/{cmd}"))
+                        .collect::<String>(),
+                ),
+            ),
+        ],
+    )
 }
 
 /// Returns the Levenshtein edit distance between two strings, counting Unicode
@@ -651,43 +660,31 @@ fn handle_help(
             .map(|(k, cmd)| format!("/{} => /{}", k, cmd.keyword()))
             .join("\n");
 
-        Ok(Some(Content::localized_with_args("command-help-list", [
-            ("client-commands", LocalizationArg::from(client_commands)),
-            ("server-commands", LocalizationArg::from(server_commands)),
-            (
-                "additional-shortcuts",
-                LocalizationArg::from(additional_shortcuts),
-            ),
-        ])))
+        Ok(Some(Content::localized_with_args(
+            "command-help-list",
+            [
+                ("client-commands", LocalizationArg::from(client_commands)),
+                ("server-commands", LocalizationArg::from(server_commands)),
+                (
+                    "additional-shortcuts",
+                    LocalizationArg::from(additional_shortcuts),
+                ),
+            ],
+        )))
     }
 }
 
-/// Handles [`ClientChatCommand::Naga`]
-///
-///Toggles use of naga in initial shader processing.
+/// Handles the legacy backend command; the shader backend is fixed.
 fn handle_naga(
     _session_state: &mut SessionState,
-    global_state: &mut GlobalState,
+    _global_state: &mut GlobalState,
     _args: Vec<String>,
 ) -> CommandResult {
-    let mut new_render_mode = global_state.settings.graphics.render_mode.clone();
-    new_render_mode.enable_naga ^= true;
-    let naga_enabled = new_render_mode.enable_naga;
-    change_render_mode(
-        new_render_mode,
-        &mut global_state.window,
-        &mut global_state.settings,
-    );
-
     Ok(Some(Content::localized_with_args(
         "command-shader-backend",
         [(
             "shader-backend",
-            if naga_enabled {
-                LocalizationArg::from("naga")
-            } else {
-                LocalizationArg::from("shaderc")
-            },
+            LocalizationArg::from("precompiled SPIR-V"),
         )],
     )))
 }
@@ -706,10 +703,10 @@ fn handle_mute(
             .values()
             .find(|p| p.player_alias == alias)
             .ok_or_else(|| {
-                Content::localized_with_args("command-mute-no-player-found", [(
-                    "player",
-                    LocalizationArg::from(alias.clone()),
-                )])
+                Content::localized_with_args(
+                    "command-mute-no-player-found",
+                    [("player", LocalizationArg::from(alias.clone()))],
+                )
             })?;
 
         if let Some(me) = client.uid().and_then(|uid| client.player_list().get(&uid))
@@ -819,10 +816,10 @@ fn handle_wiki(
     open::that_detached(url)
         .map(|_| Some(Content::localized("command-wiki-success")))
         .map_err(|e| {
-            Content::localized_with_args("command-wiki-fail", [(
-                "error",
-                LocalizationArg::from(e.to_string()),
-            )])
+            Content::localized_with_args(
+                "command-wiki-fail",
+                [("error", LocalizationArg::from(e.to_string()))],
+            )
         })
 }
 
@@ -882,13 +879,13 @@ impl TabComplete for ArgumentSpec {
                                     }
                                 })
                                 .collect()
-                        },
+                        }
                         _ => vec![],
                     }
                 } else {
                     complete_player(part, client)
                 }
-            },
+            }
             ArgumentSpec::SiteName(_) => complete_site(part, client, i18n),
             ArgumentSpec::Float(_, x, _) => {
                 if part.is_empty() {
@@ -896,14 +893,14 @@ impl TabComplete for ArgumentSpec {
                 } else {
                     vec![] // No suggestions if already typing
                 }
-            },
+            }
             ArgumentSpec::Integer(_, x, _) => {
                 if part.is_empty() {
                     vec![format!("{}", x)]
                 } else {
                     vec![]
                 }
-            },
+            }
             // No specific completion for arbitrary 'Any' arguments
             ArgumentSpec::Any(_, _) => vec![],
             ArgumentSpec::Command(_) => complete_command(part, ""),
@@ -935,7 +932,7 @@ impl TabComplete for ArgumentSpec {
                         .filter_map(|c| Some(c.strip_prefix(prefix)?.to_string()))
                         .collect()
                 }
-            },
+            }
             ArgumentSpec::Boolean(_, part, _) => ["true", "false"]
                 .iter()
                 .filter(|string| string.starts_with(part))
@@ -988,17 +985,17 @@ fn nth_word(line: &str, n: usize) -> Option<usize> {
 
     for (i, c) in line.char_indices() {
         match (is_space, c.is_whitespace()) {
-            (true, true) => {},
+            (true, true) => {}
             // start of a new word
             (true, false) => {
                 is_space = false;
                 word_counter += 1;
-            },
+            }
             // end of the current word
             (false, true) => {
                 is_space = true;
-            },
-            (false, false) => {},
+            }
+            (false, false) => {}
         }
 
         if word_counter == n {
@@ -1082,7 +1079,7 @@ pub fn complete(line: &str, client: &Client, i18n: &Localization, cmd_prefix: &s
                         } else {
                             vec![]
                         }
-                    },
+                    }
                     // For message arguments, complete with player names
                     Some(ArgumentSpec::Message(_)) => complete_player(word, client),
                     _ => vec![],
@@ -1111,14 +1108,17 @@ fn verify_cmd_list_sorted() {
 #[test]
 fn test_complete_command() {
     assert_eq!(complete_command("mu", "/"), vec!["/mute".to_string()]);
-    assert_eq!(complete_command("unba", "/"), vec![
-        "/unban".to_string(),
-        "/unban_ip".to_string()
-    ]);
-    assert_eq!(complete_command("make_", "/"), vec![
-        "/make_block".to_string(),
-        "/make_npc".to_string(),
-        "/make_sprite".to_string(),
-        "/make_volume".to_string()
-    ]);
+    assert_eq!(
+        complete_command("unba", "/"),
+        vec!["/unban".to_string(), "/unban_ip".to_string()]
+    );
+    assert_eq!(
+        complete_command("make_", "/"),
+        vec![
+            "/make_block".to_string(),
+            "/make_npc".to_string(),
+            "/make_sprite".to_string(),
+            "/make_volume".to_string()
+        ]
+    );
 }

@@ -77,7 +77,9 @@ impl BoneData {
 }
 
 impl Default for BoneData {
-    fn default() -> Self { Self::new(anim::vek::Mat4::identity(), anim::vek::Mat4::identity()) }
+    fn default() -> Self {
+        Self::new(anim::vek::Mat4::identity(), anim::vek::Mat4::identity())
+    }
 }
 
 pub struct FigureModel {

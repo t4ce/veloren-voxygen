@@ -22,5 +22,7 @@ impl<T: Copy + Pod> Consts<T> {
         self.buf.update(queue, vals, offset)
     }
 
-    pub fn buf(&self) -> &wgpu::Buffer { &self.buf.buf }
+    pub fn buf(&self) -> &wgpu::Buffer {
+        &self.buf.buf
+    }
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bake active Voxygen GLSL stages using TRUEOS's glslc Vulkan 1.1 lane."""
+"""Bake Voxygen GLSL stages offline with glslc targeting Vulkan 1.1."""
 import argparse
 import hashlib
 import json

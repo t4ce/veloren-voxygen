@@ -59,7 +59,9 @@ impl From<Vec4<f32>> for Locals {
 }
 
 impl Default for Locals {
-    fn default() -> Self { Self { pos: [0.0; 4] } }
+    fn default() -> Self {
+        Self { pos: [0.0; 4] }
+    }
 }
 
 #[repr(C)]
@@ -663,11 +665,14 @@ impl PremultiplyUpload {
         let target_dims = target.get_dimensions();
         // NOTE: We assume the max texture size is less than u16::MAX.
         let target_size_xy = target_dims.x + (target_dims.y << 16);
-        (&self.source_bg, PremultiplyAlphaParams {
-            source_size_xy: self.source_size_xy,
-            target_offset_xy,
-            target_size_xy,
-        })
+        (
+            &self.source_bg,
+            PremultiplyAlphaParams {
+                source_size_xy: self.source_size_xy,
+                target_offset_xy,
+                target_size_xy,
+            },
+        )
     }
 }
 

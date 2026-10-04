@@ -25,7 +25,9 @@ impl<T: Copy + Pod> Buffer<T> {
     }
 
     #[expect(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize { self.len }
+    pub fn len(&self) -> usize {
+        self.len
+    }
 }
 
 pub struct DynamicBuffer<T: Copy + Pod>(Buffer<T>);
@@ -59,5 +61,7 @@ impl<T: Copy + Pod> DynamicBuffer<T> {
 impl<T: Copy + Pod> std::ops::Deref for DynamicBuffer<T> {
     type Target = Buffer<T>;
 
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }

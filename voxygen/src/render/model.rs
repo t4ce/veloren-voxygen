@@ -20,7 +20,9 @@ impl<'a, V: Vertex> SubModel<'a, V> {
     }
 
     #[expect(clippy::len_without_is_empty)]
-    pub fn len(&self) -> u32 { self.vertex_range.end - self.vertex_range.start }
+    pub fn len(&self) -> u32 {
+        self.vertex_range.end - self.vertex_range.start
+    }
 }
 
 /// Represents a mesh that has been sent to the GPU.
@@ -50,10 +52,14 @@ impl<V: Vertex> Model<V> {
         }
     }
 
-    pub(super) fn buf(&self) -> &wgpu::Buffer { &self.vbuf.buf }
+    pub(super) fn buf(&self) -> &wgpu::Buffer {
+        &self.vbuf.buf
+    }
 
     #[expect(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize { self.vbuf.len() }
+    pub fn len(&self) -> usize {
+        self.vbuf.len()
+    }
 }
 
 /// Represents a mesh that has been sent to the GPU.
@@ -82,8 +88,12 @@ impl<V: Vertex> DynamicModel<V> {
         }
     }
 
-    pub fn buf(&self) -> &wgpu::Buffer { &self.vbuf.buf }
+    pub fn buf(&self) -> &wgpu::Buffer {
+        &self.vbuf.buf
+    }
 
     #[expect(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize { self.vbuf.len() }
+    pub fn len(&self) -> usize {
+        self.vbuf.len()
+    }
 }

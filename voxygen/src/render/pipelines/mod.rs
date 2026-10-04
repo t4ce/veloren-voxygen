@@ -257,7 +257,9 @@ impl Light {
         self
     }
 
-    pub fn get_pos(&self) -> Vec3<f32> { Vec3::new(self.pos[0], self.pos[1], self.pos[2]) }
+    pub fn get_pos(&self) -> Vec3<f32> {
+        Vec3::new(self.pos[0], self.pos[1], self.pos[2])
+    }
 
     #[must_use]
     pub fn with_strength(mut self, strength: f32) -> Self {
@@ -267,7 +269,9 @@ impl Light {
 }
 
 impl Default for Light {
-    fn default() -> Self { Self::new(Vec3::zero(), Rgb::zero(), 0.0) }
+    fn default() -> Self {
+        Self::new(Vec3::zero(), Rgb::zero(), 0.0)
+    }
 }
 
 impl Shadow {
@@ -283,7 +287,9 @@ impl Shadow {
 }
 
 impl Default for Shadow {
-    fn default() -> Self { Self::new(Vec3::zero(), 0.0) }
+    fn default() -> Self {
+        Self::new(Vec3::zero(), 0.0)
+    }
 }
 
 // Global scene data spread across several arrays.
@@ -335,7 +341,9 @@ impl<S: AtlasData> VoxelAtlasLayout<S> {
         Self(layout, PhantomData)
     }
 
-    pub fn layout(&self) -> &wgpu::BindGroupLayout { &self.0 }
+    pub fn layout(&self) -> &wgpu::BindGroupLayout {
+        &self.0
+    }
 }
 
 /// A trait implemented by texture atlas groups.

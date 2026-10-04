@@ -26,3 +26,6 @@ Mumble integration remains enabled on Linux.
 Development dependencies are omitted from crate manifests. Game-crate unit
 tests, documentation tests, benchmarks and extra test targets are disabled.
 Production dependencies, including tokio-parallel, remain where required.
+
+Precompiled SPIR-V shaders are always used; no runtime GLSL compiler or shaderc
+dependency remains. See voxygen/shaderbin/README.md for offline rebaking.

@@ -71,7 +71,9 @@ struct Layouts {
 impl core::ops::Deref for Layouts {
     type Target = ImmutableLayouts;
 
-    fn deref(&self) -> &Self::Target { &self.immutable }
+    fn deref(&self) -> &Self::Target {
+        &self.immutable
+    }
 }
 
 /// Render target views
@@ -277,7 +279,7 @@ impl Renderer {
                     force_fallback_adapter: false,
                     apply_limit_buckets: false,
                 }))?
-            },
+            }
         };
 
         let info = adapter.get_info();
@@ -403,19 +405,22 @@ impl Renderer {
         let intermediate_format = supported_internal_formats
             .into_iter()
             .find(|format| {
-                use wgpu::TextureUsages as Usages;
-                use wgpu::TextureFormatFeatureFlags as Flags;
                 use super::AaMode;
+                use wgpu::TextureFormatFeatureFlags as Flags;
+                use wgpu::TextureUsages as Usages;
 
-                let features = adapter
-                    .get_texture_format_features(*format);
+                let features = adapter.get_texture_format_features(*format);
 
-                let usage_ok = features
-                    .allowed_usages
-                    .contains(Usages::RENDER_ATTACHMENT | Usages::COPY_SRC | Usages::TEXTURE_BINDING);
+                let usage_ok = features.allowed_usages.contains(
+                    Usages::RENDER_ATTACHMENT | Usages::COPY_SRC | Usages::TEXTURE_BINDING,
+                );
 
                 let msaa_flags = match pipeline_modes.aa {
-                    AaMode::None | AaMode::Fxaa | AaMode::Hqx | AaMode::FxUpscale | AaMode::Bilinear => Flags::empty(),
+                    AaMode::None
+                    | AaMode::Fxaa
+                    | AaMode::Hqx
+                    | AaMode::FxUpscale
+                    | AaMode::Bilinear => Flags::empty(),
                     AaMode::MsaaX4 => Flags::MULTISAMPLE_X4,
                     AaMode::MsaaX8 => Flags::MULTISAMPLE_X8,
                     AaMode::MsaaX16 => Flags::MULTISAMPLE_X8, // TODO?
@@ -584,13 +589,15 @@ impl Renderer {
             create_quad_index_buffer_u32(&device, QUAD_INDEX_BUFFER_U32_START_VERT_LEN as usize);
         other_modes.profiler_enabled &= profiler_features_enabled;
         #[cfg(not(feature = "tracy"))]
-        let profiler =
-            wgpu_profiler::GpuProfiler::new(&device, wgpu_profiler::GpuProfilerSettings {
+        let profiler = wgpu_profiler::GpuProfiler::new(
+            &device,
+            wgpu_profiler::GpuProfilerSettings {
                 enable_timer_queries: other_modes.profiler_enabled,
                 enable_debug_groups: other_modes.profiler_enabled,
                 max_num_pending_frames: 4,
-            })
-            .expect("Error creating profiler");
+            },
+        )
+        .expect("Error creating profiler");
         #[cfg(feature = "tracy")]
         let profiler = wgpu_profiler::GpuProfiler::new_with_tracy_client(
             wgpu_profiler::GpuProfilerSettings {
@@ -666,7 +673,9 @@ impl Renderer {
     }
 
     /// Get the graphics backend being used.
-    pub fn graphics_backend(&self) -> wgpu::Backend { self.graphics_backend }
+    pub fn graphics_backend(&self) -> wgpu::Backend {
+        self.graphics_backend
+    }
 
     /// Check the status of the intial pipeline creation
     /// Returns `None` if complete
@@ -739,10 +748,14 @@ impl Renderer {
     }
 
     /// Get the pipelines mode.
-    pub fn pipeline_modes(&self) -> &PipelineModes { &self.pipeline_modes }
+    pub fn pipeline_modes(&self) -> &PipelineModes {
+        &self.pipeline_modes
+    }
 
     /// Get the supported present modes.
-    pub fn present_modes(&self) -> &[PresentMode] { &self.present_modes }
+    pub fn present_modes(&self) -> &[PresentMode] {
+        &self.present_modes
+    }
 
     /// Get the current profiling times
     /// Nested timings immediately follow their parent
@@ -795,9 +808,11 @@ impl Renderer {
                 .as_ref()
                 .map(|tgts| locals::BloomParams {
                     locals: bloom_sizes.map(|size| {
-                        Self::create_consts_inner(&self.device, &self.queue, &[bloom::Locals::new(
-                            size,
-                        )])
+                        Self::create_consts_inner(
+                            &self.device,
+                            &self.queue,
+                            &[bloom::Locals::new(size)],
+                        )
                     }),
                     src_views: [
                         &self.views.tgt_color_pp,
@@ -864,10 +879,10 @@ impl Renderer {
                         *directed_depth = new_directed_depth;
 
                         update_shadow_bind = true;
-                    },
+                    }
                     Err(err) => {
                         warn!("Could not create shadow map views: {:?}", err);
-                    },
+                    }
                 }
             }
             if let Some(rain_depth) = rain_views {
@@ -880,10 +895,10 @@ impl Renderer {
                         *rain_depth = new_rain_depth;
 
                         update_shadow_bind = true;
-                    },
+                    }
                     Err(err) => {
                         warn!("Could not create rain occlusion map view: {:?}", err);
-                    },
+                    }
                 }
             }
             if update_shadow_bind {
@@ -1055,7 +1070,9 @@ impl Renderer {
     }
 
     /// Get the resolution of the render target.
-    pub fn resolution(&self) -> Vec2<u32> { self.resolution }
+    pub fn resolution(&self) -> Vec2<u32> {
+        self.resolution
+    }
 
     /// Get the internal resolution of the render target.
     pub fn internal_resolution(&self) -> Vec2<u32> {
@@ -1174,7 +1191,7 @@ impl Renderer {
                         shadow,
                         recreating: None,
                     }
-                },
+                }
                 // Not complete
                 Err(creating) => State::Interface {
                     pipelines: interface,
@@ -1241,7 +1258,7 @@ impl Renderer {
                         shadow,
                         recreating: None,
                     }
-                },
+                }
                 Ok(Err(e)) => {
                     error!(?e, "Could not recreate shaders from assets due to an error");
                     State::Complete {
@@ -1249,7 +1266,7 @@ impl Renderer {
                         shadow,
                         recreating: None,
                     }
-                },
+                }
                 // Not complete
                 Err(pipeline_creation) => State::Complete {
                     pipelines,
@@ -1274,10 +1291,13 @@ impl Renderer {
         }
 
         // Or if we have a recreation pending
-        if matches!(&self.state, State::Complete {
-            recreating: None,
-            ..
-        }) && let Some(new_pipeline_modes) = self.recreation_pending.take()
+        if matches!(
+            &self.state,
+            State::Complete {
+                recreating: None,
+                ..
+            }
+        ) && let Some(new_pipeline_modes) = self.recreation_pending.take()
         {
             self.recreate_pipelines(new_pipeline_modes);
         }
@@ -1289,7 +1309,7 @@ impl Renderer {
                 drop(texture);
                 self.surface.configure(&self.device, &self.surface_config);
                 return Ok(None);
-            },
+            }
             wgpu::CurrentSurfaceTexture::Lost => {
                 warn!("Surface lost, recreating");
                 self.surface = self
@@ -1300,20 +1320,20 @@ impl Renderer {
                     })?;
                 self.surface.configure(&self.device, &self.surface_config);
                 return Ok(None);
-            },
+            }
             wgpu::CurrentSurfaceTexture::Outdated => {
                 warn!("Outdated swap chain, recreating");
                 self.surface.configure(&self.device, &self.surface_config);
                 return Ok(None);
-            },
+            }
             wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
                 return Ok(None);
-            },
+            }
             wgpu::CurrentSurfaceTexture::Validation => {
                 return Err(RenderError::CustomError(
                     "Surface acquisition validation failed".into(),
                 ));
-            },
+            }
         };
         let encoder = self
             .device
@@ -1331,7 +1351,7 @@ impl Renderer {
                 // Defer recreation so that we are not building multiple sets of pipelines in
                 // the background at once
                 self.recreation_pending = Some(pipeline_modes);
-            },
+            }
             State::Complete {
                 recreating, shadow, ..
             } => {
@@ -1352,13 +1372,13 @@ impl Renderer {
                         self.intermediate_format,
                     ),
                 ));
-            },
+            }
             State::Interface { .. } => {
                 // Defer recreation so that we are not building multiple sets of pipelines in
                 // the background at once
                 self.recreation_pending = Some(pipeline_modes);
-            },
-            State::Nothing => {},
+            }
+            State::Nothing => {}
         }
     }
 
@@ -1422,7 +1442,7 @@ impl Renderer {
                     self.quad_index_buffer_u16 =
                         create_quad_index_buffer_u16(&self.device, vert_length);
                 }
-            },
+            }
             Some(wgpu::IndexFormat::Uint32) => {
                 // Make sure the global quad index buffer is large enough
                 if self.quad_index_buffer_u32.len() < quad_index_length {
@@ -1438,8 +1458,8 @@ impl Renderer {
                     self.quad_index_buffer_u32 =
                         create_quad_index_buffer_u32(&self.device, vert_length);
                 }
-            },
-            None => {},
+            }
+            None => {}
         }
     }
 
@@ -1467,7 +1487,9 @@ impl Renderer {
     }
 
     /// Return the maximum supported texture size.
-    pub fn max_texture_size(&self) -> u32 { self.max_texture_size }
+    pub fn max_texture_size(&self) -> u32 {
+        self.max_texture_size
+    }
 
     /// Create a new immutable texture from the provided image.
     /// # Panics

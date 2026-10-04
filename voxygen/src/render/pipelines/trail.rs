@@ -21,7 +21,9 @@ impl Vertex {
         }
     }
 
-    pub fn zero() -> Self { Self { pos: [0.0; 3] } }
+    pub fn zero() -> Self {
+        Self { pos: [0.0; 3] }
+    }
 }
 
 impl Mul<f32> for Vertex {

@@ -137,7 +137,9 @@ pub enum ParticleMode {
 }
 
 impl ParticleMode {
-    pub fn into_uint(self) -> u32 { self as u32 }
+    pub fn into_uint(self) -> u32 {
+        self as u32
+    }
 }
 
 #[repr(C)]
