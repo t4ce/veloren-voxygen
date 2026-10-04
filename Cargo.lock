@@ -2801,16 +2801,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num_cpus"
-version = "1.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
-dependencies = [
- "hermit-abi",
- "libc",
-]
-
-[[package]]
 name = "num_enum"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4044,14 +4034,11 @@ dependencies = [
 [[package]]
 name = "rusttype"
 version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f61411055101f7b60ecf1041d87fb74205fb20b0c7a723f07ef39174cf6b4c0"
 dependencies = [
  "approx 0.3.2",
  "crossbeam-deque 0.7.4",
  "crossbeam-utils 0.7.2",
  "linked-hash-map",
- "num_cpus",
  "ordered-float 1.1.1",
  "rustc-hash 1.1.0",
  "stb_truetype",
@@ -5433,7 +5420,6 @@ dependencies = [
  "mumble-link",
  "num-integer",
  "num-traits",
- "num_cpus",
  "open",
  "ordered-float 5.3.0",
  "quinn",

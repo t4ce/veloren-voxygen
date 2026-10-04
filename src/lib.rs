@@ -10,6 +10,9 @@
 #![recursion_limit = "2048"]
 
 extern crate alloc;
+
+/// Fixed processor budget for this client.
+pub const CPU_COUNT: usize = 4;
 #[macro_use]
 pub mod ui;
 pub mod audio;

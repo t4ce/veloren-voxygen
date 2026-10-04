@@ -114,8 +114,7 @@ fn main() {
     use core::{sync::atomic::AtomicUsize, sync::atomic::Ordering};
     use tokio::runtime::Builder;
 
-    // TODO: evaluate std::thread::available_concurrency as a num_cpus replacement
-    let cores = num_cpus::get();
+    let cores = veloren_voxygen::CPU_COUNT;
     let tokio_runtime = Arc::new(
         Builder::new_multi_thread()
             .enable_all()

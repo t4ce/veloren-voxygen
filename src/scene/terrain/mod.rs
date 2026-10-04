@@ -1024,7 +1024,7 @@ impl<V: RectRasterableVol> Terrain<V> {
 
         // Limit ourselves to u16::MAX even if larger textures are supported.
         let max_texture_size = renderer.max_texture_size();
-        let meshing_cores = match num_cpus::get() as u64 {
+        let meshing_cores = match crate::CPU_COUNT as u64 {
             n if n < 4 => 1,
             n if n < 8 => n - 3,
             n => n - 4,
