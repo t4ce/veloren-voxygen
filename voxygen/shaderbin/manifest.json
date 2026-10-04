@@ -1182,12 +1182,12 @@
       "stage": "vert"
     },
     {
-      "bytes": 27720,
-      "file": "fluid-frag.shiny.minimal.spv",
-      "name": "fluid-frag.shiny",
+      "bytes": 11296,
+      "file": "fluid-frag.cheap.minimal.spv",
+      "name": "fluid-frag.cheap",
       "profile": "minimal",
-      "sha256": "3a70ae7db450c0e409d9ed0a24248ab255525de6adef89fe6bff593bd8bd96ef",
-      "source_sha256": "557e8cfa8ec6df686e1e1f73534febc2721beb81cb734cf15287cf3e218eff19",
+      "sha256": "fe079df1391e0c9715c2f71f528b78ba8a32cd3e064d9a922cef3e67dbcb060f",
+      "source_sha256": "edaede1cb60b566fb1b0d223ce25d9a641441871c5a3888fb74ce9a664e98903",
       "stage": "frag"
     }
   ]

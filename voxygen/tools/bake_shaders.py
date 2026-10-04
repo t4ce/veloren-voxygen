@@ -67,6 +67,8 @@ def bake():
                 return INCLUDE.sub(resolve, source)
 
             for name, stage in entries:
+                if minimal and name == "fluid-frag.shiny":
+                    name = "fluid-frag.cheap"
                 source = expand((SOURCES / (name.replace(".", "/") + ".glsl")).read_text())
                 suffix = "vert" if stage == "Vertex" else "frag"
                 filename = f"{name}.{'minimal' if minimal else shadow.lower()}.spv"

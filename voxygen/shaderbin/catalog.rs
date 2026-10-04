@@ -122,5 +122,5 @@ pub(super) const SHADERS: &[(&str, &str, &str, &[u8])] = &[
     ("light-shadows-debug-vert", "caecb9600f7001bc8c9d6555a195d129ca9d23f0c0ddac05c6b3d083075a6069", "1c0486b0623d183bf1be124fb6021209e07bbbfcc3a90e1fa6c75d18197b0f17", include_bytes!("light-shadows-debug-vert.minimal.spv")),
     ("rain-occlusion-directed-vert", "42defbc027157ec2cbf8bc1373e0292aad181858446cdec030c5b49083fe2f49", "55eeba17da5bd319b3c10b51fd9abcc5ca91f04ab0daeee0dcd5f0372e8af8e5", include_bytes!("rain-occlusion-directed-vert.minimal.spv")),
     ("rain-occlusion-figure-vert", "27b69b1a471c8fdbb34a923b48467fa287b4b8539500783fe04be122c20a56d2", "550df2d9493cc29c4235c597026a2c325b8320d388e14a5d304641bb33ea8928", include_bytes!("rain-occlusion-figure-vert.minimal.spv")),
-    ("fluid-frag.shiny", "557e8cfa8ec6df686e1e1f73534febc2721beb81cb734cf15287cf3e218eff19", "3a70ae7db450c0e409d9ed0a24248ab255525de6adef89fe6bff593bd8bd96ef", include_bytes!("fluid-frag.shiny.minimal.spv")),
+    ("fluid-frag.cheap", "edaede1cb60b566fb1b0d223ce25d9a641441871c5a3888fb74ce9a664e98903", "fe079df1391e0c9715c2f71f528b78ba8a32cd3e064d9a922cef3e67dbcb060f", include_bytes!("fluid-frag.cheap.minimal.spv")),
 ];
