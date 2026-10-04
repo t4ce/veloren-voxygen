@@ -43,13 +43,6 @@ version = "1.0"
 [dependencies.digest]
 version = "0.10.7"
 
-[dev-dependencies.digest]
-version = "0.10.7"
-features = ["dev"]
-
-[dev-dependencies.hex-literal]
-version = "0.2.2"
-
 [features]
 asm = ["sha1-asm"]
 compress = []

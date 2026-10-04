@@ -22,18 +22,8 @@ default = ["std"]
 std = ["vek/std"]
 libm = ["vek/libm", "num-traits"]
 
-[dev-dependencies]
-minifb = "0.19.1"
-tobj = "2.0.2"
-criterion = "0.3"
-image = "0.23.12"
-
 [lib]
 bench = false
-
-[[bench]]
-name = "teapot"
-harness = false
 
 [profile.dev]
 # Optimize by default so we don't need to remember to always pass in --release

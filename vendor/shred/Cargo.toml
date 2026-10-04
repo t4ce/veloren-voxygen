@@ -67,12 +67,6 @@ version = "1.6.1"
 [dependencies.tynm]
 version = "0.1.7"
 
-[dev-dependencies.cgmath]
-version = "0.18.0"
-
-[dev-dependencies.shred-derive]
-version = "0.7.0"
-
 [features]
 default = [
     "parallel",

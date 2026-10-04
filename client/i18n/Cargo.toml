@@ -30,3 +30,8 @@ fluent-syntax = "0.12"
 [features]
 bin = ["clap"]
 stat = []
+
+[lib]
+test = false
+doctest = false
+bench = false

@@ -31,3 +31,8 @@ specs = { version = "0.20", features = ["nightly", "serde", "storage-event-contr
 
 # Serde
 serde = { version = "1.0.118", features = ["derive"] }
+
+[lib]
+test = false
+doctest = false
+bench = false

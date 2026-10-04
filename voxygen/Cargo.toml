@@ -8,9 +8,6 @@ version = "0.18.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 default-run = "veloren-voxygen"
-# Cargo thinks it should build the voxygen binary even when a specific bench is specified for building
-# Uncomment below and comment out default-run if you want to avoid this
-# autobins = false
 
 [package.metadata.nix]
 build = true
@@ -144,13 +141,10 @@ enum-map = "2.4"
 cpal = "0.18"
 
 [[bin]]
+test = false
+bench = false
 name = "veloren-voxygen"
 path = "src/main.rs"
-
-[dev-dependencies]
-criterion = { version = "0.8", default-features = false, features = ["rayon", "cargo_bench_support"] }
-tokio-parallel = { package = "veloren-tokio-parallel", path = "../common/tokio-parallel" }
-
 
 [profile.dev]
 opt-level = 0
@@ -173,3 +167,8 @@ shred = { path = "../vendor/shred" }
 hibitset = { path = "../vendor/hibitset" }
 hashbrown = { path = "../vendor/hashbrown" }
 indexmap = { path = "../vendor/indexmap" }
+
+[lib]
+test = false
+doctest = false
+bench = false

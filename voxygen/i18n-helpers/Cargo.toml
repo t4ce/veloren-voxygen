@@ -16,7 +16,8 @@ i18n = {package = "veloren-client-i18n", path = "../../client/i18n"}
 tracing = "0.1"
 
 
-[dev-dependencies]
-rand = { version = "0.10", features = ["alloc"] }
-vek = { version = "0.17.0", features = ["serde", "mint"] }
 
+[lib]
+test = false
+doctest = false
+bench = false

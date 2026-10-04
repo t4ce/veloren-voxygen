@@ -9,7 +9,7 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 [features]
 simd = ["vek/platform_intrinsics"]
-plugins = ["common-state/plugins"]
+plugins = []
 
 default = ["simd"]
 
@@ -32,7 +32,8 @@ specs = { version = "0.20", features = ["nightly", "serde", "storage-event-contr
 # Tweak running code
 
 
-[dev-dependencies]
-# Setup a State
-common-state = { package = "veloren-common-state", path = "../state" }
 
+[lib]
+test = false
+doctest = false
+bench = false

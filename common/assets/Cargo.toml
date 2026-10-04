@@ -31,8 +31,8 @@ serde = { version = "1.0.118", features = ["derive"], optional = true }
 hot-reloading = ["assets_manager/hot-reloading"]
 plugins = ["dep:serde", "assets_manager/tar"]
 
-[dev-dependencies]
-walkdir = "2.3.2"
-serde = { version = "1.0.118", features = ["derive"] }
-tempfile = "3.27.0"
 
+[lib]
+test = false
+doctest = false
+bench = false

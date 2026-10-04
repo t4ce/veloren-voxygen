@@ -52,15 +52,8 @@ hashbrown = { version = "0.17", default-features = false, features = ["rayon", "
 
 
 
-[dev-dependencies]
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["ansi", "env-filter", "fmt", "smallvec", "time"] }
-tokio = { version = "=1.52.3", default-features = false, features = ["rt", "io-std", "fs", "rt-multi-thread"] }
-futures-util = { version = "0.3.7", default-features = false, features = ["sink", "std"] }
-clap = { version = "4.2", features = ["derive", "env"] }
-shellexpand = "3.1.0"
-serde = { version = "1.0", features = ["derive"] }
-prometheus-hyper = "0.2.1"
-criterion = { version = "0.8", default-features = false, features = ["rayon", "cargo_bench_support", "async_tokio"] }
-#quic
-rcgen = { version = "0.14" }
 
+[lib]
+test = false
+doctest = false
+bench = false

@@ -31,9 +31,6 @@ package = "veloren-tokio-parallel"
 path = "../../common/tokio-parallel"
 optional = true
 
-[dev-dependencies.rand]
-version = "0.7"
-
 [features]
 default = ["parallel"]
 parallel = ["tokio-parallel"]

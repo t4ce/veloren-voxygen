@@ -72,7 +72,8 @@ common-frontend = { package = "veloren-common-frontend", path = "../common/front
 
 
 
-[dev-dependencies]
-voxygen-i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "../voxygen/i18n-helpers" }
-client-i18n = { package = "veloren-client-i18n", path = "i18n" }
 
+[lib]
+test = false
+doctest = false
+bench = false

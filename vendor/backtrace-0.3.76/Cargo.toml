@@ -48,58 +48,6 @@ unix-backtrace = []
 name = "backtrace"
 path = "src/lib.rs"
 
-[[example]]
-name = "backtrace"
-path = "examples/backtrace.rs"
-required-features = ["std"]
-
-[[example]]
-name = "raw"
-path = "examples/raw.rs"
-required-features = ["std"]
-
-[[test]]
-name = "accuracy"
-path = "tests/accuracy/main.rs"
-required-features = ["std"]
-edition = "2021"
-
-[[test]]
-name = "concurrent-panics"
-path = "tests/concurrent-panics.rs"
-harness = false
-required-features = ["std"]
-
-[[test]]
-name = "current-exe-mismatch"
-path = "tests/current-exe-mismatch.rs"
-harness = false
-required-features = ["std"]
-
-[[test]]
-name = "long_fn_name"
-path = "tests/long_fn_name.rs"
-required-features = ["std"]
-
-[[test]]
-name = "sgx-image-base"
-path = "tests/sgx-image-base.rs"
-
-[[test]]
-name = "skip_inner_frames"
-path = "tests/skip_inner_frames.rs"
-required-features = ["std"]
-
-[[test]]
-name = "smoke"
-path = "tests/smoke.rs"
-required-features = ["std"]
-edition = "2021"
-
-[[bench]]
-name = "benchmarks"
-path = "benches/benchmarks.rs"
-
 [dependencies.cfg-if]
 version = "1.0"
 
@@ -116,9 +64,6 @@ version = "0.1.24"
 version = "1.0"
 features = ["derive"]
 optional = true
-
-[dev-dependencies.libloading]
-version = "0.8"
 
 [target.'cfg(any(windows, target_os = "cygwin"))'.dependencies.windows-link]
 version = "0.2"

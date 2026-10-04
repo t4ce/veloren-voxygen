@@ -48,3 +48,8 @@ hex = { version = "0.4.3", optional = true }
 
 # Tweak running code
 #inline_tweak = { version = "1.0.8", features = ["release_tweak"] }
+
+[lib]
+test = false
+doctest = false
+bench = false

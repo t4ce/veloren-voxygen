@@ -112,25 +112,6 @@ version = "2"
 optional = true
 default-features = false
 
-[dev-dependencies.fastrand]
-version = "2"
-default-features = false
-
-[dev-dependencies.fnv]
-version = "1.0"
-
-[dev-dependencies.itertools]
-version = "0.14"
-
-[dev-dependencies.quickcheck]
-version = "1.1"
-default-features = false
-
-[dev-dependencies.serde]
-version = "1.0"
-features = ["derive"]
-default-features = false
-
 [target."cfg(any())".dependencies.serde]
 version = "1.0.220"
 optional = true

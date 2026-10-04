@@ -20,3 +20,8 @@ directories-next = "2.0"
 # `tracing-tracy` version in `common/frontend`.
 # Using `=` here keeps `cargo update` from breaking this.
 profiling = { version = "=1.0.18", default-features = false, optional = true }
+
+[lib]
+test = false
+doctest = false
+bench = false

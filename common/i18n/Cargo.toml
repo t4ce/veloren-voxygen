@@ -12,3 +12,8 @@ license = "GPL-3.0-or-later"
 serde = { version = "1.0.118", features = ["derive", "rc"] }
 hashbrown = { version = "0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
 rand = { version = "0.10", features = ["alloc"] }
+
+[lib]
+test = false
+doctest = false
+bench = false

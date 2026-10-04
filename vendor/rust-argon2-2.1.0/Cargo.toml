@@ -45,5 +45,3 @@ version = "1.0"
 features = ["derive"]
 optional = true
 
-[dev-dependencies.hex]
-version = "0.4"

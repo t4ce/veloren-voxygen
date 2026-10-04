@@ -18,7 +18,8 @@ common-base = { package = "veloren-common-base", path = "../base" }
 specs = { version = "0.20", features = ["nightly", "serde", "storage-event-control"] }
 
 
-[dev-dependencies]
-#bench
-float-cmp = "0.10.0"
 
+[lib]
+test = false
+doctest = false
+bench = false

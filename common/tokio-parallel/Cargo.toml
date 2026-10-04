@@ -10,10 +10,11 @@ license = "MIT OR Apache-2.0"
 description = "Scoped parallel iterators executed by Tokio, without Rayon worker pools"
 
 [lib]
-# Retained upstream tests assume the Rayon scheduler API. The executor and ECS
-# integration tests below exercise this backend's supported contract.
 test = false
 doctest = false
+bench = false
+# Retained upstream tests assume the Rayon scheduler API. The executor and ECS
+# integration tests below exercise this backend's supported contract.
 
 [dependencies]
 tokio = { version = "=1.52.3", default-features = false, features = ["rt-multi-thread", "sync", "time"] }
@@ -23,8 +24,4 @@ hashbrown = { version = "0.15.5", default-features = false, features = ["default
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("trueos"))', 'cfg(feature, values("web_spin_lock"))', 'cfg(tokio_unstable)'] }
 
-
-[dev-dependencies]
-shred = { path = "../../vendor/shred" }
-specs = { path = "../../vendor/specs" }
 

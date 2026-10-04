@@ -22,3 +22,7 @@ You can also run `cd voxygen && cargo run --no-default-features`.
 Client manifests and build configuration target Ubuntu/Linux. macOS, Windows,
 TRUEOS-only dependencies and Chrono WebAssembly support are omitted.
 Mumble integration remains enabled on Linux.
+
+Development dependencies are omitted from crate manifests. Game-crate unit
+tests, documentation tests, benchmarks and extra test targets are disabled.
+Production dependencies, including tokio-parallel, remain where required.

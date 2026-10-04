@@ -38,12 +38,6 @@ version = "1.0"
 optional = true
 default-features = false
 
-[dev-dependencies.rustc-hash]
-version = "2"
-
-[dev-dependencies.serde_test]
-version = "1.0"
-
 [features]
 serde_impl = ["serde"]
 

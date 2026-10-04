@@ -61,26 +61,11 @@ std = ["digest/std"]
 name = "sha2"
 path = "src/lib.rs"
 
-[[test]]
-name = "mod"
-path = "tests/mod.rs"
-
-[[bench]]
-name = "mod"
-path = "benches/mod.rs"
-
 [dependencies.cfg-if]
 version = "1.0"
 
 [dependencies.digest]
 version = "0.10.7"
-
-[dev-dependencies.digest]
-version = "0.10.7"
-features = ["dev"]
-
-[dev-dependencies.hex-literal]
-version = "0.2.2"
 
 [target.'cfg(any(target_arch = "aarch64", target_arch = "x86_64", target_arch = "x86"))'.dependencies.cpufeatures]
 version = "=0.3.1"

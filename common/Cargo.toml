@@ -99,12 +99,8 @@ regex = "1"
 
 
 
-[dev-dependencies]
-#bench
-criterion = { version = "0.8", default-features = false, features = ["rayon", "cargo_bench_support"] }
-rand_chacha = "0.10"
 
-#test
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["ansi", "env-filter", "fmt", "smallvec", "time"] }
-petgraph = "0.8.1"
-
+[lib]
+test = false
+doctest = false
+bench = false

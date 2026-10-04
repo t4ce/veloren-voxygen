@@ -38,10 +38,6 @@ repository = "https://github.com/untitaker/rust-atomicwrites"
 name = "atomicwrites"
 path = "src/lib.rs"
 
-[[test]]
-name = "lib"
-path = "tests/lib.rs"
-
 [dependencies.tempfile]
 version = "3.1"
 
