@@ -6,9 +6,8 @@ autotests = false
 name = "veloren-network-protocol"
 description = "pure Protocol without any I/O itself"
 version = "0.6.1"
-edition.workspace = true
-license.workspace = true
-
+edition = "2024"
+license = "GPL-3.0-or-later"
 [features]
 metrics = ["prometheus"]
 trace_pedantic = [] # use for debug only
@@ -18,20 +17,20 @@ default = ["metrics"]
 [dependencies]
 
 #tracing and metrics
-tracing = { workspace = true }
-prometheus = { workspace = true, optional = true }
+tracing = "0.1"
+prometheus = { version = "0.14", default-features = false, optional = true }
 #stream flags
-bitflags = { workspace = true }
-rand = { workspace = true }
+bitflags = "2.2.1"
+rand = { version = "0.10", features = ["alloc"] }
 # async traits
-async-trait = { workspace = true }
+async-trait = "0.1.42"
 bytes = "^1"
-hashbrown = { workspace = true }
+hashbrown = { version = "0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
 
 
 
 [dev-dependencies]
 async-channel = "2.1"
-tokio = { workspace = true, features = ["macros"] }
-criterion = { workspace = true, features = ["async_tokio"] }
+tokio = { version = "=1.52.3", default-features = false, features = ["rt", "macros"] }
+criterion = { version = "0.8", default-features = false, features = ["rayon", "cargo_bench_support", "async_tokio"] }
 

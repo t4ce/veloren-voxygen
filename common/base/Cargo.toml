@@ -5,15 +5,14 @@ autobenches = false
 autotests = false
 name = "veloren-common-base"
 description = "minimal dependency for crates to now depend on whole common"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [features]
 tracy = ["profiling", "profiling/profile-with-tracy"]
 
 [dependencies]
-tracing = { workspace = true }
+tracing = "0.1"
 directories-next = "2.0"
 
 # Profiling / Tracy

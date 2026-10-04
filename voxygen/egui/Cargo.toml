@@ -4,10 +4,9 @@ autoexamples = false
 autobenches = false
 autotests = false
 name = "veloren-voxygen-egui"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [features]
 use-dyn-lib = ["common-dynlib"]
 be-dyn-lib = []
@@ -18,6 +17,6 @@ common = {package = "veloren-common", path = "../../common"}
 egui = "0.36"
 egui_plot = "0.37"
 egui-winit = "0.36"
-lazy_static = { workspace = true }
+lazy_static = "1.4.0"
 winit = "0.30"
 common-dynlib = {package = "veloren-common-dynlib", path = "../../common/dynlib", optional = true}

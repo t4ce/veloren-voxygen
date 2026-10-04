@@ -4,10 +4,9 @@ autoexamples = false
 autobenches = false
 autotests = false
 name = "veloren-common"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [features]
 no-assets = []
 hot-reloading = ["common-assets/hot-reloading"]
@@ -25,45 +24,44 @@ default = ["simd"]
 
 common-base = { package = "veloren-common-base", path = "base" }
 common-i18n = { package = "veloren-common-i18n", path = "i18n" }
-# inline_tweak = { workspace = true }
 
 # Serde
-serde = { workspace = true, features = ["rc"] }
+serde = { version = "1.0.118", features = ["derive", "rc"] }
 
 # Util
-enum-map = { workspace = true, features = ["serde"] }
-enumset = { workspace = true }
-vek = { workspace = true }
-chrono = { workspace = true }
-chrono-tz = { workspace = true }
-itertools = { workspace = true }
-serde_json = { workspace = true }
-sha2 = { workspace = true }
-ahash = { workspace = true }
-inline_tweak = { workspace = true }
+enum-map = { version = "2.4", features = ["serde"] }
+enumset = "1.1.3"
+vek = { version = "0.17.0", features = ["serde", "mint"] }
+chrono = { version = "0.4.24", default-features = false, features = ["clock", "std", "wasmbind", "serde"] }
+chrono-tz = { version = "0.10", features = ["serde"] }
+itertools = "0.14"
+serde_json = "1.0.50"
+sha2 = "0.11"
+ahash = "0.8"
+inline_tweak = "1.0.8"
 
 # Strum
-strum = { workspace = true }
+strum = { version = "0.28", features = ["derive"] }
 
 approx = "0.5.1"
-crossbeam-utils = { workspace = true }
-bitflags = { workspace = true, features = ["serde"] }
-lazy_static = { workspace = true }
+crossbeam-utils = "0.8.7"
+bitflags = { version = "2.2.1", features = ["serde"] }
+lazy_static = "1.4.0"
 num-derive = "0.4.0"
-num-traits = { workspace = true }
-ordered-float = { workspace = true }
-tokio-parallel = { workspace = true }
-ron = { workspace = true }
+num-traits = "0.2"
+ordered-float = { version = "5", default-features = true }
+tokio-parallel = { package = "veloren-tokio-parallel", path = "tokio-parallel" }
+ron = { version = "0.12", default-features = false, features = ["std"] }
 roots = "0.0.8"
 spin_sleep = "1.0"
-tracing = { workspace = true }
+tracing = "0.1"
 uuid = { version = "1.4.1", default-features = false, features = [
     "serde",
     "v4",
 ] }
-rand = { workspace = true }
-fxhash = { workspace = true }
-thread-priority = { workspace = true }
+rand = { version = "0.10", features = ["alloc"] }
+fxhash = "0.2.1"
+thread-priority = "3.0.0"
 
 # Assets
 common-assets = { package = "veloren-common-assets", path = "assets" }
@@ -75,21 +73,17 @@ csv = { version = "1.1.3", optional = true }
 # graphviz exporters
 petgraph = { version = "0.8.1", optional = true }
 # K-d trees used for RRT pathfinding
-kiddo = { workspace = true, optional = true }
-clap = { workspace = true, optional = true }
+kiddo = { version = "5", optional = true }
+clap = { version = "4.2", features = ["derive", "env"], optional = true }
 
 # Data structures
-hashbrown = { workspace = true }
-slab = { workspace = true }
-slotmap = { workspace = true }
+hashbrown = { version = "0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
+slab = "0.4.2"
+slotmap = { version = "1.0", features = ["serde"] }
 indexmap = { version = "=2.14.2", features = ["rayon"] }
 
 # ECS
-specs = { workspace = true, features = [
-    "serde",
-    "storage-event-control",
-    "shred-derive",
-] }
+specs = { version = "0.20", features = ["nightly", "serde", "storage-event-control", "shred-derive"] }
 
 
 [build-dependencies]
@@ -107,10 +101,10 @@ regex = "1"
 
 [dev-dependencies]
 #bench
-criterion = { workspace = true }
-rand_chacha = { workspace = true }
+criterion = { version = "0.8", default-features = false, features = ["rayon", "cargo_bench_support"] }
+rand_chacha = "0.10"
 
 #test
-tracing-subscriber =  { workspace = true }
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["ansi", "env-filter", "fmt", "smallvec", "time"] }
 petgraph = "0.8.1"
 

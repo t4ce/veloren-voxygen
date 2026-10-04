@@ -5,10 +5,9 @@ autobenches = false
 autotests = false
 name = "veloren-common-frontend"
 description = "common stuff that is used by server-cli and voxygen directly"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [features]
 tracy = ["common-base/tracy", "tracing-tracy"]
 
@@ -17,9 +16,9 @@ common-base = { package = "veloren-common-base", path = "../base" }
 
 # Logging
 termcolor = "1.1"
-tracing = { workspace = true }
+tracing = "0.1"
 tracing-appender = "0.2.0"
-tracing-subscriber =  { workspace = true, features = ["tracing-log"] }
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["ansi", "env-filter", "fmt", "smallvec", "time", "tracing-log"] }
 
 # Tracy
 # NOTE: This must be kept in sync with the `profiling` version in `common/base`.

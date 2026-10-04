@@ -4,10 +4,9 @@ autoexamples = false
 autobenches = false
 autotests = false
 name = "veloren-common-net"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [features]
 simd = ["vek/platform_intrinsics"]
 
@@ -15,21 +14,20 @@ default = ["simd"]
 
 [dependencies]
 common = {package = "veloren-common", path = "../../common"}
-#inline_tweak = { workspace = true }
 
-bincode = { workspace = true }
+bincode = { version = "2", features = ["serde"] }
 flate2 = "1.0.20"
-image = { workspace = true, features = ["jpeg"] }
-num-traits = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+num-traits = "0.2"
 sum_type = "0.2.0"
-vek = { workspace = true }
-tracing = { workspace = true }
+vek = { version = "0.17.0", features = ["serde", "mint"] }
+tracing = "0.1"
 
 # Data structures
-hashbrown = { workspace = true }
+hashbrown = { version = "0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
 
 # ECS
-specs = { workspace = true, features = ["serde", "storage-event-control"] }
+specs = { version = "0.20", features = ["nightly", "serde", "storage-event-control"] }
 
 # Serde
-serde = { workspace = true }
+serde = { version = "1.0.118", features = ["derive"] }

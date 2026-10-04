@@ -5,25 +5,24 @@ autobenches = false
 autotests = false
 name = "veloren-client-i18n"
 description = "Optional crate for internalization and diagnostic of existing localizations for frontends to consume"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [dependencies]
 # Assets
 common-assets = {package = "veloren-common-assets", path = "../../common/assets"}
 common-i18n = { package = "veloren-common-i18n", path = "../../common/i18n" }
-serde = { workspace = true }
+serde = { version = "1.0.118", features = ["derive"] }
 # Localization
 unic-langid = { version = "0.9"}
 intl-memoizer = "0.5"
 fluent = "0.17"
 fluent-bundle = "0.16"
 # Utility
-hashbrown = { workspace = true }
-tracing = { workspace = true }
+hashbrown = { version = "0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
+tracing = "0.1"
 # Bin
-clap = { workspace = true, optional = true }
+clap = { version = "4.2", features = ["derive", "env"], optional = true }
 fluent-syntax = "0.12"
 
 

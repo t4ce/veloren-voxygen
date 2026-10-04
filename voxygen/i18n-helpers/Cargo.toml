@@ -5,19 +5,18 @@ autobenches = false
 autotests = false
 name = "veloren-voxygen-i18n-helpers"
 description = "Crate for internalization and diagnostic of existing localizations."
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [dependencies]
 common-net = {package = "veloren-common-net", path = "../../common/net"}
 common = {package = "veloren-common", path = "../../common"}
 i18n = {package = "veloren-client-i18n", path = "../../client/i18n"}
 # Utility
-tracing = { workspace = true }
+tracing = "0.1"
 
 
 [dev-dependencies]
-rand = { workspace = true }
-vek = { workspace = true }
+rand = { version = "0.10", features = ["alloc"] }
+vek = { version = "0.17.0", features = ["serde", "mint"] }
 

@@ -4,19 +4,18 @@ autoexamples = false
 autobenches = false
 autotests = false
 name = "veloren-common-ecs"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [features]
 
 [dependencies]
 
-tracing = { workspace = true }
+tracing = "0.1"
 common-base = { package = "veloren-common-base", path = "../base" }
 
 # ECS
-specs = { workspace = true, features = ["serde", "storage-event-control"] }
+specs = { version = "0.20", features = ["nightly", "serde", "storage-event-control"] }
 
 
 [dev-dependencies]

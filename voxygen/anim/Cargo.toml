@@ -4,10 +4,9 @@ autoexamples = false
 autobenches = false
 autotests = false
 name = "veloren-voxygen-anim"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [features]
 use-dyn-lib = ["lazy_static", "common-dynlib"]
 be-dyn-lib = []
@@ -20,9 +19,9 @@ default = ["simd"]
 common = {package = "veloren-common", path = "../../common"}
 common-state = {package = "veloren-common-state", path = "../../common/state", optional = true}
 bytemuck = { version = "1.4", features=["derive"] }
-vek = { workspace = true }
+vek = { version = "0.17.0", features = ["serde", "mint"] }
 common-dynlib = {package = "veloren-common-dynlib", path = "../../common/dynlib", optional = true}
-inline_tweak = { workspace = true, features = ["derive"] }
+inline_tweak = { version = "1.0.8", features = ["derive"] }
 
 # Hot Reloading
-lazy_static = { workspace = true, optional = true}
+lazy_static = { version = "1.4.0", optional = true }

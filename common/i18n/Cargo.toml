@@ -5,11 +5,10 @@ autobenches = false
 autotests = false
 name = "veloren-common-i18n"
 description = "Crate for structs and methods that acknowledge the need for localization of the game"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
+version = "0.18.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
 [dependencies]
-serde = { workspace = true, features = ["rc"] }
-hashbrown = { workspace = true }
-rand = { workspace = true }
+serde = { version = "1.0.118", features = ["derive", "rc"] }
+hashbrown = { version = "0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
+rand = { version = "0.10", features = ["alloc"] }
