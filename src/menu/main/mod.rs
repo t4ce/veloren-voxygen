@@ -103,8 +103,6 @@ impl PlayState for MainMenuState {
         self.main_menu_ui
             .set_scale_mode(global_state.settings.interface.ui_scale);
 
-        #[cfg(feature = "discord")]
-        global_state.discord.enter_main_menu();
     }
 
     fn tick(&mut self, global_state: &mut GlobalState, events: Vec<Event>) -> PlayStateResult {

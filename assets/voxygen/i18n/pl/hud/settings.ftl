@@ -143,5 +143,3 @@ hud-settings-say = Powiedz
 hud-settings-all = Wszyscy
 hud-settings-group_only = Tylko dla grupy
 hud-settings-reset_chat = Zresetuj ustawienia
-hud-settings-third_party_integrations = Integracje grup trzecich
-hud-settings-enable_discord_integration = Włącz integrację z Discordem

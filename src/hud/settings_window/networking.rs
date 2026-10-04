@@ -25,9 +25,6 @@ widget_ids! {
         player_physics_behavior_list,
         lossy_terrain_compression_button,
         lossy_terrain_compression_label,
-        third_party_integrations_title,
-        enable_discord_integration_text,
-        enable_discord_integration_button
     }
 }
 
@@ -256,63 +253,6 @@ impl Widget for Networking<'_> {
             ));
         }
 
-        #[cfg(feature = "discord")]
-        {
-            // Third party integrations
-            Text::new(
-                &self
-                    .localized_strings
-                    .get_msg("hud-settings-third_party_integrations"),
-            )
-            .down_from(state.ids.player_physics_behavior_list, 16.0)
-            .font_size(self.fonts.cyri.scale(18))
-            .font_id(self.fonts.cyri.conrod_id)
-            .color(TEXT_COLOR)
-            .set(state.ids.third_party_integrations_title, ui);
-
-            // Toggle Discord integration
-            let enable_discord_integration = ToggleButton::new(
-                self.global_state
-                    .settings
-                    .networking
-                    .enable_discord_integration,
-                self.imgs.checkbox,
-                self.imgs.checkbox_checked,
-            )
-            .w_h(18.0, 18.0)
-            .down_from(state.ids.third_party_integrations_title, 8.0)
-            .hover_images(self.imgs.checkbox_mo, self.imgs.checkbox_checked_mo)
-            .press_images(self.imgs.checkbox_press, self.imgs.checkbox_checked)
-            .set(state.ids.enable_discord_integration_button, ui);
-
-            if self
-                .global_state
-                .settings
-                .networking
-                .enable_discord_integration
-                != enable_discord_integration
-            {
-                events.push(ToggleDiscordIntegration(
-                    !self
-                        .global_state
-                        .settings
-                        .networking
-                        .enable_discord_integration,
-                ));
-            }
-
-            Text::new(
-                &self
-                    .localized_strings
-                    .get_msg("hud-settings-enable_discord_integration"),
-            )
-            .right_from(state.ids.enable_discord_integration_button, 10.0)
-            .font_size(self.fonts.cyri.scale(14))
-            .font_id(self.fonts.cyri.conrod_id)
-            .graphics_for(state.ids.enable_discord_integration_button)
-            .color(TEXT_COLOR)
-            .set(state.ids.enable_discord_integration_text, ui);
-        }
 
         events
     }

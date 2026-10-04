@@ -133,8 +133,6 @@ hud-settings-accumulate_experience = Ukázat body zkušeností v souhrnu
 hud-settings-keybind-helper =
     M1 pro nastavení
     M2 pro zrušení
-hud-settings-third_party_integrations = Integrace třetích stran
-hud-settings-enable_discord_integration = Zapnout discord integraci
 hud-settings-subtitles = Skryté Titulky
 hud-settings-enable_poise_bar = Zapnout lištu postoje
 hud-settings-aim_offset_x = Kompenzace horizontálního míření

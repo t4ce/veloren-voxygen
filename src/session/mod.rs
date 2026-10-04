@@ -565,22 +565,6 @@ impl PlayState for SessionState {
             }
         }
 
-        #[cfg(feature = "discord")]
-        {
-            // Update the Discord activity on client initialization
-            #[cfg(feature = "singleplayer")]
-            let singleplayer = global_state.singleplayer.is_running();
-            #[cfg(not(feature = "singleplayer"))]
-            let singleplayer = false;
-
-            if singleplayer {
-                global_state.discord.join_singleplayer();
-            } else {
-                global_state
-                    .discord
-                    .join_server(self.client.borrow().server_info().name.clone());
-            }
-        }
     }
 
     fn tick(&mut self, global_state: &mut GlobalState, events: Vec<Event>) -> PlayStateResult {
@@ -613,15 +597,6 @@ impl PlayState for SessionState {
 
             let dt = global_state.clock.real_dt().as_secs_f32();
 
-            #[cfg(feature = "discord")]
-            if global_state.discord.is_active()
-                && let Some(chunk) = client.current_chunk()
-                && let Some(location_name) = chunk.meta().name()
-            {
-                global_state
-                    .discord
-                    .update_location(location_name, client.current_site());
-            }
 
             if global_state.settings.gameplay.bow_zoom {
                 let mut fov_scaling = 1.0;

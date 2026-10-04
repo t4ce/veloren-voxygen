@@ -145,8 +145,6 @@ hud-settings-group_only = Nur für die Gruppe
 hud-settings-reset_chat =
     Einstellungen
     zurücksetzen
-hud-settings-third_party_integrations = Drittanbieter Integrationen
-hud-settings-enable_discord_integration = Aktiviere Discord Integration
 hud-settings-fluid_rendering_mode-low = Niedrig
 hud-settings-minimal_graphics = Minimal
 hud-settings-subtitles = Untertitel

@@ -159,6 +159,4 @@ hud-settings-say = 說話
 hud-settings-all = 所有
 hud-settings-group_only = 僅隊伍
 hud-settings-reset_chat = 重設聊天
-hud-settings-third_party_integrations = 第三方整合
-hud-settings-enable_discord_integration = 啟用Discord整合
 hud-settings-subtitles = 字幕

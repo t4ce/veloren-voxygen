@@ -220,8 +220,6 @@ pub enum Networking {
     },
     ToggleLossyTerrainCompression(bool),
 
-    #[cfg(feature = "discord")]
-    ToggleDiscordIntegration(bool),
     // TODO: reset option (ensure it handles the entity/terrain vd the same as graphics reset
     // option)
 }
@@ -917,31 +915,6 @@ impl SettingsChange {
                         .client
                         .borrow_mut()
                         .request_lossy_terrain_compression(lossy_terrain_compression);
-                },
-                #[cfg(feature = "discord")]
-                Networking::ToggleDiscordIntegration(enabled) => {
-                    use crate::discord::Discord;
-
-                    settings.networking.enable_discord_integration = enabled;
-                    if enabled {
-                        global_state.discord = Discord::start(&global_state.tokio_runtime);
-
-                        #[cfg(feature = "singleplayer")]
-                        let singleplayer = global_state.singleplayer.is_running();
-                        #[cfg(not(feature = "singleplayer"))]
-                        let singleplayer = false;
-
-                        if singleplayer {
-                            global_state.discord.join_singleplayer();
-                        } else {
-                            global_state.discord.join_server(
-                                session_state.client.borrow().server_info().name.clone(),
-                            );
-                        }
-                    } else {
-                        global_state.discord.clear_activity();
-                        global_state.discord = Discord::Inactive;
-                    }
                 },
             },
             SettingsChange::Accessibility(accessibility_change) => match accessibility_change {

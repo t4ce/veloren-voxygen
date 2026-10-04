@@ -217,12 +217,6 @@ fn main() {
 
     
 
-    #[cfg(feature = "discord")]
-    let discord = if settings.networking.enable_discord_integration {
-        veloren_voxygen::discord::Discord::start(&tokio_runtime)
-    } else {
-        veloren_voxygen::discord::Discord::Inactive
-    };
 
     let global_state = GlobalState {
         userdata_dir,
@@ -243,8 +237,6 @@ fn main() {
         i18n,
         clipboard,
         clear_shadows_next_frame: false,
-        #[cfg(feature = "discord")]
-        discord,
         args: args.clone(),
     };
 

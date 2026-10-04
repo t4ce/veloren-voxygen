@@ -129,5 +129,3 @@ hud-settings-say = Esan
 hud-settings-all = Denak
 hud-settings-group_only = Taldean bakarrik
 hud-settings-reset_chat = Berrezarri lehenetsiak
-hud-settings-third_party_integrations = Hirugarrengoekin integrazioa
-hud-settings-enable_discord_integration = Aktibatu Discord-ekin integrazioa

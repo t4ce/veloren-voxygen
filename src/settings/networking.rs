@@ -14,7 +14,6 @@ pub struct NetworkingSettings {
     pub validate_tls: bool,
     pub player_physics_behavior: bool,
     pub lossy_terrain_compression: bool,
-    pub enable_discord_integration: bool,
 }
 
 impl Default for NetworkingSettings {
@@ -32,7 +31,6 @@ impl Default for NetworkingSettings {
             validate_tls: true,
             player_physics_behavior: false,
             lossy_terrain_compression: false,
-            enable_discord_integration: true,
         }
     }
 }

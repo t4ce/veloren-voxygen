@@ -16,7 +16,6 @@ pub mod audio;
 pub mod cli;
 pub mod cmd;
 mod credits;
-#[cfg(feature = "discord")] pub mod discord;
 mod ecs;
 pub mod error;
 pub mod game_input;
@@ -78,9 +77,6 @@ pub struct GlobalState {
     pub clear_shadows_next_frame: bool,
     /// CLI arguments passed to voxygen
     pub args: crate::cli::Args,
-    /// A channel that sends Discord activity updates to a background task
-    #[cfg(feature = "discord")]
-    pub discord: crate::discord::Discord,
 }
 
 impl GlobalState {
