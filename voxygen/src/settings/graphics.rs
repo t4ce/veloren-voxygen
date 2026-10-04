@@ -75,6 +75,7 @@ impl Default for GraphicsSettings {
             fullscreen: FullScreenSettings::default(),
             lod_detail: 250,
         }
+        .into_minimal()
     }
 }
 

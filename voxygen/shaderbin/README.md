@@ -10,8 +10,10 @@ Run from the repository root:
 cargo run --manifest-path voxygen/Cargo.toml --no-default-features
 ```
 
-The 82 artifacts cover 41 shader stages at the default render settings, with
-shadow-map and cheap-shadow variants. Additional settings and experimental
+The 123 artifacts cover 41 shader stages for the Minimal preset and the original
+default settings with shadow-map and cheap-shadow variants. New userdata uses
+the Minimal preset: FX upscaling, flat clouds, low fluid/reflections, Lambertian
+lighting, no shadows, no bloom and no point glow. Additional settings and experimental
 shaders require additional baked variants. Source and binary hashes are
 checked at runtime; unsupported or stale variants fail without a compiler
 fallback. GLSL assets remain necessary for variant selection and verification.
