@@ -13,7 +13,7 @@ use crate::{
 use async_trait::async_trait;
 use bytes::BytesMut;
 use hashbrown::HashMap;
-use core::{time::Duration};
+use core::time::Duration;
 use std::time::Instant;
 use tracing::info;
 #[cfg(feature = "trace_pedantic")]

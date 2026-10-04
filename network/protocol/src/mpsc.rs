@@ -10,7 +10,7 @@ use crate::{
     types::{Bandwidth, Promises},
 };
 use async_trait::async_trait;
-use core::{time::Duration};
+use core::time::Duration;
 use std::time::Instant;
 #[cfg(feature = "trace_pedantic")]
 use tracing::trace;

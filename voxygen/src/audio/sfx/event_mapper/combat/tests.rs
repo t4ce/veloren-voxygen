@@ -7,7 +7,7 @@ use common::{
     },
     states,
 };
-use core::{time::Duration};
+use core::time::Duration;
 use std::time::Instant;
 
 #[test]

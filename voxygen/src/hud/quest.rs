@@ -11,7 +11,7 @@ use conrod_core::{
 use i18n::Localization;
 use specs::WorldExt;
 use alloc::borrow::Cow;
-use core::{time::Duration};
+use core::time::Duration;
 use std::time::Instant;
 
 use crate::{

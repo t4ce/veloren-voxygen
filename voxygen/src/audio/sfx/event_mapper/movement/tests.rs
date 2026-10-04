@@ -7,7 +7,7 @@ use common::{
     states,
     terrain::{Block, BlockKind},
 };
-use core::{time::Duration};
+use core::time::Duration;
 use std::time::Instant;
 
 #[test]
