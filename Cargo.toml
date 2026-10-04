@@ -42,29 +42,29 @@ default = []
 
 [dependencies]
 mumble-link = "0.2.0"
-client = { package = "veloren-client", path = "../client" }
-common = { package = "veloren-common", path = "../common" }
-common-base = { package = "veloren-common-base", path = "../common/base" }
-common-ecs = { package = "veloren-common-ecs", path = "../common/ecs" }
-common-frontend = { package = "veloren-common-frontend", path = "../common/frontend" }
-common-i18n = { package = "veloren-common-i18n", path = "../common/i18n" }
-common-net = { package = "veloren-common-net", path = "../common/net" }
-common-state = { package = "veloren-common-state", path = "../common/state" }
-common-systems = { package = "veloren-common-systems", path = "../common/systems" }
+client = { package = "veloren-client", path = "client" }
+common = { package = "veloren-common", path = "common" }
+common-base = { package = "veloren-common-base", path = "common/base" }
+common-ecs = { package = "veloren-common-ecs", path = "common/ecs" }
+common-frontend = { package = "veloren-common-frontend", path = "common/frontend" }
+common-i18n = { package = "veloren-common-i18n", path = "common/i18n" }
+common-net = { package = "veloren-common-net", path = "common/net" }
+common-state = { package = "veloren-common-state", path = "common/state" }
+common-systems = { package = "veloren-common-systems", path = "common/systems" }
 
 anim = { package = "veloren-voxygen-anim", path = "anim" }
-i18n = { package = "veloren-client-i18n", path = "../client/i18n" }
-i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "i18n-helpers" }
+i18n = { package = "veloren-client-i18n", path = "client/i18n" }
+i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
 
 # Graphics
 winit = { version = "0.30.12", features = ["serde"] }
-wgpu = { version = "=30.0.0", path = "../../wgpu/wgpu", features = ["spirv"] }
+wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", features = ["spirv"] }
 wgpu-profiler = "0.28"
 bytemuck = { version = "1.7", features = ["derive"] }
 
 # Ui
-conrod_core = { path = "../vendor/conrod/conrod_core" }
-euc = { path = "../vendor/euc" }
+conrod_core = { path = "vendor/conrod/conrod_core" }
+euc = { path = "vendor/euc" }
 # We should probably migrate to a more recent version at some point, but this is significant amount of work.
 # Note: this does not depend on the version of `winit` anymore, all dependent code was moved into Voxygen
 iced = { package = "iced_native", git = "https://github.com/Imberflur/iced", tag = "veloren-winit-0.28" }
@@ -108,7 +108,7 @@ ordered-float = { version = "5", default-features = true }
 regex = "1.11"
 rand = { version = "0.10", features = ["alloc"] }
 rand_chacha = "0.10"
-tokio-parallel = { package = "veloren-tokio-parallel", path = "../common/tokio-parallel" }
+tokio-parallel = { package = "veloren-tokio-parallel", path = "common/tokio-parallel" }
 ron = { version = "0.12", default-features = false, features = ["std"] }
 serde = { version = "1.0.118", features = ["derive", "rc"] }
 serde_with = { version = "3", features = ["hashbrown_0_17"] }
@@ -142,19 +142,19 @@ opt-level = 0
 opt-level = 2
 
 [patch.crates-io]
-wgpu = { path = "../../wgpu/wgpu" }
-tynm = { path = "../vendor/tynm-0.1.10" }
-wavefront = { path = "../vendor/wavefront-0.2.3" }
-lz-fear = { path = "../vendor/lz-fear-0.2.0" }
-png = { path = "../vendor/png-0.18.1" }
-hashbrown_015 = { package = "hashbrown", path = "../vendor/hashbrown-0.15.5" }
-rust-argon2 = { path = "../vendor/rust-argon2-2.1.0" }
-sha2 = { path = "../vendor/sha2-0.10.9" }
-specs = { path = "../vendor/specs" }
-shred = { path = "../vendor/shred" }
-hibitset = { path = "../vendor/hibitset" }
-hashbrown = { path = "../vendor/hashbrown" }
-indexmap = { path = "../vendor/indexmap" }
+wgpu = { path = "../wgpu/wgpu" }
+tynm = { path = "vendor/tynm-0.1.10" }
+wavefront = { path = "vendor/wavefront-0.2.3" }
+lz-fear = { path = "vendor/lz-fear-0.2.0" }
+png = { path = "vendor/png-0.18.1" }
+hashbrown_015 = { package = "hashbrown", path = "vendor/hashbrown-0.15.5" }
+rust-argon2 = { path = "vendor/rust-argon2-2.1.0" }
+sha2 = { path = "vendor/sha2-0.10.9" }
+specs = { path = "vendor/specs" }
+shred = { path = "vendor/shred" }
+hibitset = { path = "vendor/hibitset" }
+hashbrown = { path = "vendor/hashbrown" }
+indexmap = { path = "vendor/indexmap" }
 
 [lib]
 test = false

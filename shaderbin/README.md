@@ -7,7 +7,7 @@ creates GPU pipelines.
 Run from the repository root:
 
 ```
-cargo run --manifest-path voxygen/Cargo.toml --no-default-features
+cargo run
 ```
 
 The 123 artifacts cover 41 shader stages for the Minimal preset and the original
@@ -21,13 +21,13 @@ fallback. GLSL assets remain necessary for variant selection and verification.
 Verify without a compiler:
 
 ```
-python3 voxygen/tools/bake_shaders.py --verify
+python3 shaderbin/bake_shaders.py --verify
 ```
 
 Rebuild offline with glslc installed:
 
 ```
-python3 voxygen/tools/bake_shaders.py
+python3 shaderbin/bake_shaders.py
 ```
 
 The bake uses Vulkan 1.1, GLSL 430 core and performance optimization.
