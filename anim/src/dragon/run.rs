@@ -10,10 +10,8 @@ impl Animation for RunAnimation {
     type Dependency<'a> = (f32, Vec3<f32>, Vec3<f32>, f32, Vec3<f32>);
     type Skeleton = DragonSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"dragon_run\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "dragon_run"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (_velocity, orientation, last_ori, _global_time, avg_vel): Self::Dependency<'_>,

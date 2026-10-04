@@ -9,15 +9,12 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 [features]
 no-assets = []
-simd = ["vek/platform_intrinsics"]
 bin_csv = ["csv", "clap"]
 bin_graphviz = ["petgraph", "clap"]
 bin_asset_migrate = []
 rrt_pathfinding = ["kiddo"]
 calendar_events = []
-plugins = ["common-assets/plugins"]
 
-default = ["simd"]
 
 [dependencies]
 

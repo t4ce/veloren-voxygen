@@ -12,10 +12,8 @@ impl Animation for ComboAnimation {
     type Dependency<'a> = (Option<&'a str>, StageSection, usize, Vec3<f32>, f32, f32);
     type Skeleton = BipedSmallSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"biped_small_combo\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "biped_small_combo"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (ability_id, stage_section, current_strike, velocity, _global_time, _timer): Self::Dependency<'_>,

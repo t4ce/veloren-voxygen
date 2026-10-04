@@ -23,10 +23,8 @@ impl Animation for StandAnimation {
     );
     type Skeleton = CharacterSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"character_stand\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "character_stand"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (

@@ -23,8 +23,6 @@ impl anim::Skeleton for VolumeKey {
     type ComputedSkeleton = ();
 
     const BONE_COUNT: usize = 4;
-    #[cfg(feature = "hot-anim")]
-    const COMPUTE_FN: &'static [u8] = b"I AM NOT USED\0";
 
     // Override compute_matrices so that hotloading is not done for this (since it
     // will fail as this isn't part of the hotloaded anim crate)

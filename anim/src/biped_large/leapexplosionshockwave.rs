@@ -11,13 +11,8 @@ impl Animation for LeapExplosionShockAnimation {
     type Dependency<'a> = (Option<StageSection>, Option<&'a str>);
     type Skeleton = BipedLargeSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"biped_large_leapexplosionshockwave\0";
 
-    #[cfg_attr(
-        feature = "be-dyn-lib",
-        unsafe(export_name = "biped_large_leapexplosionshockwave")
-    )]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (stage_section, ability_id): Self::Dependency<'_>,

@@ -46,10 +46,8 @@ impl Skeleton for ArthropodSkeleton {
     type ComputedSkeleton = ComputedArthropodSkeleton;
 
     const BONE_COUNT: usize = ComputedArthropodSkeleton::BONE_COUNT;
-    #[cfg(feature = "use-dyn-lib")]
-    const COMPUTE_FN: &'static [u8] = b"arthropod_compute_s\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "arthropod_compute_s"))]
+    
     fn compute_matrices_inner(
         &self,
         base_mat: Mat4<f32>,

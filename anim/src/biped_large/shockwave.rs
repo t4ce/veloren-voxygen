@@ -22,10 +22,8 @@ impl Animation for ShockwaveAnimation {
     type Dependency<'a> = ShockwaveAnimationDependency<'a>;
     type Skeleton = BipedLargeSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"biped_large_shockwave\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "biped_large_shockwave"))]
+    
     #[expect(clippy::single_match)] // TODO: Pending review in #587
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,

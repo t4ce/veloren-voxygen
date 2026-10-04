@@ -20,10 +20,8 @@ impl Animation for RunAnimation {
     );
     type Skeleton = QuadrupedLowSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"quadruped_low_run\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "quadruped_low_run"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (velocity, orientation, last_ori, _global_time, avg_vel, acc_vel, head_states): Self::Dependency<'_>,

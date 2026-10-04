@@ -587,7 +587,7 @@ impl Renderer {
         let quad_index_buffer_u32 =
             create_quad_index_buffer_u32(&device, QUAD_INDEX_BUFFER_U32_START_VERT_LEN as usize);
         other_modes.profiler_enabled &= profiler_features_enabled;
-        #[cfg(not(feature = "tracy"))]
+        
         let profiler = wgpu_profiler::GpuProfiler::new(
             &device,
             wgpu_profiler::GpuProfilerSettings {
@@ -595,18 +595,6 @@ impl Renderer {
                 enable_debug_groups: other_modes.profiler_enabled,
                 max_num_pending_frames: 4,
             },
-        )
-        .expect("Error creating profiler");
-        #[cfg(feature = "tracy")]
-        let profiler = wgpu_profiler::GpuProfiler::new_with_tracy_client(
-            wgpu_profiler::GpuProfilerSettings {
-                enable_timer_queries: true,
-                enable_debug_groups: true,
-                max_num_pending_frames: 4,
-            },
-            adapter.get_info().backend,
-            &device,
-            &queue,
         )
         .expect("Error creating profiler");
 

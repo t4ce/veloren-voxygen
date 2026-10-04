@@ -11,10 +11,8 @@ impl Animation for BuffAnimation {
     type Dependency<'a> = (Option<ToolKind>, Option<ToolKind>, Option<StageSection>);
     type Skeleton = BipedSmallSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"biped_small_selfbuff\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "biped_small_selfbuff"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (active_tool_kind, second_tool_kind, stage_section): Self::Dependency<'_>,

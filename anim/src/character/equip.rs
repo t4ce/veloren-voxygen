@@ -11,10 +11,8 @@ impl Animation for EquipAnimation {
     type Dependency<'a> = (Option<ToolKind>, Option<ToolKind>, f32, f32);
     type Skeleton = CharacterSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"character_equip\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "character_equip"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (active_tool_kind, _second_tool_kind, _velocity, _global_time): Self::Dependency<'_>,

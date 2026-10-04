@@ -18,10 +18,8 @@ impl Animation for BasicAction {
     type Dependency<'a> = BasicActionDependency<'a>;
     type Skeleton = ArthropodSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"arthropod_shoot\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "arthropod_shoot"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         d: Self::Dependency<'_>,

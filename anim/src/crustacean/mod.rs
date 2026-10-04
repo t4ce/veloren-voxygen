@@ -46,10 +46,8 @@ impl Skeleton for CrustaceanSkeleton {
     type ComputedSkeleton = ComputedCrustaceanSkeleton;
 
     const BONE_COUNT: usize = ComputedCrustaceanSkeleton::BONE_COUNT;
-    #[cfg(feature = "use-dyn-lib")]
-    const COMPUTE_FN: &'static [u8] = b"crustacean_compute_s\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "crustacean_compute_s"))]
+    
     fn compute_matrices_inner(
         &self,
         base_mat: Mat4<f32>,

@@ -10,10 +10,8 @@ impl Animation for FlyAnimation {
     type Dependency<'a> = (f32, f32);
     type Skeleton = DragonSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"dragon_fly\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "dragon_fly"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         _global_time: Self::Dependency<'_>,

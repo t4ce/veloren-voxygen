@@ -11,10 +11,8 @@ impl Animation for ShockwaveAnimation {
     type Dependency<'a> = (Option<StageSection>, f32, f32);
     type Skeleton = GolemSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"golem_shockwave\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "golem_shockwave"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (stage_section, velocity, _global_time): Self::Dependency<'_>,

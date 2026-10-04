@@ -20,10 +20,8 @@ impl Animation for DashAnimation {
     type Dependency<'a> = DashAnimationDependency<'a>;
     type Skeleton = BirdMediumSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"bird_medium_dash\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "bird_medium_dash"))]
+    
     fn update_skeleton_inner<'a>(
         skeleton: &Self::Skeleton,
         (velocity, orientation, last_ori, acc_vel, stage_section, global_time, timer): Self::Dependency<'_>,

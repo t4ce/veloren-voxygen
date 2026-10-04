@@ -24,11 +24,8 @@ tracing = "0.1"
 hashbrown = { version = "0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
 
 # asset tweak
-serde = { version = "1.0.118", features = ["derive"], optional = true }
 
 
-[features]
-plugins = ["dep:serde", "assets_manager/tar"]
 
 
 [lib]

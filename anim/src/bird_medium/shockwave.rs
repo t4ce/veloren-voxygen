@@ -10,10 +10,8 @@ impl Animation for ShockwaveAnimation {
     type Dependency<'a> = (Option<StageSection>, bool);
     type Skeleton = BirdMediumSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"bird_medium_shockwave\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "bird_medium_shockwave"))]
+    
     fn update_skeleton_inner<'a>(
         skeleton: &Self::Skeleton,
         (stage_section, on_ground): Self::Dependency<'_>,

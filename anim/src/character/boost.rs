@@ -11,10 +11,8 @@ impl Animation for BoostAnimation {
     type Dependency<'a> = BoostAnimationDependency<'a>;
     type Skeleton = CharacterSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"character_boost\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "character_boost"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         _dep: Self::Dependency<'_>,

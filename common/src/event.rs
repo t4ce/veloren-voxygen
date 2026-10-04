@@ -281,11 +281,6 @@ pub struct TeleportToPositionEvent {
     pub position: Vec3<f32>,
 }
 
-#[cfg(feature = "plugins")]
-pub struct RequestPluginsEvent {
-    pub entity: EcsEntity,
-    pub plugins: Vec<PluginHash>,
-}
 
 pub struct SetBattleModeEvent {
     pub entity: EcsEntity,

@@ -23,10 +23,8 @@ impl Skeleton for FixtureSkeleton {
     type ComputedSkeleton = ();
 
     const BONE_COUNT: usize = 1;
-    #[cfg(feature = "use-dyn-lib")]
-    const COMPUTE_FN: &'static [u8] = b"fixture_compute_mats\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "fixture_compute_mats"))]
+    
     fn compute_matrices_inner(
         &self,
         base_mat: Mat4<f32>,

@@ -9,10 +9,8 @@ impl Animation for IdleAnimation {
     type Dependency<'a> = f32;
     type Skeleton = CrustaceanSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"crustacean_idle\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "crustacean_idle"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         _global_time: Self::Dependency<'_>,

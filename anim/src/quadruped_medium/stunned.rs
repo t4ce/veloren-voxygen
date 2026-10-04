@@ -10,13 +10,8 @@ impl Animation for StunnedAnimation {
     type Dependency<'a> = (f32, f32, Option<StageSection>, f32);
     type Skeleton = QuadrupedMediumSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"quadruped_medium_stunned\0";
 
-    #[cfg_attr(
-        feature = "be-dyn-lib",
-        unsafe(export_name = "quadruped_medium_stunned")
-    )]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (_velocity, global_time, stage_section, timer): Self::Dependency<'_>,

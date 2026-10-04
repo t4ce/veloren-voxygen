@@ -27,8 +27,6 @@ use crate::{
         trail::TOOL_TRAIL_MANIFEST,
     },
 };
-#[cfg(feature = "plugins")]
-use anim::plugin::PluginSkeleton;
 use anim::{
     Animation, Skeleton,
     arthropod::{self, ArthropodSkeleton},
@@ -237,8 +235,6 @@ pub struct FigureMgrStates {
     pub volume_states: HashMap<EcsEntity, FigureState<VolumeKey, BoundTerrainLocals>>,
     pub arthropod_states: HashMap<EcsEntity, FigureState<ArthropodSkeleton>>,
     pub crustacean_states: HashMap<EcsEntity, FigureState<CrustaceanSkeleton>>,
-    #[cfg(feature = "plugins")]
-    pub plugin_states: HashMap<EcsEntity, FigureState<PluginSkeleton>>,
 }
 
 impl FigureMgrStates {
@@ -312,10 +308,8 @@ impl FigureMgrStates {
                 .get_mut(entity)
                 .map(DerefMut::deref_mut),
             Body::Plugin(_body) => {
-                #[cfg(not(feature = "plugins"))]
+                
                 unreachable!("Plugins require feature");
-                #[cfg(feature = "plugins")]
-                self.plugin_states.get_mut(entity).map(DerefMut::deref_mut)
             },
         }
     }
@@ -353,10 +347,8 @@ impl FigureMgrStates {
             Body::Arthropod(_) => self.arthropod_states.remove(entity).map(|e| e.meta),
             Body::Crustacean(_) => self.crustacean_states.remove(entity).map(|e| e.meta),
             Body::Plugin(_) => {
-                #[cfg(not(feature = "plugins"))]
+                
                 unreachable!("Plugins require feature");
-                #[cfg(feature = "plugins")]
-                self.plugin_states.remove(entity).map(|e| e.meta)
             },
         }
     }
@@ -382,14 +374,10 @@ impl FigureMgrStates {
         self.volume_states.retain(|k, v| f(k, &mut *v));
         self.arthropod_states.retain(|k, v| f(k, &mut *v));
         self.crustacean_states.retain(|k, v| f(k, &mut *v));
-        #[cfg(feature = "plugins")]
-        self.plugin_states.retain(|k, v| f(k, &mut *v));
     }
 
     fn count(&self) -> usize {
-        #[cfg(feature = "plugins")]
-        let plugin_states = self.plugin_states.len();
-        #[cfg(not(feature = "plugins"))]
+        
         let plugin_states = 0;
         self.character_states.len()
             + self.quadruped_small_states.len()
@@ -415,13 +403,7 @@ impl FigureMgrStates {
     }
 
     fn count_visible(&self) -> usize {
-        #[cfg(feature = "plugins")]
-        let plugin_states = self
-            .plugin_states
-            .iter()
-            .filter(|(_, c)| c.visible())
-            .count();
-        #[cfg(not(feature = "plugins"))]
+        
         let plugin_states = 0;
         self.character_states
             .iter()
@@ -565,8 +547,6 @@ struct FigureReadData<'a> {
 }
 
 struct FigureUpdateData<'a, CSS, COR> {
-    #[cfg(feature = "plugins")]
-    plugins: &'a mut common_state::plugin::PluginMgr,
     scene_data: &'a SceneData<'a>,
     terrain: Option<&'a Terrain>,
     camera_mode: CameraMode,
@@ -742,8 +722,6 @@ pub struct FigureMgr {
     volume_model_cache: FigureModelCache<VolumeKey>,
     arthropod_model_cache: FigureModelCache<ArthropodSkeleton>,
     crustacean_model_cache: FigureModelCache<CrustaceanSkeleton>,
-    #[cfg(feature = "plugins")]
-    plugin_model_cache: FigureModelCache<PluginSkeleton>,
     pub states: FigureMgrStates,
 }
 
@@ -770,8 +748,6 @@ impl FigureMgr {
             volume_model_cache: FigureModelCache::new(),
             arthropod_model_cache: FigureModelCache::new(),
             crustacean_model_cache: FigureModelCache::new(),
-            #[cfg(feature = "plugins")]
-            plugin_model_cache: FigureModelCache::new(),
             states: FigureMgrStates::default(),
         }
     }
@@ -779,9 +755,7 @@ impl FigureMgr {
     pub fn atlas(&self) -> &FigureAtlas { &self.atlas }
 
     fn any_watcher_reloaded(&mut self) -> bool {
-        #[cfg(feature = "plugins")]
-        let plugin_reloaded = self.plugin_model_cache.watcher_reloaded();
-        #[cfg(not(feature = "plugins"))]
+        
         let plugin_reloaded = false;
         self.character_model_cache.watcher_reloaded()
             || self.theropod_model_cache.watcher_reloaded()
@@ -830,8 +804,6 @@ impl FigureMgr {
             self.volume_model_cache.clear_models();
             self.arthropod_model_cache.clear_models();
             self.crustacean_model_cache.clear_models();
-            #[cfg(feature = "plugins")]
-            self.plugin_model_cache.clear_models();
         }
 
         self.character_model_cache.clean(&mut self.atlas, tick);
@@ -855,8 +827,6 @@ impl FigureMgr {
         self.volume_model_cache.clean(&mut self.atlas, tick);
         self.arthropod_model_cache.clean(&mut self.atlas, tick);
         self.crustacean_model_cache.clean(&mut self.atlas, tick);
-        #[cfg(feature = "plugins")]
-        self.plugin_model_cache.clean(&mut self.atlas, tick);
     }
 
     pub fn update_lighting(&mut self, scene_data: &SceneData) {
@@ -1023,9 +993,7 @@ impl FigureMgr {
             let collides_with_aabr = |a: math::Aabr<f32>, b: math::Aabr<f32>| {
                 let min = math::Vec4::new(a.min.x, a.min.y, b.min.x, b.min.y);
                 let max = math::Vec4::new(b.max.x, b.max.y, a.max.x, a.max.y);
-                #[cfg(feature = "simd")]
-                return min.partial_cmple_simd(max).reduce_and();
-                #[cfg(not(feature = "simd"))]
+                
                 return min.partial_cmple(&max).reduce_and();
             };
 
@@ -1079,8 +1047,6 @@ impl FigureMgr {
         let focus_pos = camera.get_focus_pos();
 
         let mut data = FigureUpdateData {
-            #[cfg(feature = "plugins")]
-            plugins: &mut ecs.write_resource(),
             scene_data,
             terrain,
             camera_mode: camera.get_mode(),
@@ -6813,90 +6779,7 @@ impl FigureMgr {
                 );
             },
             Body::Plugin(body) => {
-                #[cfg(feature = "plugins")]
-                {
-                    let (model, _skeleton_attr) = self.plugin_model_cache.get_or_create_model(
-                        renderer,
-                        &mut self.atlas,
-                        body,
-                        inventory,
-                        (),
-                        tick,
-                        viewpoint_camera_mode,
-                        viewpoint_character_state,
-                        slow_jobs,
-                        None,
-                    );
-
-                    let state = self.states.plugin_states.entry(entity).or_insert_with(|| {
-                        FigureState::new(renderer, PluginSkeleton::default(), body)
-                    });
-
-                    // Average velocity relative to the current ground
-                    let rel_avg_vel = state.avg_vel - physics.ground_vel;
-
-                    let idle_state = CharacterState::Idle(idle::Data::default());
-                    let last = Last(idle_state.clone());
-                    let (character, last_character) = match (character, last_character) {
-                        (Some(c), Some(l)) => (c, l),
-                        _ => (&idle_state, &last),
-                    };
-
-                    if !character.same_variant(&last_character.0) {
-                        state.state_time = 0.0;
-                    }
-
-                    let char_state = match character {
-                        CharacterState::BasicMelee(_) => {
-                            common_state::plugin::module::CharacterState::Melee
-                        },
-                        CharacterState::Sit => common_state::plugin::module::CharacterState::Feed,
-                        CharacterState::Stunned(_) => {
-                            common_state::plugin::module::CharacterState::Stunned
-                        },
-                        _ if physics.on_ground.is_none() => {
-                            common_state::plugin::module::CharacterState::Jump
-                        },
-                        _ if physics.in_liquid().is_some() => {
-                            common_state::plugin::module::CharacterState::Swim
-                        },
-                        _ if rel_vel.magnitude_squared() > MOVING_THRESHOLD_SQR => {
-                            common_state::plugin::module::CharacterState::Run
-                        },
-                        _ => common_state::plugin::module::CharacterState::Idle,
-                    };
-
-                    if let Some(bodyobj) = data.plugins.create_body("lizard") {
-                        let dep = common_state::plugin::module::Dependency {
-                            velocity: state.avg_vel.into_tuple(),
-                            ori: ori.into_vec4().into_tuple(),
-                            last_ori: state.last_ori.into_vec4().into_tuple(),
-                            global_time: time,
-                            avg_vel: rel_avg_vel.into_tuple(),
-                            state: char_state,
-                        };
-
-                        if let Some(target_bones) =
-                            data.plugins.update_skeleton(&bodyobj, &dep, time)
-                        {
-                            state.skeleton = Lerp::lerp(
-                                &state.skeleton,
-                                &PluginSkeleton::from_module(target_bones),
-                                dt_lerp,
-                            );
-                            state.update(
-                                renderer,
-                                trail_mgr,
-                                update_buf,
-                                &common_params,
-                                state_animation_rate,
-                                model,
-                                body,
-                            );
-                        }
-                    }
-                }
-                #[cfg(not(feature = "plugins"))]
+                
                 let _ = body;
             },
         }
@@ -7286,8 +7169,6 @@ impl FigureMgr {
                     volume_states,
                     arthropod_states,
                     crustacean_states,
-                    #[cfg(feature = "plugins")]
-                    plugin_states,
                 },
         } = self;
         let atlas = atlas_;
@@ -7661,32 +7542,10 @@ impl FigureMgr {
                 }
             },
             Body::Plugin(body) => {
-                #[cfg(not(feature = "plugins"))]
+                
                 {
                     let _ = body;
                     unreachable!("Plugins require feature");
-                }
-                #[cfg(feature = "plugins")]
-                {
-                    plugin_states
-                        .get(&entity)
-                        .filter(|state| filter_state(state))
-                        .map(move |state| {
-                            (
-                                state.bound(),
-                                plugin_model_cache
-                                    .get_model(
-                                        atlas,
-                                        body,
-                                        inventory,
-                                        tick,
-                                        viewpoint_camera_mode,
-                                        character_state,
-                                        item_key,
-                                    )
-                                    .map(ModelEntryRef::Figure),
-                            )
-                        })
                 }
             },
         } {
@@ -7899,16 +7758,8 @@ impl FigureMgr {
                     .map(|state| &state.computed_skeleton)
                     .map(|skeleton| (skeleton.chest * Vec4::new(0.0, 7.0, 0.0, 1.0)).xyz()),
                 Body::Plugin(_) => {
-                    #[cfg(not(feature = "plugins"))]
+                    
                     unreachable!("Plugins require feature");
-                    #[cfg(feature = "plugins")]
-                    {
-                        self.states
-                            .plugin_states
-                            .get(&entity)
-                            .map(|state| &state.computed_skeleton)
-                            .map(|skeleton| (skeleton.bone0 * Vec4::new(0.0, 3.0, 0.0, 1.0)).xyz())
-                    }
                 },
             })
             .unwrap_or_else(Vec3::zero)
@@ -8001,13 +7852,8 @@ impl FigureMgr {
                     crustacean::mount_transform(b, &state.computed_skeleton, &state.skeleton)
                 }),
                 Body::Plugin(_) => {
-                    #[cfg(not(feature = "plugins"))]
+                    
                     unreachable!("Plugins require feature");
-                    #[cfg(feature = "plugins")]
-                    Some(Transform {
-                        position: body.mount_offset().into_tuple().into(),
-                        ..Default::default()
-                    })
                 },
             })
     }

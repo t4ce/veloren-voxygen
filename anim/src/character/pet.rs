@@ -11,10 +11,8 @@ impl Animation for PetAnimation {
     type Dependency<'a> = (Vec3<f32>, Vec3<f32>, f32);
     type Skeleton = CharacterSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"character_pet\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "character_pet"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (pos, target_pos, _global_time): Self::Dependency<'_>,

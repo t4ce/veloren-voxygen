@@ -22,10 +22,8 @@ impl Animation for BreatheAnimation {
     type Dependency<'a> = BreatheAnimationDependency<'a>;
     type Skeleton = BirdLargeSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"bird_large_breathe\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "bird_large_breathe"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (

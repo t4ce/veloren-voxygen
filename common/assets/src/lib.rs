@@ -18,16 +18,10 @@ pub use assets_manager::{
 };
 
 mod fs;
-#[cfg(feature = "plugins")] mod plugin_cache;
 mod walk;
 pub use walk::{Walk, walk_tree};
 
-#[cfg(feature = "plugins")]
-lazy_static! {
-    /// The HashMap where all loaded assets are stored in.
-    static ref ASSETS: plugin_cache::CombinedCache = plugin_cache::CombinedCache::new().unwrap();
-}
-#[cfg(not(feature = "plugins"))]
+
 lazy_static! {
     /// The HashMap where all loaded assets are stored in.
     static ref ASSETS: AssetCache =
@@ -35,8 +29,6 @@ lazy_static! {
 }
 
 // register a new plugin
-#[cfg(feature = "plugins")]
-pub fn register_tar(path: PathBuf) -> std::io::Result<()> { ASSETS.register_tar(path) }
 
 pub type AssetHandle<T> = &'static assets_manager::Handle<T>;
 pub type AssetReadGuard<T> = assets_manager::AssetReadGuard<'static, T>;
@@ -131,11 +123,7 @@ pub trait AssetCombined: AssetExt {
 
     /// Load combined table without hot-reload support
     fn load_and_combine_static(specifier: &str) -> Result<AssetHandle<Self>, Error> {
-        #[cfg(feature = "plugins")]
-        {
-            ASSETS.no_record(|| Self::load_and_combine(ASSETS.as_cache(), specifier))
-        }
-        #[cfg(not(feature = "plugins"))]
+        
         {
             Self::load(specifier)
         }
@@ -155,11 +143,7 @@ pub trait AssetCombined: AssetExt {
     /// Load combined table without hot-reload support, panic on error
     #[track_caller]
     fn load_expect_combined_static(specifier: &str) -> AssetHandle<Self> {
-        #[cfg(feature = "plugins")]
-        {
-            ASSETS.no_record(|| Self::load_expect_combined(ASSETS.as_cache(), specifier))
-        }
-        #[cfg(not(feature = "plugins"))]
+        
         {
             Self::load_expect(specifier)
         }
@@ -188,13 +172,7 @@ impl CacheCombined for AssetCache {
         &self,
         specifier: &str,
     ) -> Result<&assets_manager::Handle<A>, Error> {
-        #[cfg(feature = "plugins")]
-        {
-            tracing::info!("combine {specifier}");
-            let data: Result<A, _> = ASSETS.combine(self, |cache| cache.load_owned::<A>(specifier));
-            data.map(|data| self.get_or_insert(specifier, data))
-        }
-        #[cfg(not(feature = "plugins"))]
+        
         {
             self.load(specifier)
         }
@@ -287,28 +265,10 @@ impl<T: Concatenate> Concatenate for Ron<T> {
 }
 
 /// This wrapper combines several RON files from multiple sources
-#[cfg(feature = "plugins")]
-#[derive(Clone)]
-pub struct MultiRon<T>(pub T);
 
-#[cfg(feature = "plugins")]
-impl<T> Asset for MultiRon<T>
-where
-    T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static + Concatenate,
-{
-    // the passed cache registers with hot reloading
-    fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
-        ASSETS
-            .combine(cache, |cache| {
-                cache.load_owned::<Ron<T>>(id).map(|ron| ron.into_inner())
-            })
-            .map(MultiRon)
-            .map_err(Into::<BoxedError>::into)
-    }
-}
 
 // fallback
-#[cfg(not(feature = "plugins"))]
+
 pub use assets_manager::asset::Ron as MultiRon;
 
 /// Return path to repository root by searching 10 directories back

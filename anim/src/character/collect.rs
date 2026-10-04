@@ -11,10 +11,8 @@ impl Animation for CollectAnimation {
     type Dependency<'a> = (Vec3<f32>, f32, Option<StageSection>, Vec3<f32>, bool);
     type Skeleton = CharacterSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"character_collect\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "character_collect"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (position, _global_time, stage_section, sprite_pos, is_riding): Self::Dependency<'_>,

@@ -19,11 +19,7 @@ use client_init::{ClientInit, Error as InitError, Msg as InitMsg};
 use common::{comp, event::UpdateCharacterMetadata};
 use common_base::span;
 use common_net::msg::ClientType;
-#[cfg(feature = "plugins")]
-use common_state::plugin::PluginMgr;
 use i18n::{LocalizationGuard, LocalizationHandle, fluent_args};
-#[cfg(feature = "plugins")]
-use specs::WorldExt;
 use core::cell::RefCell;
 use std::path::Path;
 use alloc::{rc::Rc, sync::Arc};
@@ -119,17 +115,6 @@ impl PlayState for MainMenuState {
         match self.init.client().and_then(|init| init.poll()) {
             Some(InitMsg::Done(Ok(mut client))) => {
                 // load local plugins needed by the server
-                #[cfg(feature = "plugins")]
-                for path in client.take_local_plugins().drain(..) {
-                    if let Err(e) = client
-                        .state_mut()
-                        .ecs_mut()
-                        .write_resource::<PluginMgr>()
-                        .load_server_plugin(path)
-                    {
-                        tracing::error!(?e, "load local plugin");
-                    }
-                }
                 // Register voxygen components / resources
                 crate::ecs::init(client.state_mut().ecs_mut());
                 self.init =
@@ -202,29 +187,8 @@ impl PlayState for MainMenuState {
                                     persisted_state.location_markers.update(marker_event);
                                 }
                             },
-                            #[cfg_attr(not(feature = "plugins"), expect(unused_variables))]
+                            #[expect(unused_variables)]
                             client::Event::PluginDataReceived(data) => {
-                                #[cfg(feature = "plugins")]
-                                {
-                                    tracing::info!("plugin data {}", data.len());
-                                    if let InitState::Pipeline(client, _) = &mut self.init {
-                                        let hash = client
-                                            .state()
-                                            .ecs()
-                                            .write_resource::<PluginMgr>()
-                                            .cache_server_plugin(&global_state.config_dir, data);
-                                        match hash {
-                                            Ok(hash) => {
-                                                if client.plugin_received(hash) == 0 {
-                                                    // now load characters (plugins might contain
-                                                    // items)
-                                                    client.load_character_list();
-                                                }
-                                            },
-                                            Err(e) => tracing::error!(?e, "cache_server_plugin"),
-                                        }
-                                    }
-                                }
                             },
                             _ => {},
                         }

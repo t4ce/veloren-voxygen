@@ -7,10 +7,7 @@ name = "veloren-common-net"
 version = "0.18.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
-[features]
-simd = ["vek/platform_intrinsics"]
 
-default = ["simd"]
 
 [dependencies]
 common = {package = "veloren-common", path = "../../common"}

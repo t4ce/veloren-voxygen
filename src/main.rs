@@ -2,19 +2,11 @@
 #![recursion_limit = "2048"]
 
 extern crate alloc;
-#[cfg(all(
-    target_os = "windows",
-    not(feature = "tracy-memory"),
-    not(feature = "hot-anim"),
-))]
+#[cfg(target_os = "windows")]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 // Allow profiling allocations with Tracy
-#[cfg_attr(feature = "tracy-memory", global_allocator)]
-#[cfg(feature = "tracy-memory")]
-static GLOBAL: common_base::tracy_client::ProfiledAllocator<std::alloc::System> =
-    common_base::tracy_client::ProfiledAllocator::new(std::alloc::System, 128);
 
 use i18n::{self, LocalizationHandle};
 use veloren_voxygen::{
@@ -70,8 +62,6 @@ fn main() {
         }
     }
 
-    #[cfg(feature = "tracy")]
-    common_base::tracy_client::Client::start();
 
     let userdata_dir = common_base::userdata_dir();
 
@@ -140,10 +130,6 @@ fn main() {
     );
 
     // Initialise watcher for animation hot-reloading
-    #[cfg(feature = "hot-anim")]
-    {
-        anim::init();
-    }
 
     // Setup audio
     let mut audio = match settings.audio.output {

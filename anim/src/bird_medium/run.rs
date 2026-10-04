@@ -10,10 +10,8 @@ impl Animation for RunAnimation {
     type Dependency<'a> = (Vec3<f32>, Vec3<f32>, Vec3<f32>, Vec3<f32>, f32);
     type Skeleton = BirdMediumSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"bird_medium_run\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "bird_medium_run"))]
+    
     fn update_skeleton_inner<'a>(
         skeleton: &Self::Skeleton,
         (velocity, orientation, last_ori, avg_vel, acc_vel): Self::Dependency<'_>,

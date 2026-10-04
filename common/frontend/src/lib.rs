@@ -1,4 +1,4 @@
-#[cfg(not(feature = "tracy"))] use std::fs;
+ use std::fs;
 use std::path::Path;
 
 use termcolor::{ColorChoice, StandardStream};
@@ -10,10 +10,10 @@ use tracing_subscriber::{
 
 // TRUEOS std file writes are buffered until an explicit sync or close. Commit
 // each logging batch so an operator can read the live log through TRUEOSFS.
-#[cfg(all(target_os = "trueos", not(feature = "tracy")))]
+#[cfg(target_os = "trueos")]
 struct SyncedLogFile(fs::File);
 
-#[cfg(all(target_os = "trueos", not(feature = "tracy")))]
+#[cfg(target_os = "trueos")]
 impl std::io::Write for SyncedLogFile {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         std::io::Write::write(&mut self.0, bytes)
@@ -57,10 +57,8 @@ where
 {
     // To hold the guards that we create, they will cause the logs to be
     // flushed when they're dropped.
-    #[cfg(not(feature = "tracy"))]
+    
     let mut guards: Vec<WorkerGuard> = Vec::new();
-    #[cfg(feature = "tracy")]
-    let guards: Vec<WorkerGuard> = Vec::new();
 
     // We will do lower logging than the default (INFO) by INCLUSION. This
     // means that if you need lower level logging for a specific module, then
@@ -123,19 +121,11 @@ where
     let filter = filter; // mutation is done
 
     let registry = registry();
-    #[cfg(not(feature = "tracy"))]
+    
     let mut file_setup = false;
-    #[cfg(feature = "tracy")]
-    let file_setup = false;
-    #[cfg(feature = "tracy")]
-    let _terminal = terminal;
 
     // Create the terminal writer layer.
-    #[cfg(feature = "tracy")]
-    let registry = registry.with(tracing_tracy::TracyLayer::new(
-        tracing_tracy::DefaultConfig::default(),
-    ));
-    #[cfg(not(feature = "tracy"))]
+    
     let registry = {
         let (non_blocking, stdio_guard) = tracing_appender::non_blocking(terminal.make_writer());
         guards.push(stdio_guard);
@@ -143,7 +133,7 @@ where
     };
 
     // Try to create the log file's parent folders.
-    #[cfg(not(feature = "tracy"))]
+    
     if let Some((path, file)) = log_path_file {
         match fs::create_dir_all(path) {
             Ok(_) => {
@@ -176,8 +166,6 @@ where
     } else {
         registry.with(filter).init();
     }
-    #[cfg(feature = "tracy")]
-    registry.with(filter).init();
 
     if file_setup {
         let (path, file) = log_path_file.unwrap();

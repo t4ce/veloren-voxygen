@@ -10,10 +10,8 @@ impl Animation for FeedAnimation {
     type Dependency<'a> = f32;
     type Skeleton = BirdLargeSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"bird_large_feed\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "bird_large_feed"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         global_time: Self::Dependency<'_>,

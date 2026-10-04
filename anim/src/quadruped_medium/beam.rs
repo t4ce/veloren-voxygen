@@ -11,10 +11,8 @@ impl Animation for BeamAnimation {
     type Dependency<'a> = (Option<&'a str>, Option<StageSection>);
     type Skeleton = QuadrupedMediumSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"quadruped_medium_beam\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "quadruped_medium_beam"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (ability_id, stage_section): Self::Dependency<'_>,

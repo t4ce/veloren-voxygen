@@ -12,10 +12,8 @@ impl Animation for ShootAnimation {
     type Dependency<'a> = ShootAnimationDependency;
     type Skeleton = BirdMediumSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"bird_medium_shoot\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "bird_medium_shoot"))]
+    
     fn update_skeleton_inner<'a>(
         skeleton: &Self::Skeleton,
         (velocity, global_time, stage_section, timer, look_dir, on_ground): Self::Dependency<'_>,

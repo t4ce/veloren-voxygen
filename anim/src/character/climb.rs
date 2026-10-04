@@ -17,10 +17,8 @@ impl Animation for ClimbAnimation {
     );
     type Skeleton = CharacterSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"character_climb\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "character_climb"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (_active_tool_kind, _second_tool_kind, velocity, _orientation, global_time): Self::Dependency<'_>,

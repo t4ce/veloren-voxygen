@@ -2,7 +2,6 @@
 //! server (`veloren-server`) and the client (`veloren-client`)
 
 extern crate alloc;
-#[cfg(feature = "plugins")] pub mod plugin;
 mod special_areas;
 mod state;
 // TODO: breakup state module and remove glob

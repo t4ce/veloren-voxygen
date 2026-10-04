@@ -11,10 +11,8 @@ impl Animation for SneakEquipAnimation {
     type Dependency<'a> = (Option<ToolKind>, Vec3<f32>, Vec3<f32>, Vec3<f32>, f32);
     type Skeleton = CharacterSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"character_sneakequip\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "character_sneakequip"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (active_tool_kind, velocity, orientation, last_ori, global_time): Self::Dependency<'_>,

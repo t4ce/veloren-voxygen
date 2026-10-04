@@ -17,10 +17,8 @@ impl Animation for LeapAnimation {
     );
     type Skeleton = BipedSmallSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"biped_small_leapmelee\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "biped_small_leapmelee"))]
+    
     fn update_skeleton_inner(
         skeleton: &Self::Skeleton,
         (active_tool_kind, _second_tool_kind, _velocity, _global_time, stage_section): Self::Dependency<'_>,

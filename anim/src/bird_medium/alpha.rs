@@ -10,10 +10,8 @@ impl Animation for AlphaAnimation {
     type Dependency<'a> = (Option<StageSection>, f32, f32, Vec3<f32>, Vec3<f32>, bool);
     type Skeleton = BirdMediumSkeleton;
 
-    #[cfg(feature = "use-dyn-lib")]
-    const UPDATE_FN: &'static [u8] = b"bird_medium_alpha\0";
 
-    #[cfg_attr(feature = "be-dyn-lib", unsafe(export_name = "bird_medium_alpha"))]
+    
     fn update_skeleton_inner<'a>(
         skeleton: &Self::Skeleton,
         (stage_section, global_time, timer, orientation, last_ori, on_ground): Self::Dependency<'_>,

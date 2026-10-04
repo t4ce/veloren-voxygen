@@ -54,7 +54,6 @@ use common::{
     vol::RectVolSize,
     weather::{CompressedWeather, SharedWeatherGrid, Weather, WeatherGrid},
 };
-#[cfg(feature = "tracy")] use common_base::plot;
 use common_base::{prof_span, span};
 use common_i18n::Content;
 use common_net::{
@@ -70,8 +69,6 @@ use common_net::{
 
 pub use common_net::msg::ClientType;
 use common_state::State;
-#[cfg(feature = "plugins")]
-use common_state::plugin::PluginMgr;
 use common_systems::add_local_systems;
 use comp::BuffKind;
 use hashbrown::{HashMap, HashSet};
@@ -464,7 +461,7 @@ impl Client {
         auth_trusted: impl FnMut(&str) -> bool,
         init_stage_update: &(dyn Fn(ClientInitStage) + Send + Sync),
         add_foreign_systems: impl Fn(&mut DispatcherBuilder) + Send + 'static,
-        #[cfg_attr(not(feature = "plugins"), expect(unused_variables))] config_dir: PathBuf,
+        #[expect(unused_variables)] config_dir: PathBuf,
         client_type: ClientType,
     ) -> Result<Self, Error> {
         let _ = rustls::crypto::ring::default_provider().install_default(); // needs to be initialized before usage
@@ -713,31 +710,12 @@ impl Client {
                     add_local_systems(dispatch_builder);
                     add_foreign_systems(dispatch_builder);
                 },
-                #[cfg(feature = "plugins")]
-                common_state::plugin::PluginMgr::from_asset_or_default(),
             );
 
-            #[cfg_attr(not(feature = "plugins"), expect(unused_mut))]
+            #[expect(unused_mut)]
             let mut missing_plugins: Vec<PluginHash> = Vec::new();
-            #[cfg_attr(not(feature = "plugins"), expect(unused_mut))]
+            #[expect(unused_mut)]
             let mut local_plugins: Vec<PathBuf> = Vec::new();
-            #[cfg(feature = "plugins")]
-            {
-                let already_present = state.ecs().read_resource::<PluginMgr>().plugin_list();
-                for hash in _active_plugins.iter() {
-                    if !already_present.contains(hash) {
-                        // look in config_dir first (cache)
-                        if let Ok(local_path) = common_state::plugin::find_cached(&config_dir, hash)
-                        {
-                            local_plugins.push(local_path);
-                        } else {
-                            //tracing::info!("cache not found {local_path:?}");
-                            tracing::info!("Server requires plugin {hash:x?}");
-                            missing_plugins.push(*hash);
-                        }
-                    }
-                }
-            }
             // Client-only components
             state.ecs_mut().register::<comp::Last<CharacterState>>();
             let entity = state.ecs_mut().apply_entity_package(entity_package);
@@ -1217,8 +1195,6 @@ impl Client {
             ClientMsg::Type(msg) => self.register_stream.send(msg),
             ClientMsg::Register(msg) => self.register_stream.send(msg),
             ClientMsg::General(msg) => {
-                #[cfg(feature = "tracy")]
-                let (mut ingame, mut terrain) = (0.0, 0.0);
                 let stream = match msg {
                     ClientGeneral::RequestCharacterList
                     | ClientGeneral::CreateCharacter { .. }
@@ -1243,19 +1219,11 @@ impl Client {
                     | ClientGeneral::SpectatePosition(_)
                     | ClientGeneral::SpectateEntity(_)
                     | ClientGeneral::SetBattleMode(_) => {
-                        #[cfg(feature = "tracy")]
-                        {
-                            ingame = 1.0;
-                        }
                         &mut self.in_game_stream
                     },
                     // Terrain
                     ClientGeneral::TerrainChunkRequest { .. }
                     | ClientGeneral::LodZoneRequest { .. } => {
-                        #[cfg(feature = "tracy")]
-                        {
-                            terrain = 1.0;
-                        }
                         &mut self.terrain_stream
                     },
                     // Always possible
@@ -1264,11 +1232,6 @@ impl Client {
                     | ClientGeneral::Terminate
                     | ClientGeneral::RequestPlugins(_) => &mut self.general_stream,
                 };
-                #[cfg(feature = "tracy")]
-                {
-                    plot!("ingame_sends", ingame);
-                    plot!("terrain_sends", terrain);
-                }
                 stream.send(msg)
             },
             ClientMsg::Ping(msg) => self.ping_stream.send(msg),
@@ -3199,8 +3162,6 @@ impl Client {
 
     fn handle_messages(&mut self, frontend_events: &mut Vec<Event>) -> Result<u64, Error> {
         let mut cnt = 0;
-        #[cfg(feature = "tracy")]
-        let (mut terrain_cnt, mut ingame_cnt) = (0, 0);
         loop {
             let cnt_start = cnt;
 
@@ -3218,29 +3179,14 @@ impl Client {
             }
             while let Some(msg) = self.in_game_stream.try_recv()? {
                 cnt += 1;
-                #[cfg(feature = "tracy")]
-                {
-                    ingame_cnt += 1;
-                }
                 self.handle_server_in_game_msg(frontend_events, msg)?;
             }
             while let Some(msg) = self.terrain_stream.try_recv()? {
                 cnt += 1;
-                #[cfg(feature = "tracy")]
-                {
-                    if let ServerGeneral::TerrainChunkUpdate { chunk, .. } = &msg {
-                        terrain_cnt += chunk.as_ref().map(|x| x.approx_len()).unwrap_or(0);
-                    }
-                }
                 self.handle_server_terrain_msg(msg)?;
             }
 
             if cnt_start == cnt {
-                #[cfg(feature = "tracy")]
-                {
-                    plot!("terrain_recvs", terrain_cnt as f64);
-                    plot!("ingame_recvs", ingame_cnt as f64);
-                }
                 return Ok(cnt);
             }
         }
