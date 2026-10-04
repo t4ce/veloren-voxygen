@@ -8,6 +8,9 @@ description = "Crate for game loading assets for veloren."
 version = "0.18.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
+[features]
+picasso-assets = ["dep:picasso"]
+
 [dependencies]
 lazy_static = "1.4.0"
 assets_manager = { version = "0.13", features = [
@@ -35,3 +38,12 @@ bench = false
 
 [target.'cfg(target_os = "trueos")'.dependencies]
 trueos = { path = "../../../TRUEOS-Blueprints/api" }
+picasso = { package = "trueos-picasso", path = "../../../TRUEOS-Picasso", default-features = false, features = ["runtime-assets"], optional = true }
+
+[target.'cfg(not(target_os = "trueos"))'.dependencies]
+picasso = { package = "trueos-picasso", path = "../../../TRUEOS-Picasso", default-features = false, features = ["runtime-assets", "test-std"], optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+serde = { version = "1", features = ["derive"] }
+walkdir = "2"

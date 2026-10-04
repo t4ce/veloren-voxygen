@@ -88,6 +88,9 @@ fn main() {
     let log_filename = format!("{}_voxygen.log", now.format("%Y-%m-%d"));
     let _guards = common_frontend::init_stdout(Some((&logs_dir, &log_filename)));
 
+    #[cfg(feature = "picasso-assets")]
+    common::assets::initialize_picasso_assets();
+
     // Re-run userdata selection so any warnings will be logged
     common_base::userdata_dir();
 

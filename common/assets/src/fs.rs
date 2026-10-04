@@ -244,6 +244,24 @@ mod tests {
     // -- Some basic tests for the DSL above
 
     #[test]
+    #[cfg(feature = "picasso-assets")]
+    fn picasso_preserves_overrides_after_ingestion() {
+        FileSystem::scope(&|fs, main_path, override_path| {
+            FileSystem::mock_file(main_path, "shared.ron", "[1]");
+            FileSystem::mock_file(override_path, "shared.ron", "[2]");
+            FileSystem::mock_file(override_path, "extra.ron", "[3]");
+            let source = crate::picasso_source::PicassoSource::import(&fs).unwrap();
+            std::fs::remove_file(override_path.join("shared.ron")).unwrap();
+            std::fs::remove_file(main_path.join("shared.ron")).unwrap();
+            assert_eq!(source.read("shared", "ron").unwrap().as_ref(), b"[2]");
+            assert_eq!(source.read("extra", "ron").unwrap().as_ref(), b"[3]");
+            let mut count = 0;
+            source.read_dir("", &mut |_| count += 1).unwrap();
+            assert_eq!(count, 2);
+        });
+    }
+
+    #[test]
     fn test_mock_tree() {
         FileSystem::scope(&|fs, main_path, _override_path| {
             FileSystem::mock_tree(main_path, vec![FsNode::File("template.ron", "(5)")]);

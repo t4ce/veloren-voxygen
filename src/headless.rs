@@ -71,6 +71,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "trueos")]
     let args = Args::parse_from(["voxygen-headless"]);
     let _logs = common_frontend::init_stdout(None);
+    #[cfg(feature = "picasso-assets")]
+    common::assets::initialize_picasso_assets();
     let runtime = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)

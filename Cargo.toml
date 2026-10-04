@@ -13,6 +13,7 @@ autotests = false
 default = ["audio"]
 audio = ["dep:kira", "dep:cpal"]
 headless = ["dep:softbuffer"]
+picasso-assets = ["common/picasso-assets"]
 # Cargo features are additive: select this with default features disabled.
 noaudio = ["headless"]
 

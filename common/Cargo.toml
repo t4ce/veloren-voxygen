@@ -9,6 +9,7 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 [features]
 no-assets = []
+picasso-assets = ["common-assets/picasso-assets"]
 bin_csv = ["csv", "clap"]
 bin_graphviz = ["petgraph", "clap"]
 bin_asset_migrate = []

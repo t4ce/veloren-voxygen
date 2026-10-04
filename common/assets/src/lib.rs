@@ -18,14 +18,28 @@ pub use assets_manager::{
 };
 
 mod fs;
+#[cfg(feature = "picasso-assets")]
+mod picasso_source;
 mod walk;
 pub use walk::{Walk, walk_tree};
 
 
 lazy_static! {
     /// The HashMap where all loaded assets are stored in.
-    static ref ASSETS: AssetCache =
-            AssetCache::with_source(fs::FileSystem::new().unwrap());
+    static ref ASSETS: AssetCache = create_asset_cache();
+}
+
+fn create_asset_cache() -> AssetCache {
+    #[cfg(feature = "picasso-assets")]
+    return AssetCache::with_source(picasso_source::PicassoSource::new().unwrap());
+    #[cfg(not(feature = "picasso-assets"))]
+    AssetCache::with_source(fs::FileSystem::new().unwrap())
+}
+
+/// Imports raw assets before the application starts when using Picasso.
+#[cfg(feature = "picasso-assets")]
+pub fn initialize_picasso_assets() {
+    lazy_static::initialize(&ASSETS);
 }
 
 // register a new plugin
