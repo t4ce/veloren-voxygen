@@ -2,7 +2,7 @@ use super::super::{
     ExperimentalShader, GlobalsLayouts, PipelineModes, Renderer, Texture, Vertex as VertexTrait,
 };
 use bytemuck::{Pod, Zeroable};
-use std::mem;
+use core::mem;
 use vek::*;
 
 #[repr(C)]

@@ -111,7 +111,7 @@ fn create_tether_mesh() -> Mesh<Vertex> {
     (0..RADIAL_SEGMENTS)
         .flat_map(|i| {
             let at_angle = |x: f32| {
-                let theta = x / RADIAL_SEGMENTS as f32 * std::f32::consts::TAU;
+                let theta = x / RADIAL_SEGMENTS as f32 * core::f32::consts::TAU;
                 Vec2::new(theta.sin(), theta.cos())
             };
             let start = at_angle(i as f32);

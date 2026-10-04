@@ -1,5 +1,5 @@
 use fluent_syntax::parser::ParserError;
-use std::{error::Error, fmt, ops::Range};
+use core::{error::Error, fmt, ops::Range};
 
 #[derive(Debug)]
 struct Pos {

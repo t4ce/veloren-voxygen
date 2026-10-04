@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 #![recursion_limit = "2048"]
 
+extern crate alloc;
 #[cfg(all(
     target_os = "windows",
     not(feature = "tracy-memory"),
@@ -122,10 +123,8 @@ fn main() {
 
     // Setup tokio runtime
     use common::consts::MIN_RECOMMENDED_TOKIO_THREADS;
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
+    use alloc::sync::Arc;
+    use core::{sync::atomic::AtomicUsize, sync::atomic::Ordering};
     use tokio::runtime::Builder;
 
     // TODO: evaluate std::thread::available_concurrency as a num_cpus replacement
@@ -242,7 +241,7 @@ fn main() {
         #[cfg(feature = "egui-ui")]
         egui_state,
         lazy_init,
-        clock: Clock::new(std::time::Duration::from_secs_f64(
+        clock: Clock::new(core::time::Duration::from_secs_f64(
             1.0 / get_fps(settings.graphics.max_fps) as f64,
         )),
         settings,

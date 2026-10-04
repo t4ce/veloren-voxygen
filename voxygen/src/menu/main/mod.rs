@@ -28,7 +28,9 @@ use i18n::{LocalizationGuard, LocalizationHandle, fluent_args};
 use server::ServerInitStage;
 #[cfg(any(feature = "singleplayer", feature = "plugins"))]
 use specs::WorldExt;
-use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
+use core::cell::RefCell;
+use std::path::Path;
+use alloc::{rc::Rc, sync::Arc};
 use tokio::runtime;
 use tracing::error;
 use ui::{Event as MainMenuEvent, MainMenuUi};

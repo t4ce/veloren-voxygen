@@ -29,7 +29,8 @@ use kira::{
 use music::MusicTransitionManifest;
 use sfx::{SfxEvent, SfxTag, SfxTriggerItem};
 use soundcache::load_ogg;
-use std::{cmp::Ordering, collections::VecDeque, time::Duration};
+use core::{cmp::Ordering, time::Duration};
+use alloc::collections::VecDeque;
 use strum::Display;
 use tracing::{debug, error, info, warn};
 

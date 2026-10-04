@@ -22,7 +22,8 @@ use conrod_core::{
     widget_ids,
 };
 use i18n::Localization;
-use std::{collections::VecDeque, num::NonZeroU32};
+use alloc::collections::VecDeque;
+use core::num::NonZeroU32;
 
 widget_ids! {
     struct Ids{

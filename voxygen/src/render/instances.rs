@@ -1,20 +1,20 @@
 use super::buffer::DynamicBuffer;
 use bytemuck::Pod;
-use std::ops::Range;
+use core::ops::Range;
 
 /// Represents a set of instances that has been sent to the GPU.
 pub struct SubInstances<'a, T: Copy + Pod> {
     pub inst_range: Range<u32>,
     buf: &'a wgpu::Buffer,
-    phantom_data: std::marker::PhantomData<T>,
+    phantom_data: core::marker::PhantomData<T>,
 }
 
 impl<'a, T: Copy + Pod> SubInstances<'a, T> {
     pub(super) fn buf(&self) -> wgpu::BufferSlice<'a> {
         let start = self.inst_range.start as wgpu::BufferAddress
-            * std::mem::size_of::<T>() as wgpu::BufferAddress;
+            * core::mem::size_of::<T>() as wgpu::BufferAddress;
         let end = self.inst_range.end as wgpu::BufferAddress
-            * std::mem::size_of::<T>() as wgpu::BufferAddress;
+            * core::mem::size_of::<T>() as wgpu::BufferAddress;
         self.buf.slice(start..end)
     }
 
@@ -43,7 +43,7 @@ impl<T: Copy + Pod> Instances<T> {
         SubInstances {
             inst_range,
             buf: self.buf(),
-            phantom_data: std::marker::PhantomData,
+            phantom_data: core::marker::PhantomData,
         }
     }
 

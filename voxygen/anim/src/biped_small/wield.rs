@@ -4,7 +4,7 @@ use super::{
     biped_small_wield_sword,
 };
 use common::comp::item::tool::{AbilitySpec, ToolKind};
-use std::f32::consts::PI;
+use core::f32::consts::PI;
 
 pub struct WieldAnimation;
 

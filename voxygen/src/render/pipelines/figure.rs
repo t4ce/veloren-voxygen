@@ -276,7 +276,7 @@ pub struct FigureSpriteAtlasData {
 }
 
 impl AtlasData for FigureSpriteAtlasData {
-    type SliceMut<'a> = std::slice::IterMut<'a, [u8; 4]>;
+    type SliceMut<'a> = core::slice::IterMut<'a, [u8; 4]>;
 
     const TEXTURES: usize = 1;
 
@@ -315,7 +315,7 @@ impl AtlasData for FigureSpriteAtlasData {
         ]
     }
 
-    fn slice_mut(&mut self, range: std::ops::Range<usize>) -> Self::SliceMut<'_> {
+    fn slice_mut(&mut self, range: core::ops::Range<usize>) -> Self::SliceMut<'_> {
         self.col_lights[range].iter_mut()
     }
 }

@@ -14,7 +14,7 @@ use conrod_core::{
     widget_ids,
 };
 use i18n::Localization;
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 widget_ids! {
     struct Ids {

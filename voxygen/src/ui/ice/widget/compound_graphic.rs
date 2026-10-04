@@ -1,6 +1,6 @@
 use super::image::Handle;
 use iced::{Element, Hasher, Layout, Length, Point, Rectangle, Widget, layout};
-use std::hash::Hash;
+use core::hash::Hash;
 use vek::{Aabr, Rgba, Vec2};
 
 // TODO: this widget combines multiple images in precise ways, they may or may
@@ -201,7 +201,7 @@ where
 
     fn hash_layout(&self, state: &mut Hasher) {
         struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
+        core::any::TypeId::of::<Marker>().hash(state);
 
         self.width.hash(state);
         self.height.hash(state);

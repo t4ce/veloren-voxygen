@@ -6,7 +6,7 @@ use super::{
     GlobalModel, Texture, lod_terrain,
 };
 use bytemuck::{Pod, Zeroable};
-use std::mem;
+use core::mem;
 use vek::*;
 
 pub const VERT_PAGE_SIZE: u32 = 256;

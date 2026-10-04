@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 #![deny(clippy::clone_on_ref_ptr)]
 
+extern crate alloc;
 pub mod addr;
 pub mod error;
 
@@ -82,14 +83,9 @@ use network::{ConnectAddr, Network, Participant, Pid, Stream};
 use num_traits::FloatConst;
 use rustls::client::danger::ServerCertVerified;
 use specs::Component;
-use std::{
-    collections::{BTreeMap, VecDeque},
-    fmt::Debug,
-    mem,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use alloc::{collections::BTreeMap, collections::VecDeque, sync::Arc};
+use core::{fmt::Debug, mem, time::Duration, time::Instant};
+use std::path::PathBuf;
 use tokio::runtime::Runtime;
 use tokio_parallel::prelude::*;
 use tracing::{debug, error, trace, warn};
@@ -3549,7 +3545,7 @@ impl Client {
     pub fn are_plugins_missing(&self) -> bool { !self.missing_plugins.is_empty() }
 
     /// extract list of locally cached plugins to load
-    pub fn take_local_plugins(&mut self) -> Vec<PathBuf> { std::mem::take(&mut self.local_plugins) }
+    pub fn take_local_plugins(&mut self) -> Vec<PathBuf> { core::mem::take(&mut self.local_plugins) }
 }
 
 impl Drop for Client {

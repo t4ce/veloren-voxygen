@@ -6,7 +6,7 @@ use super::{
 };
 use bytemuck::{Pod, Zeroable};
 use common::figure::CellSurface;
-use std::mem;
+use core::mem;
 use vek::*;
 
 #[repr(C)]
@@ -332,7 +332,7 @@ pub struct TerrainAtlasData {
 
 impl AtlasData for TerrainAtlasData {
     type SliceMut<'a> =
-        std::iter::Zip<std::slice::IterMut<'a, [u8; 4]>, std::slice::IterMut<'a, u8>>;
+        core::iter::Zip<core::slice::IterMut<'a, [u8; 4]>, core::slice::IterMut<'a, u8>>;
 
     const TEXTURES: usize = 2;
 
@@ -392,7 +392,7 @@ impl AtlasData for TerrainAtlasData {
         ]
     }
 
-    fn slice_mut(&mut self, range: std::ops::Range<usize>) -> Self::SliceMut<'_> {
+    fn slice_mut(&mut self, range: core::ops::Range<usize>) -> Self::SliceMut<'_> {
         self.col_lights[range.clone()]
             .iter_mut()
             .zip(self.kinds[range].iter_mut())

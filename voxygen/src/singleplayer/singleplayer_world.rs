@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    io::{BufReader, Read},
-    path::{Path, PathBuf},
-};
+use std::{fs, io::BufReader, io::Read, path::Path, path::PathBuf};
 
 use common::{assets::ASSETS_PATH, consts::DAY_LENGTH_DEFAULT};
 use serde::{Deserialize, Serialize};
@@ -180,9 +176,9 @@ impl SingleplayerWorlds {
     pub fn remove(&mut self, idx: usize) {
         if let Some(ref mut i) = self.current {
             match (*i).cmp(&idx) {
-                std::cmp::Ordering::Less => {},
-                std::cmp::Ordering::Equal => self.current = None,
-                std::cmp::Ordering::Greater => *i -= 1,
+                core::cmp::Ordering::Less => {},
+                core::cmp::Ordering::Equal => self.current = None,
+                core::cmp::Ordering::Greater => *i -= 1,
             }
         }
         let _ = fs::remove_dir_all(&self.worlds[idx].path);
@@ -252,7 +248,7 @@ impl SingleplayerWorlds {
 }
 
 mod version {
-    use std::any::{Any, type_name};
+    use core::{any::Any, any::type_name};
 
     use serde::de::DeserializeOwned;
 

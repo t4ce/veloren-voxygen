@@ -2,7 +2,7 @@ use super::{
     super::{Animation, vek::*},
     FishSmallSkeleton, SkeletonAttr,
 };
-use std::f32::consts::PI;
+use core::f32::consts::PI;
 
 pub struct IdleAnimation;
 

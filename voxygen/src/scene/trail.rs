@@ -12,7 +12,8 @@ use common::{
 use common_base::span;
 use serde::Deserialize;
 use specs::{Entity as EcsEntity, Join, WorldExt};
-use std::{borrow::Cow, collections::HashMap};
+use alloc::borrow::Cow;
+use std::collections::HashMap;
 use vek::*;
 
 lazy_static::lazy_static! {

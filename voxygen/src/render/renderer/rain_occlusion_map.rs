@@ -107,7 +107,7 @@ impl RainOcclusionMap {
             multiview_mask: None,
         });
 
-        queue.submit(std::iter::once(encoder.finish()));
+        queue.submit(core::iter::once(encoder.finish()));
 
         tex
     }

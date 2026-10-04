@@ -2,7 +2,11 @@ pub mod interactable;
 pub mod settings_change;
 mod target;
 
-use std::{cell::RefCell, collections::HashSet, rc::Rc, result::Result, time::Duration};
+use core::{cell::RefCell, result::Result, time::Duration};
+
+use std::collections::HashSet;
+
+use alloc::rc::Rc;
 
 use itertools::Itertools;
 #[cfg(not(target_os = "macos"))]
@@ -115,7 +119,7 @@ pub struct SessionState {
     zoom_lock: bool,
     is_aiming: bool,
     pub(crate) target_entity: Option<specs::Entity>,
-    pub(crate) selected_entity: Option<(specs::Entity, std::time::Instant)>,
+    pub(crate) selected_entity: Option<(specs::Entity, core::time::Instant)>,
     pub(crate) viewpoint_entity: Option<specs::Entity>,
     interactables: interactable::Interactables,
     #[cfg(not(target_os = "macos"))]
@@ -1290,7 +1294,7 @@ impl PlayState for SessionState {
                             GameInput::Select => {
                                 if !state {
                                     self.selected_entity =
-                                        self.target_entity.map(|e| (e, std::time::Instant::now()));
+                                        self.target_entity.map(|e| (e, core::time::Instant::now()));
                                 }
                             },
                             GameInput::AcceptGroupInvite if state => {
@@ -1567,7 +1571,7 @@ impl PlayState for SessionState {
                             + input_vec.x
                                 * (3.0 - input_vec.y * 1.5 * if is_aiming { 1.5 } else { 1.0 })
                                 * dt,
-                        std::f32::consts::PI * if is_aiming { 0.015 } else { 0.1 },
+                        core::f32::consts::PI * if is_aiming { 0.015 } else { 0.1 },
                         0.0,
                     ));
                 }

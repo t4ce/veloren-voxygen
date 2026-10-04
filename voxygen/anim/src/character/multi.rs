@@ -8,7 +8,7 @@ use common::{
     util::Dir,
 };
 use core::f32::consts::{PI, TAU};
-use std::ops::{Mul, Sub};
+use core::{ops::Mul, ops::Sub};
 
 pub struct MultiAction;
 

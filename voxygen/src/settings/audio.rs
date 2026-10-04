@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::Deref};
+use core::{fmt::Debug, ops::Deref};
 use tracing::warn;
 
 use serde::{Deserialize, Serialize};

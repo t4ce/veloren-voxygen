@@ -2,7 +2,7 @@ use crate::api::{ConnectAddr, ListenAddr};
 use network_protocol::{Cid, Pid};
 #[cfg(feature = "metrics")]
 use prometheus::{IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry};
-use std::{error::Error, net::SocketAddr};
+use core::{error::Error, net::SocketAddr};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub(crate) enum ProtocolInfo {
@@ -286,9 +286,9 @@ impl NetworkMetrics {
     pub(crate) fn cleanup_participant(&self, _remote_p: &str) {}
 }
 
-impl std::fmt::Debug for NetworkMetrics {
+impl core::fmt::Debug for NetworkMetrics {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "NetworkMetrics()")
     }
 }

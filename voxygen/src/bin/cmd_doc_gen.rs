@@ -1,3 +1,4 @@
+extern crate alloc;
 use common::cmd::{ChatCommandData, ServerChatCommand};
 use i18n::{LocalizationGuard, LocalizationHandle};
 use veloren_voxygen::cmd::ClientChatCommand;

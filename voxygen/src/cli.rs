@@ -10,7 +10,7 @@
 //!
 //! Likewise Airshipper should only use the following subcommands:
 //! * `ListWgpuBackends`
-use std::str::FromStr;
+use core::str::FromStr;
 
 use clap::{Parser, Subcommand};
 use common_net::msg::ClientType;
@@ -59,8 +59,8 @@ impl FromStr for VoxygenClientType {
     }
 }
 
-impl std::fmt::Display for VoxygenClientType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for VoxygenClientType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", match self.0 {
             ClientType::Game => "game",
             ClientType::ChatOnly => "chat_only",

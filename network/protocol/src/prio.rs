@@ -5,10 +5,9 @@ use crate::{
     types::{Bandwidth, HIGHEST_PRIO, Mid, Prio, Promises, Sid},
 };
 use bytes::Bytes;
-use std::{
-    collections::{HashMap, VecDeque},
-    time::Duration,
-};
+use std::collections::HashMap;
+use alloc::collections::VecDeque;
+use core::time::Duration;
 
 #[derive(Debug)]
 struct StreamInfo {

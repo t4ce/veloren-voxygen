@@ -9,11 +9,8 @@ use kira::{
         streaming::{StreamingSoundData, StreamingSoundHandle},
     },
 };
-use std::{
-    borrow::Cow,
-    io::{self, Cursor},
-    sync::Arc,
-};
+use alloc::{borrow::Cow, sync::Arc};
+use std::{io::self, io::Cursor};
 use tracing::warn;
 
 // Kira does not provide a generic interface over sound data and sound handles,

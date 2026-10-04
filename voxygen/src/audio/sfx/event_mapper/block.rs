@@ -13,7 +13,7 @@ use common_state::State;
 use hashbrown::HashMap;
 use rand::{RngExt, prelude::*, rng};
 use rand_chacha::ChaCha8Rng;
-use std::time::{Duration, Instant};
+use core::{time::Duration, time::Instant};
 use vek::*;
 
 #[derive(Clone, PartialEq)]
@@ -192,7 +192,7 @@ impl EventMapper for BlockEventMapper {
                         {
                             blocks
                                 .choose(&mut rng)
-                                .map(std::slice::from_ref)
+                                .map(core::slice::from_ref)
                                 .unwrap_or(&[])
                         } else {
                             blocks

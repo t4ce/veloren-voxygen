@@ -32,7 +32,8 @@ use conrod_core::{
 };
 use i18n::Localization;
 use specs::Entity as EcsEntity;
-use std::{borrow::Borrow, sync::Arc};
+use core::borrow::Borrow;
+use alloc::sync::Arc;
 use vek::Vec2;
 
 #[derive(PartialEq)]
@@ -255,7 +256,7 @@ impl<'a> Widget for SlotGrid<'a> {
                     item.is_none(),
                     item.as_ref().map(|i| {
                         (
-                            std::cmp::Reverse(i.quality()),
+                            core::cmp::Reverse(i.quality()),
                             {
                                 // TODO: we do double the work here, optimize?
                                 let (name, _) =

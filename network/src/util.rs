@@ -1,5 +1,6 @@
 use core::hash::Hash;
-use std::{collections::HashMap, time::Instant};
+use std::collections::HashMap;
+use core::time::Instant;
 use tracing::Level;
 
 /// used to collect multiple traces and not spam the console
@@ -40,7 +41,7 @@ impl<T: Eq + Hash> DeferredTracer<T> {
                 tracing::debug!("this seems to be logged continuously");
             }
             self.last_cnt = 0;
-            Some(std::mem::take(&mut self.items))
+            Some(core::mem::take(&mut self.items))
         } else {
             None
         }

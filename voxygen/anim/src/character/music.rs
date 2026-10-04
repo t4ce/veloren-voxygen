@@ -6,7 +6,7 @@ use common::{
     comp::item::{Hands, ToolKind},
     states::utils::AbilityInfo,
 };
-use std::{f32::consts::PI, ops::Mul};
+use core::{f32::consts::PI, ops::Mul};
 
 pub struct MusicAnimation;
 

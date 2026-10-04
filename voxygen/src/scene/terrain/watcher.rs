@@ -271,7 +271,7 @@ impl BlocksOfInterest {
                                 pos,
                                 Vec2::unit_y()
                                     .rotated_z(
-                                        std::f32::consts::PI
+                                        core::f32::consts::PI
                                             * 0.25
                                             * block
                                                 .get_attr::<sprite::Ori>()

@@ -2,7 +2,7 @@ use super::{
     super::{Animation, vek::*},
     CharacterSkeleton, SkeletonAttr,
 };
-use std::ops::Mul;
+use core::ops::Mul;
 
 pub struct GlidingAnimation;
 

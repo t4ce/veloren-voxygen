@@ -149,8 +149,8 @@ impl TakeScreenshot {
         let padded_bytes_per_row = padded_bytes_per_row(self.width, self.bytes_per_pixel);
 
         // Map buffer
-        let buffer = std::sync::Arc::new(self.buffer);
-        let buffer2 = std::sync::Arc::clone(&buffer);
+        let buffer = alloc::sync::Arc::new(self.buffer);
+        let buffer2 = alloc::sync::Arc::clone(&buffer);
         let buffer_slice = buffer.slice(..);
         let (map_result_sender, map_result_receiver) = crossbeam_channel::bounded(1);
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {

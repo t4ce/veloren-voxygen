@@ -237,7 +237,7 @@ impl Widget for BuffsBar<'_> {
 
             // Sort the buffs by kind
             buff_vec
-                .sort_by_key(|(((_id, _timer_id), _mult_id), buff)| std::cmp::Reverse(buff.kind));
+                .sort_by_key(|(((_id, _timer_id), _mult_id), buff)| core::cmp::Reverse(buff.kind));
 
             buff_vec
                 .iter()
@@ -423,7 +423,7 @@ impl Widget for BuffsBar<'_> {
                 .collect::<Vec<_>>();
 
             // Sort the buffs by kind
-            buff_vec.sort_by_key(|((_id, _timer_id), txt_id)| std::cmp::Reverse(txt_id.kind));
+            buff_vec.sort_by_key(|((_id, _timer_id), txt_id)| core::cmp::Reverse(txt_id.kind));
 
             buff_vec.iter().enumerate().for_each(
                 |(i, ((((id, timer_id), txt_id), mult_id), buff))| {

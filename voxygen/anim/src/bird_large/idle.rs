@@ -2,7 +2,7 @@ use super::{
     super::{Animation, vek::*},
     BirdLargeSkeleton, SkeletonAttr,
 };
-use std::ops::Mul;
+use core::ops::Mul;
 
 pub struct IdleAnimation;
 

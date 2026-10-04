@@ -12,7 +12,7 @@ use crate::{
 use async_trait::async_trait;
 use bytes::BytesMut;
 use hashbrown::HashMap;
-use std::time::{Duration, Instant};
+use core::{time::Duration, time::Instant};
 use tracing::info;
 #[cfg(feature = "trace_pedantic")]
 use tracing::trace;
@@ -345,7 +345,7 @@ mod test_utils {
     use super::*;
     use crate::metrics::{ProtocolMetricCache, ProtocolMetrics};
     use async_channel::*;
-    use std::sync::Arc;
+    use alloc::sync::Arc;
 
     pub struct TcpDrain {
         pub sender: Sender<BytesMut>,
@@ -418,7 +418,8 @@ mod tests {
         types::{Pid, Promises, STREAM_ID_OFFSET1, STREAM_ID_OFFSET2, Sid},
     };
     use bytes::{Bytes, BytesMut};
-    use std::{sync::Arc, time::Duration};
+    use alloc::sync::Arc;
+    use core::time::Duration;
 
     #[tokio::test]
     async fn handshake_all_good() {

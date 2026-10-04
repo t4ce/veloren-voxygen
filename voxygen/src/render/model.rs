@@ -3,13 +3,13 @@ use super::{
     buffer::{Buffer, DynamicBuffer},
     mesh::Mesh,
 };
-use std::ops::Range;
+use core::ops::Range;
 
 /// Represents a mesh that has been sent to the GPU.
 pub struct SubModel<'a, V: Vertex> {
     pub vertex_range: Range<u32>,
     buf: &'a wgpu::Buffer,
-    phantom_data: std::marker::PhantomData<V>,
+    phantom_data: core::marker::PhantomData<V>,
 }
 
 impl<'a, V: Vertex> SubModel<'a, V> {
@@ -48,7 +48,7 @@ impl<V: Vertex> Model<V> {
         SubModel {
             vertex_range,
             buf: self.buf(),
-            phantom_data: std::marker::PhantomData,
+            phantom_data: core::marker::PhantomData,
         }
     }
 
@@ -84,7 +84,7 @@ impl<V: Vertex> DynamicModel<V> {
         SubModel {
             vertex_range,
             buf: self.buf(),
-            phantom_data: std::marker::PhantomData,
+            phantom_data: core::marker::PhantomData,
         }
     }
 

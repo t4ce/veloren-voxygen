@@ -3,8 +3,8 @@ use super::{
     QuadrupedMediumSkeleton, SkeletonAttr,
 };
 use common::states::utils::StageSection;
-//use std::ops::Rem;
-use std::f32::consts::PI;
+//use core::ops::Rem;
+use core::f32::consts::PI;
 
 pub struct ShockwaveAnimation;
 

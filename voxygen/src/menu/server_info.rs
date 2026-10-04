@@ -24,10 +24,8 @@ use iced::{
     Align, Column, Container, HorizontalAlignment, Length, Row, Scrollable, VerticalAlignment,
     button, scrollable,
 };
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-};
+use std::collections::hash_map::DefaultHasher;
+use core::{hash::Hash, hash::Hasher};
 use tracing::error;
 
 image_ids_ice! {

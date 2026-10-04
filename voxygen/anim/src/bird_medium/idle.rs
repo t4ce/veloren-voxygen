@@ -2,7 +2,7 @@ use super::{
     super::{Animation, vek::*},
     BirdMediumSkeleton, SkeletonAttr,
 };
-use std::{f32::consts::PI, ops::Mul};
+use core::{f32::consts::PI, ops::Mul};
 pub struct IdleAnimation;
 
 impl Animation for IdleAnimation {

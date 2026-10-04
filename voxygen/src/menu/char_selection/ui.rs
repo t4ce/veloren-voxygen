@@ -37,13 +37,13 @@ use i18n::{Localization, LocalizationHandle};
 use rand::{RngExt, rng};
 //ImageFrame, Tooltip,
 use crate::settings::Settings;
-//use std::time::Duration;
+//use core::time::Duration;
 //use ui::ice::widget;
 use iced::{
     Align, Button, Checkbox, Color, Column, Container, HorizontalAlignment, Length, Row,
     Scrollable, Slider, Space, Text, TextInput, button, scrollable, slider, text_input,
 };
-use std::sync::Arc;
+use alloc::sync::Arc;
 use vek::{Rgba, Vec2};
 
 pub const TEXT_COLOR: iced::Color = iced::Color::from_rgb(1.0, 1.0, 1.0);
@@ -51,8 +51,8 @@ pub const DISABLED_TEXT_COLOR: iced::Color = iced::Color::from_rgba(1.0, 1.0, 1.
 pub const TOOLTIP_BACK_COLOR: Rgba<u8> = Rgba::new(20, 18, 10, 255);
 const FILL_FRAC_ONE: f32 = 0.77;
 const FILL_FRAC_TWO: f32 = 0.53;
-const TOOLTIP_HOVER_DUR: std::time::Duration = std::time::Duration::from_millis(150);
-const TOOLTIP_FADE_DUR: std::time::Duration = std::time::Duration::from_millis(350);
+const TOOLTIP_HOVER_DUR: core::time::Duration = core::time::Duration::from_millis(150);
+const TOOLTIP_FADE_DUR: core::time::Duration = core::time::Duration::from_millis(350);
 const BANNER_ALPHA: u8 = 210;
 // Buttons in the bottom corners
 const SMALL_BUTTON_HEIGHT: u16 = 31;

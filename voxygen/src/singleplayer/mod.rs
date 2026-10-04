@@ -8,14 +8,11 @@ use server::{
     settings::server_description::ServerDescription,
 };
 
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    thread::{self, JoinHandle},
-    time::Duration,
-};
+use alloc::sync::Arc;
+
+use core::{sync::atomic::AtomicBool, sync::atomic::Ordering, time::Duration};
+
+use std::{thread::self, thread::JoinHandle};
 use tokio::runtime::Runtime;
 use tracing::{error, info, trace, warn};
 

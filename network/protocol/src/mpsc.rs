@@ -10,7 +10,7 @@ use crate::{
     types::{Bandwidth, Promises},
 };
 use async_trait::async_trait;
-use std::time::{Duration, Instant};
+use core::{time::Duration, time::Instant};
 #[cfg(feature = "trace_pedantic")]
 use tracing::trace;
 
@@ -188,7 +188,7 @@ pub mod test_utils {
     use super::*;
     use crate::metrics::{ProtocolMetricCache, ProtocolMetrics};
     use async_channel::*;
-    use std::sync::Arc;
+    use alloc::sync::Arc;
 
     pub struct ACDrain {
         sender: Sender<MpscMsg>,

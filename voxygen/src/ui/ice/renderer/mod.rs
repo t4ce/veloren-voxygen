@@ -22,7 +22,7 @@ use crate::{
 };
 use common::{slowjob::SlowJobPool, util::srgba_to_linear};
 use common_base::span;
-use std::{convert::TryInto, ops::Range};
+use core::{convert::TryInto, ops::Range};
 use vek::*;
 
 enum DrawKind {

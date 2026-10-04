@@ -25,7 +25,7 @@ use iced::{Column, Container, HorizontalAlignment, Length, Row, Space, text_inpu
 use crate::settings::Settings;
 use common::assets::{AssetExt, Image, Ron};
 use rand::{rng, seq::IndexedRandom};
-use std::time::Duration;
+use core::time::Duration;
 use tracing::warn;
 
 use super::DetailedInitializationStage;
@@ -577,7 +577,7 @@ impl Controls {
                 } = &mut self.screen
                     && let ConnectionState::AuthTrustPrompt { auth_server, .. } = connection_state
                 {
-                    let auth_server = std::mem::take(auth_server);
+                    let auth_server = core::mem::take(auth_server);
                     let added = matches!(msg, Message::TrustPromptAdd);
 
                     *connection_state = ConnectionState::InProgress;

@@ -13,7 +13,8 @@ use guillotiere::{SimpleAtlasAllocator, size2};
 use hashbrown::{HashMap, hash_map::Entry};
 use image::{DynamicImage, RgbaImage};
 use slab::Slab;
-use std::{borrow::Cow, hash::Hash, sync::Arc};
+use alloc::{borrow::Cow, sync::Arc};
+use core::hash::Hash;
 use tracing::{error, warn};
 use vek::*;
 

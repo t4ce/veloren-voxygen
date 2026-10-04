@@ -1,4 +1,6 @@
-use std::{fs, path::Path, sync::Arc};
+extern crate alloc;
+use std::{fs, path::Path};
+use alloc::sync::Arc;
 
 use anim::{
     Animation, FigureBoneData, Skeleton, arthropod::ArthropodSkeleton,
@@ -109,7 +111,7 @@ pub fn main() {
                     args.seed
                         .map(|s| {
                             let b = s.to_le_bytes();
-                            std::array::from_fn(|i| b[i % b.len()])
+                            core::array::from_fn(|i| b[i % b.len()])
                         })
                         .unwrap_or(rand::rng().random()),
                 );
@@ -125,9 +127,9 @@ pub fn main() {
                     &bones,
                     image_size,
                     veloren_voxygen::ui::Transform {
-                        ori: Quaternion::rotation_x(-90.0 * std::f32::consts::PI / 180.0)
-                            .rotated_y(180.0 * std::f32::consts::PI / 180.0)
-                            .rotated_z(0.0 * std::f32::consts::PI / 180.0),
+                        ori: Quaternion::rotation_x(-90.0 * core::f32::consts::PI / 180.0)
+                            .rotated_y(180.0 * core::f32::consts::PI / 180.0)
+                            .rotated_z(0.0 * core::f32::consts::PI / 180.0),
                         offset: Vec3::new(0.0, 0.0, 0.0),
                         zoom: 0.9,
                         orth: true,

@@ -11,13 +11,8 @@ use network_protocol::{
     _internal::SortedVec, Bandwidth, Cid, Pid, Prio, Promises, ProtocolEvent, RecvProtocol,
     SendProtocol, Sid,
 };
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicI32, Ordering},
-    },
-    time::{Duration, Instant},
-};
+use alloc::sync::Arc;
+use core::{sync::atomic::AtomicBool, sync::atomic::AtomicI32, sync::atomic::Ordering, time::Duration, time::Instant};
 use tokio::{
     select,
     sync::{Mutex, RwLock, mpsc, oneshot, watch},

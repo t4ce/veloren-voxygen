@@ -1,7 +1,7 @@
 use iced::{
     Clipboard, Element, Event, Hasher, Layout, Length, Point, Rectangle, Size, Widget, layout,
 };
-use std::hash::Hash;
+use core::hash::Hash;
 
 // Note: it might be more efficient to make this generic over the content type?
 
@@ -13,7 +13,7 @@ enum AspectRatio<I> {
 }
 
 impl<I: Hash> Hash for AspectRatio<I> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         match self {
             Self::Image(i) => i.hash(state),
             Self::Ratio(r) => r.to_bits().hash(state),
@@ -138,7 +138,7 @@ where
 
     fn hash_layout(&self, state: &mut Hasher) {
         struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
+        core::any::TypeId::of::<Marker>().hash(state);
 
         self.max_width.hash(state);
         self.max_height.hash(state);

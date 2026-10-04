@@ -1,4 +1,5 @@
-use std::{cmp::Ordering, collections::VecDeque};
+use core::cmp::Ordering;
+use alloc::collections::VecDeque;
 
 use crate::{settings::Settings, ui::fonts::Fonts};
 use client::Client;

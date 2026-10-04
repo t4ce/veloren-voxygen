@@ -37,7 +37,7 @@ use common::{
 };
 use hashbrown::HashMap;
 use serde::{Deserialize, Deserializer};
-use std::{fmt, hash::Hash};
+use core::{fmt, hash::Hash};
 use tracing::{error, warn};
 use vek::*;
 
@@ -132,7 +132,7 @@ pub fn recolor_grey(rgb: Rgb<u8>, color: Rgb<u8>) -> Rgb<u8> {
 pub trait BodySpec: Sized {
     type Spec;
     /// Cloned on each cache invalidation. If this type is expensive to clone,
-    /// place it behind an [`std::sync::Arc`].
+    /// place it behind an [`alloc::sync::Arc`].
     type Manifests: Send + Sync + Clone;
     type Extra: Send + Sync;
     type BoneMesh;
@@ -6328,7 +6328,7 @@ impl BodySpec for common::comp::plugin::Body {
         manifests: &Self::Manifests,
         _extra: Self::Extra,
     ) -> [Option<BoneMeshes>; anim::MAX_BONE_COUNT] {
-        let mut result = std::array::from_fn(|_| None);
+        let mut result = core::array::from_fn(|_| None);
         if let Some(bones) = manifests.read().0.get(&key.body.id()) {
             for (mesh, result) in bones.iter().zip(result.iter_mut()) {
                 *result = Some((

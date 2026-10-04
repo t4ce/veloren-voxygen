@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime};
+use core::{time::Duration, time::SystemTime};
 
 use common::terrain::SiteKindMeta;
 use discord_sdk::{

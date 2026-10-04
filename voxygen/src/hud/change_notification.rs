@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use std::time::Duration;
+use core::time::Duration;
 
 /// Default initial alpha of a Notify
 const NOTIF_START_ALPHA: f32 = 1.0;

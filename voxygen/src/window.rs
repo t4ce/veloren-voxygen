@@ -11,7 +11,7 @@ use gilrs::{Button as GilButton, EventType, Gilrs};
 use hashbrown::{HashMap, hash_set::Iter};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use alloc::sync::Arc;
 use strum::{AsRefStr, EnumIter};
 use tracing::{error, warn};
 use vek::*;
@@ -663,7 +663,7 @@ impl Window {
             }
         }
 
-        let mut events = std::mem::take(&mut self.events);
+        let mut events = core::mem::take(&mut self.events);
         // Mouse emulation for the menus, to be removed when a proper menu navigation
         // system is available
         if !self.cursor_grabbed {
@@ -1208,7 +1208,7 @@ impl Window {
         let sender = self.message_sender.clone();
         let mut path = settings.screenshots_path.clone();
         self.renderer.create_screenshot(move |image| {
-            use std::time::SystemTime;
+            use core::time::SystemTime;
 
             // Handle any error if there was one when generating the image.
             let image = match image {

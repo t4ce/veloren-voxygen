@@ -10,7 +10,7 @@
 //! The command system allows players to interact with the game through text
 //! commands prefixed with a slash (e.g., /help, /wiki).
 
-use std::{num::NonZeroU64, str::FromStr};
+use core::{num::NonZeroU64, str::FromStr};
 
 use crate::{
     GlobalState,
@@ -142,7 +142,7 @@ impl ClientChatCommand {
     pub fn help_content(&self) -> Content {
         let data = self.data();
 
-        let usage = std::iter::once(format!("/{}", self.keyword()))
+        let usage = core::iter::once(format!("/{}", self.keyword()))
             .chain(data.args.iter().map(|arg| arg.usage_string()))
             .collect::<Vec<_>>()
             .join(" ");

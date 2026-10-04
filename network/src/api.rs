@@ -12,14 +12,8 @@ use network_protocol::{Bandwidth, InitProtocolError, Pid, Prio, Promises, Sid};
 #[cfg(feature = "metrics")]
 use prometheus::Registry;
 use serde::{Serialize, de::DeserializeOwned};
-use std::{
-    net::SocketAddr,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
-};
+use core::{net::SocketAddr, sync::atomic::AtomicBool, sync::atomic::Ordering, time::Duration};
+use alloc::sync::Arc;
 use tokio::{
     io,
     runtime::Runtime,
@@ -169,7 +163,7 @@ pub struct StreamParams {
 ///
 /// The `Network` is the single source that handles all connections in your
 /// Application. You can pass it around multiple threads in an
-/// [`Arc`](std::sync::Arc) as all commands have internal mutability.
+/// [`Arc`](alloc::sync::Arc) as all commands have internal mutability.
 ///
 /// The `Network` has methods to [`connect`] to other [`Participants`] actively
 /// via their [`ConnectAddr`], or [`listen`] passively for [`connected`]
@@ -183,7 +177,7 @@ pub struct StreamParams {
 /// use tokio::runtime::Runtime;
 /// use veloren_network::{Network, ConnectAddr, ListenAddr, Pid};
 ///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # fn main() -> Result<(), Box<dyn core::error::Error>> {
 /// // Create a Network, listen on port `2999` to accept connections and connect to port `8080` to connect to a (pseudo) database Application
 /// let runtime = Runtime::new().unwrap();
 /// let mut network = Network::new(Pid::new(), &runtime);
@@ -345,7 +339,7 @@ impl Network {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{Network, Pid, ListenAddr};
     ///
-    /// # fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> core::result::Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, listen on port `2000` TCP on all NICs and `2001` UDP locally
     /// let runtime = Runtime::new().unwrap();
     /// let mut network = Network::new(Pid::new(), &runtime);
@@ -385,7 +379,7 @@ impl Network {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{Network, Pid, ListenAddr, ConnectAddr};
     ///
-    /// # fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> core::result::Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, connect on port `2010` TCP and `2011` UDP like listening above
     /// let runtime = Runtime::new().unwrap();
     /// let network = Network::new(Pid::new(), &runtime);
@@ -448,7 +442,7 @@ impl Network {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{ConnectAddr, ListenAddr, Network, Pid};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, listen on port `2020` TCP and opens returns their Pid
     /// let runtime = Runtime::new().unwrap();
     /// let mut network = Network::new(Pid::new(), &runtime);
@@ -585,7 +579,7 @@ impl Participant {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{ConnectAddr, ListenAddr, Network, Pid, Promises};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, connect on port 2100 and open a stream
     /// let runtime = Runtime::new().unwrap();
     /// let network = Network::new(Pid::new(), &runtime);
@@ -650,7 +644,7 @@ impl Participant {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{Network, Pid, ListenAddr, ConnectAddr, Promises};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, connect on port 2110 and wait for the other side to open a stream
     /// // Note: It's quite unusual to actively connect, but then wait on a stream to be connected, usually the Application taking initiative want's to also create the first Stream.
     /// let runtime = Runtime::new().unwrap();
@@ -707,7 +701,7 @@ impl Participant {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{Network, Pid, ListenAddr, ConnectAddr};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, listen on port `2030` TCP and opens returns their Pid and close connection.
     /// let runtime = Runtime::new().unwrap();
     /// let mut network = Network::new(Pid::new(), &runtime);
@@ -791,7 +785,7 @@ impl Participant {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{Network, Pid, ListenAddr, ConnectAddr, Promises, ParticipantEvent};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, connect on port 2040 and wait for the other side to open a stream
     /// // Note: It's quite unusual to actively connect, but then wait on a stream to be connected, usually the Application taking initiative want's to also create the first Stream.
     /// let runtime = Runtime::new().unwrap();
@@ -904,7 +898,7 @@ impl Stream {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{Network, ListenAddr, ConnectAddr, Pid};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, listen on Port `2200` and wait for a Stream to be opened, then answer `Hello World`
     /// let runtime = Runtime::new().unwrap();
     /// let mut network = Network::new(Pid::new(), &runtime);
@@ -946,7 +940,7 @@ impl Stream {
     /// use bincode;
     /// use veloren_network::{Network, ListenAddr, ConnectAddr, Pid, Message};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// let runtime = Runtime::new().unwrap();
     /// let mut network = Network::new(Pid::new(), &runtime);
     /// # let remote1 = Network::new(Pid::new(), &runtime);
@@ -1014,7 +1008,7 @@ impl Stream {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{Network, ListenAddr, ConnectAddr, Pid};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, listen on Port `2220` and wait for a Stream to be opened, then listen on it
     /// let runtime = Runtime::new().unwrap();
     /// let mut network = Network::new(Pid::new(), &runtime);
@@ -1048,7 +1042,7 @@ impl Stream {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{Network, ListenAddr, ConnectAddr, Pid};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, listen on Port `2230` and wait for a Stream to be opened, then listen on it
     /// let runtime = Runtime::new().unwrap();
     /// let mut network = Network::new(Pid::new(), &runtime);
@@ -1104,7 +1098,7 @@ impl Stream {
     /// use tokio::runtime::Runtime;
     /// use veloren_network::{Network, ListenAddr, ConnectAddr, Pid};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, listen on Port `2240` and wait for a Stream to be opened, then listen on it
     /// let runtime = Runtime::new().unwrap();
     /// let mut network = Network::new(Pid::new(), &runtime);
@@ -1114,7 +1108,7 @@ impl Stream {
     ///     # let remote_p = remote.connect(ConnectAddr::Tcp("127.0.0.1:2240".parse().unwrap())).await?;
     ///     # let mut stream_p = remote_p.open(4, Promises::ORDERED | Promises::CONSISTENCY, 0).await?;
     ///     # stream_p.send("Hello World");
-    ///     # std::thread::sleep(std::time::Duration::from_secs(1));
+    ///     # std::thread::sleep(core::time::Duration::from_secs(1));
     ///     let mut participant_a = network.connected().await?;
     ///     let mut stream_a = participant_a.opened().await?;
     ///     //Try Recv  Message
@@ -1281,9 +1275,9 @@ impl Drop for Stream {
     }
 }
 
-impl std::fmt::Debug for Participant {
+impl core::fmt::Debug for Participant {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "Participant {{ local_pid: {:?}, remote_pid: {:?} }}",
@@ -1387,7 +1381,7 @@ impl PartialEq for StreamError {
     }
 }
 
-impl std::error::Error for StreamError {}
-impl std::error::Error for ParticipantError {}
-impl std::error::Error for NetworkError {}
-impl std::error::Error for NetworkConnectError {}
+impl core::error::Error for StreamError {}
+impl core::error::Error for ParticipantError {}
+impl core::error::Error for NetworkError {}
+impl core::error::Error for NetworkConnectError {}

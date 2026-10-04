@@ -117,12 +117,12 @@ impl<V: Vertex> Mesh<V> {
         }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, V> {
+    pub fn iter(&self) -> core::slice::Iter<'_, V> {
         self.verts.iter()
     }
 
     /// NOTE: Panics if vertex_range is out of bounds of vertices.
-    pub fn iter_mut(&mut self, vertex_range: Range<usize>) -> std::slice::IterMut<'_, V> {
+    pub fn iter_mut(&mut self, vertex_range: Range<usize>) -> core::slice::IterMut<'_, V> {
         self.verts[vertex_range].iter_mut()
     }
 
@@ -136,7 +136,7 @@ impl<V: Vertex> Mesh<V> {
 }
 
 impl<V: Vertex> IntoIterator for Mesh<V> {
-    type IntoIter = std::vec::IntoIter<V>;
+    type IntoIter = alloc::vec::IntoIter<V>;
     type Item = V;
 
     fn into_iter(self) -> Self::IntoIter {

@@ -16,7 +16,7 @@ use common::{
     weather,
 };
 use hashbrown::HashMap;
-use std::ops::Range;
+use core::ops::Range;
 use treeculler::{AABB, BVol, Frustum};
 use vek::*;
 

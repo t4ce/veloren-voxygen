@@ -21,7 +21,8 @@ use i18n::Localization;
 use inline_tweak::*;
 use serde::{Deserialize, Serialize};
 use specs::WorldExt;
-use std::{borrow::Cow, time::Duration};
+use alloc::borrow::Cow;
+use core::time::Duration;
 use vek::*;
 
 use super::{

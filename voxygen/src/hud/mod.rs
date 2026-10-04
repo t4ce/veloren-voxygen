@@ -137,15 +137,8 @@ use hashbrown::{HashMap, HashSet};
 use i18n::Localization;
 use rand::RngExt;
 use specs::{Entity as EcsEntity, Join, LendJoin, WorldExt};
-use std::{
-    borrow::Cow,
-    cell::RefCell,
-    cmp::Ordering,
-    collections::VecDeque,
-    rc::Rc,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use alloc::{borrow::Cow, collections::VecDeque, rc::Rc, sync::Arc};
+use core::{cell::RefCell, cmp::Ordering, time::Duration, time::Instant};
 use tracing::{instrument, trace, warn};
 use vek::*;
 
@@ -4836,7 +4829,7 @@ impl Hud {
         if let Some(id) = ui.global_input().current.widget_capturing_keyboard {
             ui.widget_graph()
                 .widget(id)
-                .filter(|c| c.type_id == std::any::TypeId::of::<<W as Widget>::State>())
+                .filter(|c| c.type_id == core::any::TypeId::of::<<W as Widget>::State>())
                 .is_some()
         } else {
             false
@@ -5288,7 +5281,7 @@ impl Hud {
 
         // Optimization: skip maintaining UI when it's off.
         if !self.show.ui {
-            return std::mem::take(&mut self.events);
+            return core::mem::take(&mut self.events);
         }
 
         if let Some(maybe_id) = self.to_focus.take() {

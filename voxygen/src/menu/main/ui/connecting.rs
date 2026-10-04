@@ -183,7 +183,7 @@ impl Screen {
                                                     msg.push(')');
                                                 }
 
-                                                std::borrow::Cow::Owned(msg)
+                                                alloc::borrow::Cow::Owned(msg)
                                             },
                                         }
                                     },

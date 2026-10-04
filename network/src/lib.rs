@@ -38,13 +38,13 @@
 //!
 //! # Examples
 //! ```rust
-//! use std::sync::Arc;
+//! use alloc::sync::Arc;
 //! use tokio::{join, runtime::Runtime, time::sleep};
 //! use veloren_network::{ConnectAddr, ListenAddr, Network, Pid, Promises};
 //!
 //! // Client
-//! async fn client(runtime: &Runtime) -> Result<(), Box<dyn std::error::Error>> {
-//!     sleep(std::time::Duration::from_secs(1)).await; // `connect` MUST be after `listen`
+//! async fn client(runtime: &Runtime) -> Result<(), Box<dyn core::error::Error>> {
+//!     sleep(core::time::Duration::from_secs(1)).await; // `connect` MUST be after `listen`
 //!     let client_network = Network::new(Pid::new(), runtime);
 //!     let server = client_network
 //!         .connect(ConnectAddr::Tcp("127.0.0.1:12345".parse().unwrap()))
@@ -57,7 +57,7 @@
 //! }
 //!
 //! // Server
-//! async fn server(runtime: &Runtime) -> Result<(), Box<dyn std::error::Error>> {
+//! async fn server(runtime: &Runtime) -> Result<(), Box<dyn core::error::Error>> {
 //!     let mut server_network = Network::new(Pid::new(), runtime);
 //!     server_network
 //!         .listen(ListenAddr::Tcp("127.0.0.1:12345".parse().unwrap()))
@@ -70,7 +70,7 @@
 //!     Ok(())
 //! }
 //!
-//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! fn main() -> Result<(), Box<dyn core::error::Error>> {
 //!     let runtime = Runtime::new().unwrap();
 //!     runtime.block_on(async {
 //!         let (result_c, result_s) = join!(client(&runtime), server(&runtime),);
@@ -98,6 +98,7 @@
 //! [`ConnectAddr`]: crate::api::ConnectAddr
 //! [`Promises`]: network_protocol::Promises
 
+extern crate alloc;
 mod api;
 mod channel;
 mod message;

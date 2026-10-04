@@ -10,13 +10,8 @@ use network_protocol::{Cid, Pid, ProtocolMetricCache, ProtocolMetrics};
 #[cfg(feature = "metrics")]
 use prometheus::Registry;
 use rand::RngExt;
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
-    },
-    time::Duration,
-};
+use alloc::sync::Arc;
+use core::{sync::atomic::AtomicBool, sync::atomic::AtomicU64, sync::atomic::Ordering, time::Duration};
 use tokio::{
     io,
     sync::{Mutex, mpsc, oneshot},

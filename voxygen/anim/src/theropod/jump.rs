@@ -1,5 +1,5 @@
 use super::{super::Animation, SkeletonAttr, TheropodSkeleton};
-//use std::f32::consts::PI;
+//use core::f32::consts::PI;
 use super::super::vek::*;
 
 pub struct JumpAnimation;

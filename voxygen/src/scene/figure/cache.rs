@@ -35,7 +35,8 @@ use core::{hash::Hash, ops::Range};
 use crossbeam_utils::atomic;
 use hashbrown::{HashMap, hash_map::Entry};
 use serde::Deserialize;
-use std::{array::from_fn, sync::Arc};
+use core::array::from_fn;
+use alloc::sync::Arc;
 use vek::*;
 
 /// A type produced by mesh worker threads corresponding to the information

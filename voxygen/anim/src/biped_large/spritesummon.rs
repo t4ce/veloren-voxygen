@@ -6,7 +6,7 @@ use common::{
     comp::item::{AbilitySpec, ToolKind},
     states::utils::StageSection,
 };
-use std::f32::consts::PI;
+use core::f32::consts::PI;
 
 pub struct SpriteSummonAnimation;
 

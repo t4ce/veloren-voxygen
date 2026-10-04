@@ -1,5 +1,6 @@
 use clap::{Arg, Command};
-use std::{thread, time::Duration};
+use std::thread;
+use core::time::Duration;
 use tracing::error;
 
 pub enum Cmd {

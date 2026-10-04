@@ -6,7 +6,7 @@ pub struct Buffer<T: Copy + Pod> {
     // Size in number of elements
     // TODO: determine if this is a good name
     len: usize,
-    phantom_data: std::marker::PhantomData<T>,
+    phantom_data: core::marker::PhantomData<T>,
 }
 
 impl<T: Copy + Pod> Buffer<T> {
@@ -20,7 +20,7 @@ impl<T: Copy + Pod> Buffer<T> {
                 usage,
             }),
             len: data.len(),
-            phantom_data: std::marker::PhantomData,
+            phantom_data: core::marker::PhantomData,
         }
     }
 
@@ -38,11 +38,11 @@ impl<T: Copy + Pod> DynamicBuffer<T> {
             buf: device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 mapped_at_creation: false,
-                size: len as u64 * std::mem::size_of::<T>() as u64,
+                size: len as u64 * core::mem::size_of::<T>() as u64,
                 usage: usage | wgpu::BufferUsages::COPY_DST,
             }),
             len,
-            phantom_data: std::marker::PhantomData,
+            phantom_data: core::marker::PhantomData,
         };
         Self(buffer)
     }
@@ -51,14 +51,14 @@ impl<T: Copy + Pod> DynamicBuffer<T> {
         if !vals.is_empty() {
             queue.write_buffer(
                 &self.buf,
-                offset as u64 * std::mem::size_of::<T>() as u64,
+                offset as u64 * core::mem::size_of::<T>() as u64,
                 bytemuck::cast_slice(vals),
             )
         }
     }
 }
 
-impl<T: Copy + Pod> std::ops::Deref for DynamicBuffer<T> {
+impl<T: Copy + Pod> core::ops::Deref for DynamicBuffer<T> {
     type Target = Buffer<T>;
 
     fn deref(&self) -> &Self::Target {

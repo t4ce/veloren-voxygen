@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 #![expect(incomplete_features)]
 #![expect(
+extern crate alloc;
     clippy::identity_op,
     clippy::option_map_unit_fn,
     clippy::needless_pass_by_ref_mut //until we find a better way for specs
@@ -52,7 +53,7 @@ use common_base::span;
 use i18n::LocalizationHandle;
 use std::path::PathBuf;
 
-use std::sync::Arc;
+use alloc::sync::Arc;
 use tokio::runtime::Runtime;
 
 /// A type used to store state that is shared between all play states.

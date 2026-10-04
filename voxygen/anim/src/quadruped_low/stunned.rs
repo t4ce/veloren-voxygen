@@ -3,7 +3,7 @@ use super::{
     QuadrupedLowSkeleton, SkeletonAttr,
 };
 use common::states::utils::StageSection;
-//use std::ops::Rem;
+//use core::ops::Rem;
 
 pub struct StunnedAnimation;
 

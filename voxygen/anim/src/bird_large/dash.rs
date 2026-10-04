@@ -3,7 +3,7 @@ use super::{
     BirdLargeSkeleton, SkeletonAttr,
 };
 use common::states::utils::StageSection;
-use std::f32::consts::PI;
+use core::f32::consts::PI;
 
 pub struct DashAnimation;
 type DashAnimationDependency<'a> = (

@@ -7,7 +7,7 @@ use common::{
     states::utils::StageSection,
     util::Dir,
 };
-use std::f32::consts::PI;
+use core::f32::consts::PI;
 
 pub struct RollAnimation;
 

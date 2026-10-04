@@ -8,7 +8,7 @@ pub enum RenderError {
     RequestAdapterError(wgpu::RequestAdapterError),
 }
 
-use std::fmt;
+use core::fmt;
 impl fmt::Debug for RenderError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

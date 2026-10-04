@@ -3,7 +3,7 @@ use super::{
     CharacterSkeleton, SkeletonAttr,
 };
 use common::comp::item::{Hands, ToolKind};
-use std::ops::Mul;
+use core::ops::Mul;
 
 pub struct IdleAnimation;
 

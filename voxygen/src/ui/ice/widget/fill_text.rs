@@ -1,5 +1,5 @@
 use iced::{Element, Hasher, Layout, Length, Point, Rectangle, Size, Widget, layout};
-use std::hash::Hash;
+use core::hash::Hash;
 
 const DEFAULT_FILL_FRACTION: f32 = 1.0;
 const DEFAULT_VERTICAL_ADJUSTMENT: f32 = 0.05;
@@ -114,7 +114,7 @@ where
 
     fn hash_layout(&self, state: &mut Hasher) {
         struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
+        core::any::TypeId::of::<Marker>().hash(state);
 
         self.fill_fraction.to_bits().hash(state);
         self.vertical_adjustment.to_bits().hash(state);

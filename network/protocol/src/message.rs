@@ -55,7 +55,7 @@ impl OTMessage {
     }
 
     fn get_next_data(&mut self) -> OTFrame {
-        let to_send = std::cmp::min(self.data.len(), Self::FRAME_DATA_SIZE as usize);
+        let to_send = core::cmp::min(self.data.len(), Self::FRAME_DATA_SIZE as usize);
         let data = self.data.split_to(to_send);
         self.start += Self::FRAME_DATA_SIZE;
 
@@ -149,7 +149,7 @@ impl OUMessage {
 
     pub fn get_data(&self, index: u64) -> Frame {
         let start = index * Self::FRAME_DATA_SIZE;
-        let to_send = std::cmp::min(
+        let to_send = core::cmp::min(
             self.buffer.data[start as usize..].len() as u64,
             Self::FRAME_DATA_SIZE,
         );

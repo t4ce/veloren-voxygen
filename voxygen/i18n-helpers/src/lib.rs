@@ -1,4 +1,5 @@
-use std::borrow::Cow;
+extern crate alloc;
+use alloc::borrow::Cow;
 
 use common::{
     comp::{

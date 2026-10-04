@@ -4,7 +4,7 @@ use crate::{
 };
 use common::ViewDistances;
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use core::fmt;
 
 #[derive(Copy, Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Fps {

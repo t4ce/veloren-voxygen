@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::convert::AsRef;
+use core::convert::AsRef;
 use strum::{AsRefStr, EnumIter, EnumString};
 
 /// Represents a key that the game recognises after input mapping.

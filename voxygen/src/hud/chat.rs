@@ -30,7 +30,8 @@ use conrod_core::{
 };
 use i18n::Localization;
 use i18n_helpers::localize_chat_message;
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
+use alloc::collections::VecDeque;
 use vek::{Vec2, approx::AbsDiffEq};
 
 /// Determines whether a message is from a muted player.
@@ -508,7 +509,7 @@ impl Widget for Chat<'_> {
         // Chat input uses a rectangle as its background.
         if input_focused {
             // Shallow comparison of ChatMode.
-            let discrim = std::mem::discriminant;
+            let discrim = core::mem::discriminant;
             if discrim(&state.input.mode) != discrim(&self.client.chat_mode) {
                 state.update(|s| {
                     s.input.mode = self.client.chat_mode.clone();

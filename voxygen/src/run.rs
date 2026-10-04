@@ -6,7 +6,7 @@ use crate::{
     window::{Event, EventLoop},
 };
 use common_base::{prof_span, span};
-use std::{mem, time::Duration};
+use core::{mem, time::Duration};
 use tracing::debug;
 use winit::event_loop::ActiveEventLoop;
 

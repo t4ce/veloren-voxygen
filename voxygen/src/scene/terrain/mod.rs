@@ -38,10 +38,8 @@ use core::{f32, fmt::Debug, marker::PhantomData, time::Duration};
 use crossbeam_channel as channel;
 use guillotiere::AtlasAllocator;
 use hashbrown::HashMap;
-use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering},
-};
+use alloc::sync::Arc;
+use core::{sync::atomic::AtomicU64, sync::atomic::Ordering};
 use tracing::warn;
 use treeculler::{AABB, BVol, Frustum};
 use vek::*;
@@ -195,7 +193,7 @@ pub(super) fn get_sprite_instances<'a, I: 'a>(
             // 0..=2: 4/17
             // 3: 5/17
             // Then multiply by π/2 rad to get axis aligned rotations.
-            .unwrap_or((seed % 17 / 4).min(3) as f32 / 2.0 * std::f32::consts::PI);
+            .unwrap_or((seed % 17 / 4).min(3) as f32 / 2.0 * core::f32::consts::PI);
         let mirror = block.sprite_mirror_vec();
         // try to make the variation more uniform as the PRNG is highly unfair
         let variation = match data.variations.len() {
@@ -1143,7 +1141,7 @@ impl<V: RectRasterableVol> Terrain<V> {
             scene_data.state.get_delta_time() * CHUNKS_PER_SECOND + self.mesh_recv_overflow;
         self.mesh_recv_overflow = recv_count.fract();
         let incoming_chunks =
-            std::iter::from_fn(|| self.mesh_recv.recv_timeout(Duration::new(0, 0)).ok())
+            core::iter::from_fn(|| self.mesh_recv.recv_timeout(Duration::new(0, 0)).ok())
                 .take(recv_count.floor() as usize)
                 .collect::<Vec<_>>(); // Avoid ownership issue
         for response in incoming_chunks {

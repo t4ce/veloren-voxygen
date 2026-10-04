@@ -1,5 +1,6 @@
 #![feature(stmt_expr_attributes)]
 
+extern crate alloc;
 #[cfg(all(feature = "be-dyn-lib", feature = "use-dyn-lib"))]
 compile_error!("Can't use both \"be-dyn-lib\" and \"use-dyn-lib\" features at once");
 
@@ -28,11 +29,11 @@ use common::comp::{
     aura::AuraKind::{Buff, ForcePvP, FriendlyFire},
 };
 use egui_winit::State as WinitState;
-use std::time::Duration;
+use core::time::Duration;
 use winit::window::Window as WinitWindow;
 #[cfg(feature = "use-dyn-lib")]
 use {
-    common_dynlib::LoadedLib, lazy_static::lazy_static, std::ffi::CStr, std::sync::Arc,
+    common_dynlib::LoadedLib, lazy_static::lazy_static, alloc::ffi::CStr, alloc::sync::Arc,
     std::sync::Mutex,
 };
 

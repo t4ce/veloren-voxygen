@@ -43,7 +43,7 @@ use conrod_core::{
 use hashbrown::{HashMap, HashSet};
 use i18n::Localization;
 use itertools::Either;
-use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
+use alloc::{borrow::Cow, collections::BTreeMap, sync::Arc};
 use strum::{EnumIter, IntoEnumIterator};
 use tracing::{error, warn};
 use vek::{approx::AbsDiffEq, *};

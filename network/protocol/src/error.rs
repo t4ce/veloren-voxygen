@@ -2,7 +2,7 @@
 ///
 /// [`InitProtocol`]: crate::InitProtocol
 #[derive(Debug, PartialEq, Eq)]
-pub enum InitProtocolError<E: std::fmt::Debug + Send> {
+pub enum InitProtocolError<E: core::fmt::Debug + Send> {
     Custom(E),
     /// expected Handshake, didn't get handshake
     NotHandshake,
@@ -14,7 +14,7 @@ pub enum InitProtocolError<E: std::fmt::Debug + Send> {
 
 /// When you return closed you must stay closed!
 #[derive(Debug, PartialEq, Eq)]
-pub enum ProtocolError<E: std::fmt::Debug + Send> {
+pub enum ProtocolError<E: core::fmt::Debug + Send> {
     /// Custom Error on the underlying I/O,
     /// e.g. the TCP, UDP or MPSC connection is dropped by the OS
     Custom(E),
@@ -24,7 +24,7 @@ pub enum ProtocolError<E: std::fmt::Debug + Send> {
     Violated,
 }
 
-impl<E: std::fmt::Debug + Send> From<ProtocolError<E>> for InitProtocolError<E> {
+impl<E: core::fmt::Debug + Send> From<ProtocolError<E>> for InitProtocolError<E> {
     fn from(err: ProtocolError<E>) -> Self {
         match err {
             ProtocolError::Custom(e) => InitProtocolError::Custom(e),
@@ -35,7 +35,7 @@ impl<E: std::fmt::Debug + Send> From<ProtocolError<E>> for InitProtocolError<E> 
     }
 }
 
-impl<E: std::fmt::Debug + Send> core::fmt::Display for InitProtocolError<E> {
+impl<E: core::fmt::Debug + Send> core::fmt::Display for InitProtocolError<E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             InitProtocolError::Custom(e) => write!(f, "custom: {:?}", e),
@@ -62,7 +62,7 @@ impl<E: std::fmt::Debug + Send> core::fmt::Display for InitProtocolError<E> {
     }
 }
 
-impl<E: std::fmt::Debug + Send> core::fmt::Display for ProtocolError<E> {
+impl<E: core::fmt::Debug + Send> core::fmt::Display for ProtocolError<E> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             ProtocolError::Custom(e) => write!(f, "Channel custom close: {:?}", e),
@@ -71,5 +71,5 @@ impl<E: std::fmt::Debug + Send> core::fmt::Display for ProtocolError<E> {
     }
 }
 
-impl<E: std::fmt::Debug + Send> std::error::Error for InitProtocolError<E> {}
-impl<E: std::fmt::Debug + Send> std::error::Error for ProtocolError<E> {}
+impl<E: core::fmt::Debug + Send> core::error::Error for InitProtocolError<E> {}
+impl<E: core::fmt::Debug + Send> core::error::Error for ProtocolError<E> {}

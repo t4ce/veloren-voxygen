@@ -5,14 +5,9 @@ use client::{
 };
 use common_net::msg::ClientType;
 use crossbeam_channel::{Receiver, Sender, TryRecvError, unbounded};
-use std::{
-    path::Path,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
-};
+use std::path::Path;
+use alloc::sync::Arc;
+use core::{sync::atomic::AtomicBool, sync::atomic::Ordering, time::Duration};
 use tokio::runtime;
 use tracing::{trace, warn};
 

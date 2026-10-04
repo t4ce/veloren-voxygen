@@ -30,7 +30,7 @@ use common::{
     vol::{BaseVol, ReadVol},
 };
 use specs::WorldExt;
-use std::sync::Arc;
+use alloc::sync::Arc;
 use vek::*;
 use winit::event::MouseButton;
 
@@ -321,7 +321,7 @@ impl Scene {
             FigureUpdateCommonParameters {
                 entity: None,
                 pos,
-                ori: anim::vek::Quaternion::identity().rotated_z(std::f32::consts::PI * -0.5),
+                ori: anim::vek::Quaternion::identity().rotated_z(core::f32::consts::PI * -0.5),
                 scale: 1.0,
                 mount_transform_pos: None,
                 body: None,

@@ -2,7 +2,7 @@ use common::assets::{
     self, Asset, AssetCache, AssetExt, AssetHandle, BoxedError, FileAsset, SharedString,
 };
 use hashbrown::HashMap;
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 /// Load from a GLSL file.
 pub struct Glsl(pub String);

@@ -16,7 +16,7 @@ use conrod_core::{
 };
 use i18n::Localization;
 use itertools::Itertools;
-use std::time::Instant;
+use core::time::Instant;
 use vek::{Vec2, approx::AbsDiffEq};
 
 widget_ids! {

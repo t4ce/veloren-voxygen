@@ -15,7 +15,7 @@ use conrod_core::{
     widget_ids,
 };
 use i18n::Localization;
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 pub const TEXT_COLOR: Color = Color::Rgba(0.61, 0.61, 0.89, 1.0);
 pub const NEGATIVE_TEXT_COLOR: Color = Color::Rgba(0.91, 0.15, 0.17, 1.0);

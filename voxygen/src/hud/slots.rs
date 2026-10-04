@@ -17,7 +17,7 @@ use common::{
 };
 use conrod_core::{Color, image};
 use specs::Entity as EcsEntity;
-use std::fmt::{Debug, Formatter};
+use core::{fmt::Debug, fmt::Formatter};
 
 pub use common::comp::slot::{ArmorSlot, EquipSlot};
 
@@ -333,7 +333,7 @@ impl PartialEq for CraftSlot {
 }
 
 impl Debug for CraftSlot {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         f.debug_struct("CraftSlot")
             .field("index", &self.index)
             .field("slot", &self.slot)

@@ -28,7 +28,7 @@ pub use self::{
 use super::{FigureBoneData, Skeleton, vek::*};
 use common::comp::{self};
 use core::convert::TryFrom;
-use std::f32::consts::PI;
+use core::f32::consts::PI;
 
 pub type Body = comp::biped_small::Body;
 

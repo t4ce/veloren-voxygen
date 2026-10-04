@@ -6,7 +6,7 @@ use common::{
     comp::item::{Hands, ToolKind},
     util::Dir,
 };
-use std::ops::Mul;
+use core::ops::Mul;
 
 pub struct StandAnimation;
 

@@ -44,7 +44,7 @@ pub struct ImageSlider<T, K> {
     skew: f32,
     track: Track,
     slider: Slider,
-    kind: std::marker::PhantomData<K>,
+    kind: core::marker::PhantomData<K>,
 }
 
 struct Track {
@@ -115,7 +115,7 @@ impl<T, K> ImageSlider<T, K> {
                 color: None,
                 length: None,
             },
-            kind: std::marker::PhantomData,
+            kind: core::marker::PhantomData,
         }
     }
 }

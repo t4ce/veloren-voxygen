@@ -45,7 +45,7 @@ use conrod_core::{
     widget_ids,
 };
 use i18n::Localization;
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 use strum::{EnumIter, IntoEnumIterator};
 use vek::*;
 const ART_SIZE: [f64; 2] = [320.0, 320.0];

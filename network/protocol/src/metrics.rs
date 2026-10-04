@@ -6,7 +6,8 @@ use prometheus::{
 };
 #[cfg(feature = "metrics")]
 use std::collections::HashMap;
-use std::{error::Error, sync::Arc};
+use core::error::Error;
+use alloc::sync::Arc;
 
 pub enum RemoveReason {
     Finished,
@@ -375,9 +376,9 @@ impl Drop for ProtocolMetricCache {
 }
 
 #[cfg(feature = "metrics")]
-impl std::fmt::Debug for ProtocolMetrics {
+impl core::fmt::Debug for ProtocolMetrics {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "ProtocolMetrics()")
     }
 }

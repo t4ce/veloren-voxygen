@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 /// Localization metadata from manifest file
 /// See `Language` for more info on each attributes

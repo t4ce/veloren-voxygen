@@ -1,6 +1,6 @@
 use super::super::{Bound, Consts, GlobalsLayouts, Quad, Texture, Tri, Vertex as VertexTrait};
 use bytemuck::{Pod, Zeroable};
-use std::mem;
+use core::mem;
 use vek::*;
 
 /// The format of textures that the UI sources image data from.
@@ -676,7 +676,7 @@ impl PremultiplyUpload {
     }
 }
 
-use std::sync::Arc;
+use alloc::sync::Arc;
 /// Per-target texture batched uploads
 #[derive(Default)]
 pub(in super::super) struct BatchedUploads {

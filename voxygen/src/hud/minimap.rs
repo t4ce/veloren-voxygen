@@ -31,7 +31,7 @@ use conrod_core::{
 use hashbrown::{HashMap, HashSet};
 use image::{DynamicImage, RgbaImage};
 use specs::WorldExt;
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 use vek::{Rgba, Vec2, Vec3, approx::AbsDiffEq};
 

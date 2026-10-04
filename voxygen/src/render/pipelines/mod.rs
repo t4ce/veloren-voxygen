@@ -21,7 +21,7 @@ use super::{Consts, Renderer, Texture};
 use crate::scene::camera::CameraMode;
 use bytemuck::{Pod, Zeroable};
 use common::{resources::TimeOfDay, terrain::BlockKind, util::srgb_to_linear};
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 use vek::*;
 
 pub use self::{figure::FigureSpriteAtlasData, terrain::TerrainAtlasData};
@@ -326,7 +326,7 @@ where
 {
     pub(super) bind_group: wgpu::BindGroup,
     pub textures: [Texture; S::TEXTURES],
-    phantom: std::marker::PhantomData<Locals>,
+    phantom: core::marker::PhantomData<Locals>,
 }
 
 pub struct VoxelAtlasLayout<S: AtlasData>(wgpu::BindGroupLayout, PhantomData<S>);
@@ -372,7 +372,7 @@ pub trait AtlasData {
     fn layout() -> Vec<wgpu::BindGroupLayoutEntry>;
 
     /// Take a sub-slice of the texture data for each layer in the atlas.
-    fn slice_mut(&mut self, range: std::ops::Range<usize>) -> Self::SliceMut<'_>;
+    fn slice_mut(&mut self, range: core::ops::Range<usize>) -> Self::SliceMut<'_>;
 
     /// Create textures on the GPU corresponding to the layers in the atlas.
     fn create_textures(
@@ -810,7 +810,7 @@ impl GlobalsLayouts {
         AtlasTextures {
             textures,
             bind_group,
-            phantom: std::marker::PhantomData,
+            phantom: core::marker::PhantomData,
         }
     }
 }

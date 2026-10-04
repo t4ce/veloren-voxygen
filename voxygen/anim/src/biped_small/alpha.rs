@@ -5,7 +5,7 @@ use super::{
     init_biped_small_alpha,
 };
 use common::{comp::item::ToolKind, states::utils::StageSection};
-use std::f32::consts::PI;
+use core::f32::consts::PI;
 
 pub struct AlphaAnimation;
 

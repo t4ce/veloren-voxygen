@@ -40,7 +40,7 @@ use super::{
     slots::{SlotKind, SlotManager, TradeSlot},
     util,
 };
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 #[allow(clippy::large_enum_variant)]
 pub enum TradeEvent {

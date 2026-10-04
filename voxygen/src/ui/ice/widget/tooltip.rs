@@ -1,11 +1,8 @@
 use iced::{
     Clipboard, Element, Event, Hasher, Layout, Length, Point, Rectangle, Size, Widget, layout,
 };
-use std::{
-    hash::Hash,
-    sync::Mutex,
-    time::{Duration, Instant},
-};
+use core::{hash::Hash, time::Duration, time::Instant};
+use std::sync::Mutex;
 use vek::*;
 
 #[derive(Copy, Clone, Debug)]
@@ -211,7 +208,7 @@ where
 
     fn hash_layout(&self, state: &mut Hasher) {
         struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
+        core::any::TypeId::of::<Marker>().hash(state);
         self.content.hash_layout(state);
     }
 
@@ -351,7 +348,7 @@ where
 
     fn hash_layout(&self, state: &mut Hasher, position: Point) {
         struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
+        core::any::TypeId::of::<Marker>().hash(state);
 
         (position.x as u32).hash(state);
         (position.y as u32).hash(state);

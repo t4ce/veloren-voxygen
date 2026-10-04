@@ -13,7 +13,8 @@ use super::{
     shaders::Shaders,
 };
 use common_base::{prof_span, prof_span_alloc};
-use std::sync::{Arc, OnceLock};
+use alloc::sync::Arc;
+use std::sync::OnceLock;
 
 /// All the pipelines
 pub struct Pipelines {

@@ -31,10 +31,7 @@ use common_base::prof_span;
 use hashbrown::HashMap;
 use rand::prelude::*;
 use specs::{Entity, Join, LendJoin, WorldExt};
-use std::{
-    f32::consts::{PI, TAU},
-    time::Duration,
-};
+use core::{f32::consts::PI, f32::consts::TAU, time::Duration};
 use vek::*;
 
 pub struct ParticleMgr {
@@ -3095,7 +3092,7 @@ impl ParticleMgr {
                                     || {
                                         let orbit_speed = 1.0_f32;
                                         let theta = time as f32 * orbit_speed
-                                            + rng.random::<f32>() * std::f32::consts::TAU;
+                                            + rng.random::<f32>() * core::f32::consts::TAU;
                                         let r = aura.radius * (0.25 + rng.random::<f32>() * 0.2);
                                         let spawn_pos =
                                             (Vec2::new(r * theta.sin(), r * theta.cos())

@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use core::net::SocketAddr;
 use tokio::net::lookup_host;
 use tracing::trace;
 
@@ -101,7 +101,7 @@ fn sort_ipv6(s: impl Iterator<Item = SocketAddr>, prefer_ipv6: bool) -> Vec<Sock
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+    use core::{net::IpAddr, net::Ipv4Addr, net::Ipv6Addr};
 
     #[tokio::test]
     async fn resolve_localhost() {

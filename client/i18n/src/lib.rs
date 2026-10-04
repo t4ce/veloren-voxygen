@@ -1,3 +1,4 @@
+extern crate alloc;
 mod error;
 mod raw;
 
@@ -12,7 +13,7 @@ use unic_langid::LanguageIdentifier;
 
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 use assets::{
     AssetCache, AssetExt, AssetHandle, AssetReadGuard, BoxedError, ReloadWatcher, SharedString,

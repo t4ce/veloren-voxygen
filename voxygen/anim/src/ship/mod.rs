@@ -143,11 +143,11 @@ impl<'a> From<&'a Body> for SkeletonAttr {
                 Train => (0.0, 0.0, 0.0),
             },
             bone1_ori: match body {
-                Carriage | Cart | Train => std::f32::consts::PI * 0.5,
+                Carriage | Cart | Train => core::f32::consts::PI * 0.5,
                 _ => 0.0,
             },
             bone2_ori: match body {
-                Carriage | Cart | Train => std::f32::consts::PI * -0.5,
+                Carriage | Cart | Train => core::f32::consts::PI * -0.5,
                 _ => 0.0,
             },
             bone_rotation_rate: match body {

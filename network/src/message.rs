@@ -78,9 +78,9 @@ impl Message {
     /// # use veloren_network::{Network, ListenAddr, ConnectAddr, Pid};
     /// # use veloren_network::Promises;
     /// # use tokio::runtime::Runtime;
-    /// # use std::sync::Arc;
+    /// # use alloc::sync::Arc;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
     /// // Create a Network, listen on Port `2300` and wait for a Stream to be opened, then listen on it
     /// # let runtime = Runtime::new().unwrap();
     /// # let mut network = Network::new(Pid::new(), &runtime);

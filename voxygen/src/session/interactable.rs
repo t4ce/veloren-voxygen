@@ -1,4 +1,5 @@
-use std::{cmp::Reverse, collections::HashSet};
+use core::cmp::Reverse;
+use std::collections::HashSet;
 
 use specs::{Join, LendJoin, ReadStorage, WorldExt};
 use vek::*;

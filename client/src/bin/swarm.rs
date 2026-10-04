@@ -1,3 +1,4 @@
+extern crate alloc;
 use clap::Parser;
 use common::{
     comp,
@@ -5,14 +6,9 @@ use common::{
     vol::RectVolSize,
 };
 use hashbrown::HashSet;
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU32, Ordering},
-    },
-    thread,
-    time::{Duration, SystemTime},
-};
+use alloc::sync::Arc;
+use core::{sync::atomic::AtomicU32, sync::atomic::Ordering, time::Duration, time::SystemTime};
+use std::thread;
 use tokio::runtime::Runtime;
 use vek::*;
 use veloren_client::{Client, ClientType, addr::ConnectionArgs};

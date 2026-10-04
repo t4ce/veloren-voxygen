@@ -43,12 +43,13 @@
 //!
 //! [`UnreliableDrain`]: crate::UnreliableDrain
 //! [`UnreliableSink`]: crate::UnreliableSink
-//! [`Vec<u8>`]: std::vec::Vec
+//! [`Vec<u8>`]: alloc::vec::Vec
 //! [`Bytes`]: bytes::Bytes
 //! [`SendProtocol`]: crate::SendProtocol
 //! [`RecvProtocol`]: crate::RecvProtocol
 //! [`InitProtocol`]: crate::InitProtocol
 
+extern crate alloc;
 mod error;
 mod event;
 mod frame;
@@ -85,7 +86,7 @@ use async_trait::async_trait;
 /// Handshake: Used to connect 2 Channels.
 #[async_trait]
 pub trait InitProtocol {
-    type CustomErr: std::fmt::Debug + Send;
+    type CustomErr: core::fmt::Debug + Send;
 
     async fn initialize(
         &mut self,
@@ -108,7 +109,7 @@ pub trait InitProtocol {
 /// [`ProtocolEvent`]: crate::ProtocolEvent
 #[async_trait]
 pub trait SendProtocol {
-    type CustomErr: std::fmt::Debug + Send;
+    type CustomErr: core::fmt::Debug + Send;
 
     /// YOU MUST inform the `SendProtocol` by any Stream Open BEFORE using it in
     /// `send` and Stream Close AFTER using it in `send` via this fn.
@@ -126,7 +127,7 @@ pub trait SendProtocol {
     async fn flush(
         &mut self,
         bandwidth: Bandwidth,
-        dt: std::time::Duration,
+        dt: core::time::Duration,
     ) -> Result<Bandwidth, ProtocolError<Self::CustomErr>>;
 }
 
@@ -135,7 +136,7 @@ pub trait SendProtocol {
 /// [`SendProtocol`]: crate::SendProtocol
 #[async_trait]
 pub trait RecvProtocol {
-    type CustomErr: std::fmt::Debug + Send;
+    type CustomErr: core::fmt::Debug + Send;
 
     /// Either recv an event or fail the Protocol, once the Recv side is closed
     /// it cannot recover from the error.
@@ -152,7 +153,7 @@ pub trait RecvProtocol {
 /// [`async-channel`]: async-channel
 #[async_trait]
 pub trait UnreliableDrain: Send {
-    type CustomErr: std::fmt::Debug + Send;
+    type CustomErr: core::fmt::Debug + Send;
     type DataFormat;
     async fn send(&mut self, data: Self::DataFormat) -> Result<(), ProtocolError<Self::CustomErr>>;
 }
@@ -162,7 +163,7 @@ pub trait UnreliableDrain: Send {
 /// [`UnreliableDrain`]: crate::UnreliableDrain
 #[async_trait]
 pub trait UnreliableSink: Send {
-    type CustomErr: std::fmt::Debug + Send;
+    type CustomErr: core::fmt::Debug + Send;
     type DataFormat;
     async fn recv(&mut self) -> Result<Self::DataFormat, ProtocolError<Self::CustomErr>>;
 }

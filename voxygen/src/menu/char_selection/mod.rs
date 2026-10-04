@@ -18,7 +18,8 @@ use common_base::span;
 #[cfg(feature = "plugins")]
 use common_state::plugin::PluginMgr;
 use specs::WorldExt;
-use std::{cell::RefCell, rc::Rc};
+use core::cell::RefCell;
+use alloc::rc::Rc;
 use tracing::error;
 use ui::CharSelectionUi;
 

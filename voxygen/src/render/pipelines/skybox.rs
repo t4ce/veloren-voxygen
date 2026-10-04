@@ -1,6 +1,6 @@
 use super::super::{AaMode, GlobalsLayouts, Mesh, Quad, Vertex as VertexTrait};
 use bytemuck::{Pod, Zeroable};
-use std::mem;
+use core::mem;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]

@@ -35,7 +35,7 @@ use super::{
 use common::assets::{self, AssetExt, AssetHandle, ReloadWatcher};
 use common_base::span;
 use core::convert::TryFrom;
-use std::sync::Arc;
+use alloc::sync::Arc;
 use tracing::{error, info, warn};
 use vek::*;
 
@@ -929,7 +929,7 @@ impl Renderer {
 
     pub fn maintain(&self) {
         if self.is_minimized {
-            self.queue.submit(std::iter::empty());
+            self.queue.submit(core::iter::empty());
         }
 
         let _ = self.device.poll(wgpu::PollType::Poll);
@@ -1603,8 +1603,8 @@ impl Renderer {
         if self.other_modes.profiler_enabled {
             let file_name = format!(
                 "frame-trace_{}.json",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                core::time::SystemTime::now()
+                    .duration_since(core::time::SystemTime::UNIX_EPOCH)
                     .map(|d| d.as_millis())
                     .unwrap_or(0)
             );

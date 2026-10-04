@@ -1,9 +1,6 @@
 use directories_next::UserDirs;
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path, path::PathBuf};
 use tracing::warn;
 
 pub mod audio;

@@ -1,6 +1,6 @@
 // TODO: unused (I think?) consider slating for removal
 use iced::{Element, Hasher, Layout, Length, Point, Rectangle, Size, Widget, layout};
-use std::hash::Hash;
+use core::hash::Hash;
 
 /// Stack up some widgets
 pub struct Stack<'a, M, R> {
@@ -57,7 +57,7 @@ where
 
     fn hash_layout(&self, state: &mut Hasher) {
         struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
+        core::any::TypeId::of::<Marker>().hash(state);
 
         self.children
             .iter()

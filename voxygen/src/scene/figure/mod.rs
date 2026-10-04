@@ -86,7 +86,7 @@ use specs::{
     Entities, Entity as EcsEntity, Join, LazyUpdate, LendJoin, ReadExpect, ReadStorage, SystemData,
     WorldExt, shred,
 };
-use std::sync::Arc;
+use alloc::sync::Arc;
 use treeculler::{BVol, BoundingSphere};
 use vek::*;
 

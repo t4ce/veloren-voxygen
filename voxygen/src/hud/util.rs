@@ -15,10 +15,8 @@ use common::{
 };
 use conrod_core::image;
 use i18n::{FluentValue, Localization, fluent_args};
-use std::{
-    borrow::Cow,
-    fmt::{Display, Write},
-};
+use alloc::borrow::Cow;
+use core::{fmt::Display, fmt::Write};
 use vek::num_traits;
 
 /// Converts a float type to a [String], rounds it and trims trailing zeros. The

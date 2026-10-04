@@ -2,7 +2,7 @@ use iced::{
     Align, Clipboard, Element, Event, Hasher, Layout, Length, Padding, Point, Rectangle, Size,
     Widget, layout, mouse,
 };
-use std::hash::Hash;
+use core::hash::Hash;
 
 /// A widget used to overlay one widget on top of another
 /// Layout behaves similar to the iced::Container widget
@@ -170,7 +170,7 @@ where
 
     fn hash_layout(&self, state: &mut Hasher) {
         struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
+        core::any::TypeId::of::<Marker>().hash(state);
 
         self.padding.hash(state);
         self.width.hash(state);

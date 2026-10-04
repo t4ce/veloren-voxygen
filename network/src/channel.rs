@@ -10,15 +10,9 @@ use network_protocol::{
 };
 #[cfg(feature = "quic")]
 use network_protocol::{QuicDataFormat, QuicDataFormatStream, QuicRecvProtocol, QuicSendProtocol};
-use std::{
-    io,
-    net::SocketAddr,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::Duration,
-};
+use std::io;
+use core::{net::SocketAddr, sync::atomic::AtomicU64, sync::atomic::Ordering, time::Duration};
+use alloc::sync::Arc;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net,
@@ -65,7 +59,7 @@ pub(crate) type C2cMpscConnect = (
 pub(crate) type C2sProtocol = (Protocols, ConnectAddr, Cid);
 
 fn anonymize_addr(addr: &SocketAddr) -> String {
-    use std::net::IpAddr;
+    use core::net::IpAddr;
     match addr.ip() {
         IpAddr::V4(ip) => {
             let [o0, _, o2, _] = ip.octets();
@@ -273,7 +267,7 @@ impl Protocols {
     ) -> Result<Self, NetworkConnectError> {
         let config = config.clone();
 
-        use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+        use core::{net::IpAddr, net::Ipv4Addr, net::Ipv6Addr};
 
         let bindsock = match addr {
             SocketAddr::V4(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
@@ -755,7 +749,7 @@ mod tests {
     use super::*;
     use bytes::Bytes;
     use network_protocol::{Promises, ProtocolMetrics, RecvProtocol, SendProtocol};
-    use std::sync::Arc;
+    use alloc::sync::Arc;
     use tokio::net::{TcpListener, TcpStream};
 
     #[tokio::test]

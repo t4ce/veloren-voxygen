@@ -54,7 +54,7 @@ use conrod_core::{
 use core::{convert::TryInto, f64, ops::Range};
 use graphic::TexId;
 use hashbrown::hash_map::Entry;
-use std::time::Duration;
+use core::time::Duration;
 use tracing::{error, warn};
 use vek::*;
 
@@ -741,7 +741,7 @@ impl Ui {
                         // Marker widget indicates the end of primitives from widget wrapped in
                         // `Ingame<W>`. If end marker reached, go back to drawing the interface.
                         if container.type_id
-                            == std::any::TypeId::of::<widgets::ingame::IngameEndMarkerState>()
+                            == core::any::TypeId::of::<widgets::ingame::IngameEndMarkerState>()
                         {
                             placement = Placement::Interface;
                             if visible {

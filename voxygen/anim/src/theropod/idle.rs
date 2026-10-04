@@ -1,7 +1,7 @@
 use super::{super::Animation, SkeletonAttr, TheropodSkeleton};
 //use std::{f32::consts::PI, ops::Mul};
 use super::super::vek::*;
-use std::ops::Mul;
+use core::ops::Mul;
 
 pub struct IdleAnimation;
 

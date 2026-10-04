@@ -1,9 +1,6 @@
 use crate::{assets::Walk, error::ResourceErr};
 use fluent_syntax::{ast, parser};
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, io, path::Path, path::PathBuf};
 
 /// Generate tree of i18n files, path should be absolute.
 /// We assume that all i18n directories should have the same tree structure,

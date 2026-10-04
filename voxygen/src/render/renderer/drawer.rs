@@ -17,7 +17,7 @@ use super::{
 };
 use common_base::prof_span;
 use core::ops::Range;
-use std::sync::Arc;
+use alloc::sync::Arc;
 use vek::Aabr;
 use wgpu_profiler::{OwningScope, Scope};
 #[cfg(feature = "egui-ui")]
@@ -722,7 +722,7 @@ impl<'frame> Drawer<'frame> {
 
         if let Some(ShadowMap::Enabled(shadow_renderer)) = self.borrow.shadow.map(|s| &s.map) {
             let mut encoder = self.encoder.scope("point shadows");
-            const STRIDE: usize = std::mem::size_of::<shadow::PointLightMatrix>();
+            const STRIDE: usize = core::mem::size_of::<shadow::PointLightMatrix>();
             let data = bytemuck::cast_slice(matrices);
 
             for face in 0..6 {
@@ -902,7 +902,7 @@ impl Drop for Drawer<'_> {
         profiler.resolve_queries(&mut encoder);
 
         // It is recommended to only do one submit per frame
-        self.borrow.queue.submit(std::iter::once(encoder.finish()));
+        self.borrow.queue.submit(core::iter::once(encoder.finish()));
         // Need to call this after submit so the async mapping doesn't occur before
         // copying the screenshot to the buffer which will be mapped.
         if let Some(f) = download_and_handle_screenshot {

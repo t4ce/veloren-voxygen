@@ -2,7 +2,7 @@ use iced::{
     Clipboard, Element, Event, Hasher, Layout, Length, Point, Rectangle, Size, Widget, layout,
     mouse,
 };
-use std::hash::Hash;
+use core::hash::Hash;
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -56,7 +56,7 @@ where
 
     fn hash_layout(&self, state: &mut Hasher) {
         struct Marker;
-        std::any::TypeId::of::<Marker>().hash(state);
+        core::any::TypeId::of::<Marker>().hash(state);
 
         self.width.hash(state);
         self.height.hash(state);

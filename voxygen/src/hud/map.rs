@@ -29,7 +29,7 @@ use conrod_core::{
 };
 use i18n::Localization;
 use specs::WorldExt;
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 use vek::*;
 use winit::event::MouseButton;
 

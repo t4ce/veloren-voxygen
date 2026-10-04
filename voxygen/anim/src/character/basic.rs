@@ -3841,7 +3841,7 @@ impl Animation for BasicAction {
                     Some(StageSection::Action) => buildup_frac + move2base * (1.0 - buildup_frac),
                     _ => 0.0,
                 };
-                let circle_angle = (t * std::f32::consts::PI * 0.5).sin() * TAU;
+                let circle_angle = (t * core::f32::consts::PI * 0.5).sin() * TAU;
 
                 next.hand_l.position = Vec3::new(s_a.sthl.0, s_a.sthl.1, s_a.sthl.2);
                 next.hand_l.orientation =
@@ -3854,7 +3854,7 @@ impl Animation for BasicAction {
 
                 let (sin_offset, cos_offset, forward_nudge) =
                     if matches!(d.stage_section, Some(StageSection::Recover)) {
-                        let r = (move3base * std::f32::consts::PI * 0.5).cos();
+                        let r = (move3base * core::f32::consts::PI * 0.5).cos();
                         (0.0_f32, r, 0.0_f32)
                     } else {
                         (circle_angle.sin(), circle_angle.cos(), (1.0 - t) * 6.0)

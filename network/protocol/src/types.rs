@@ -132,9 +132,9 @@ impl Sid {
     pub(crate) fn to_bytes(self, bytes: &mut BytesMut) { bytes.put_u64_le(self.internal) }
 }
 
-impl std::fmt::Debug for Pid {
+impl core::fmt::Debug for Pid {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         const BITS_PER_SIXLET: usize = 6;
         //only print last 6 chars of number as full u128 logs are unreadable
         const CHAR_COUNT: usize = 6;
@@ -153,12 +153,12 @@ impl Default for Pid {
     fn default() -> Self { Pid::new() }
 }
 
-impl std::fmt::Display for Pid {
+impl core::fmt::Display for Pid {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{:?}", self) }
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { write!(f, "{:?}", self) }
 }
 
-impl std::ops::AddAssign for Sid {
+impl core::ops::AddAssign for Sid {
     fn add_assign(&mut self, other: Self) {
         *self = Self {
             internal: self.internal + other.internal,
@@ -166,9 +166,9 @@ impl std::ops::AddAssign for Sid {
     }
 }
 
-impl std::fmt::Debug for Sid {
+impl core::fmt::Debug for Sid {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         //only print last 6 chars of number as full u128 logs are unreadable
         write!(f, "{}", self.internal.rem_euclid(1000000))
     }
@@ -178,9 +178,9 @@ impl From<u64> for Sid {
     fn from(internal: u64) -> Self { Sid { internal } }
 }
 
-impl std::fmt::Display for Sid {
+impl core::fmt::Display for Sid {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.internal)
     }
 }

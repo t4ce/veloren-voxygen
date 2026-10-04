@@ -16,7 +16,7 @@ use crate::{
 };
 use common::comp::inventory::InventorySortOrder;
 use i18n::{LanguageMetadata, LocalizationHandle};
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 #[derive(Clone)]
 pub enum Audio {

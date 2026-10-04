@@ -5,10 +5,8 @@ use crate::{
 };
 use common::assets::{AssetExt, BoxedError, FileAsset};
 use glyph_brush::GlyphBrushBuilder;
-use std::{
-    borrow::Cow,
-    cell::{RefCell, RefMut},
-};
+use alloc::borrow::Cow;
+use core::{cell::RefCell, cell::RefMut};
 use vek::*;
 
 // TODO: probably make cache fields where we have mut getters into just public

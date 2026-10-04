@@ -21,7 +21,7 @@ use tracing::{debug, error, info, trace};
 /// [`RecvProtocol`]: crate::RecvProtocol
 #[async_trait]
 pub trait ReliableDrain {
-    type CustomErr: std::fmt::Debug + Send;
+    type CustomErr: core::fmt::Debug + Send;
     async fn send(&mut self, frame: InitFrame) -> Result<(), ProtocolError<Self::CustomErr>>;
 }
 
@@ -31,7 +31,7 @@ pub trait ReliableDrain {
 /// [`ReliableDrain`]: crate::ReliableDrain
 #[async_trait]
 pub trait ReliableSink {
-    type CustomErr: std::fmt::Debug + Send;
+    type CustomErr: core::fmt::Debug + Send;
     async fn recv(&mut self) -> Result<InitFrame, ProtocolError<Self::CustomErr>>;
 }
 
@@ -40,7 +40,7 @@ impl<D, S, E> InitProtocol for (D, S)
 where
     D: ReliableDrain<CustomErr = E> + Send,
     S: ReliableSink<CustomErr = E> + Send,
-    E: std::fmt::Debug + Send,
+    E: core::fmt::Debug + Send,
 {
     type CustomErr = E;
 
@@ -123,7 +123,7 @@ where
                 }
             },
             InitFrame::Raw(bytes) => {
-                match std::str::from_utf8(bytes.as_slice()) {
+                match core::str::from_utf8(bytes.as_slice()) {
                     Ok(string) => error!(?string, ERR_S),
                     _ => error!(?bytes, ERR_S),
                 }
@@ -153,7 +153,7 @@ where
                 Ok((pid, stream_id_offset, secret))
             },
             InitFrame::Raw(bytes) => {
-                match std::str::from_utf8(bytes.as_slice()) {
+                match core::str::from_utf8(bytes.as_slice()) {
                     Ok(string) => error!(?string, ERR_S),
                     _ => error!(?bytes, ERR_S),
                 }

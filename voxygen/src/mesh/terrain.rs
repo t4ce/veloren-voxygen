@@ -15,7 +15,8 @@ use common::{
     volumes::vol_grid_2d::{CachedVolGrid2d, VolGrid2d},
 };
 use common_base::span;
-use std::{collections::VecDeque, fmt::Debug, sync::Arc};
+use alloc::{collections::VecDeque, sync::Arc};
+use core::fmt::Debug;
 use tracing::error;
 use vek::*;
 

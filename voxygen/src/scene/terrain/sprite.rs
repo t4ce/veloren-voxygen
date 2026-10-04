@@ -1,4 +1,4 @@
-use std::ops::Range;
+use core::ops::Range;
 
 use super::SPRITE_LOD_LEVELS;
 use common::{
@@ -11,7 +11,7 @@ use common::{
 };
 use hashbrown::HashMap;
 use serde::Deserialize;
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 use vek::*;
 
 #[derive(Deserialize, Debug)]
@@ -57,7 +57,7 @@ macro_rules! impl_sprite_attribute_filter {
             #[cfg(test)]
             fn is_valid_for_category(&self, category: sprite::Category) -> Result<(), &'static str> {
                 $(if self.$field_name.is_some() && !category.has_attr::<sprite::$attr>() {
-                    return Err(::std::any::type_name::<sprite::$attr>());
+                    return Err(::core::any::type_name::<sprite::$attr>());
                 })*
                 Ok(())
             }

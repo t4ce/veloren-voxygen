@@ -10,10 +10,8 @@ use conrod_core::{
 };
 use i18n::Localization;
 use specs::WorldExt;
-use std::{
-    borrow::Cow,
-    time::{Duration, Instant},
-};
+use alloc::borrow::Cow;
+use core::{time::Duration, time::Instant};
 
 use crate::{
     GlobalState,

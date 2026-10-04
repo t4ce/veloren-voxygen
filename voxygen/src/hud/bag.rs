@@ -41,7 +41,7 @@ use conrod_core::{
     widget_ids,
 };
 use i18n::Localization;
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 use specs::Entity as EcsEntity;
 use vek::{Vec2, approx::AbsDiffEq};

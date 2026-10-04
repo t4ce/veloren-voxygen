@@ -25,7 +25,8 @@ use core::convert::TryFrom;
 use i18n::Localization;
 
 use itertools::Itertools;
-use std::{iter::once, rc::Rc};
+use core::iter::once;
+use alloc::rc::Rc;
 use winit::monitor::VideoModeHandle;
 
 widget_ids! {
