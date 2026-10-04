@@ -12,7 +12,7 @@ use crate::{
 };
 use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use core::time::Duration;
 use vek::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize, Default)]

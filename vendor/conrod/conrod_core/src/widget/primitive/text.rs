@@ -217,7 +217,7 @@ impl<'a> Widget for Text<'a> {
             },
         };
         let line_spacing = self.style.line_spacing(&ui.theme);
-        let height = text::height(std::cmp::max(num_lines, 1), font_size, line_spacing);
+        let height = text::height(core::cmp::max(num_lines, 1), font_size, line_spacing);
         Dimension::Absolute(height)
     }
 
@@ -257,7 +257,7 @@ impl<'a> Widget for Text<'a> {
         // Otherwise, we'll check to see if we have to update the line breaks.
         } else {
             use utils::write_if_different;
-            use std::borrow::Cow;
+            use alloc::borrow::Cow;
 
             // Compare the line_infos and only collect the new ones if they are different.
             let maybe_new_line_infos = {

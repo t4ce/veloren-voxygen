@@ -2,7 +2,7 @@ use crate::{make_case_elim, make_proj_elim};
 use rand::{RngExt, prelude::IndexedRandom, rng};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::ops::Range;
+use core::ops::Range;
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
 use vek::*;
 
@@ -180,7 +180,7 @@ pub const ALL_SPECIES: [Species; 6] = [
 ];
 
 impl<'a, SpeciesMeta: 'a> IntoIterator for &'a AllSpecies<SpeciesMeta> {
-    type IntoIter = std::iter::Copied<std::slice::Iter<'static, Self::Item>>;
+    type IntoIter = core::iter::Copied<core::slice::Iter<'static, Self::Item>>;
     type Item = Species;
 
     fn into_iter(self) -> Self::IntoIter { ALL_SPECIES.iter().copied() }

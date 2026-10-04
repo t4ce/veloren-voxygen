@@ -402,7 +402,7 @@ impl<'a> ::border::Borderable for Tabs<'a> {
 
 /// An iterator yielding the **Rect** for each Tab in the given list.
 pub struct TabRects<'a> {
-    tabs: std::slice::Iter<'a, (widget::Id, &'a str)>,
+    tabs: core::slice::Iter<'a, (widget::Id, &'a str)>,
     tab_dim: Dimensions,
     next_xy: Point,
     xy_step: Point,

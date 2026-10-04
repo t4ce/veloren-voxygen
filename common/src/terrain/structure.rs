@@ -90,7 +90,7 @@ pub(crate) struct BaseStructure<B> {
 
 pub struct StructuresGroup(Vec<Structure>);
 
-impl std::ops::Deref for StructuresGroup {
+impl core::ops::Deref for StructuresGroup {
     type Target = [Structure];
 
     fn deref(&self) -> &[Structure] { &self.0 }
@@ -112,7 +112,7 @@ impl assets::Asset for StructuresGroup {
                         center: Vec3::from(sp.center),
                         base,
                         custom_indices: {
-                            let mut indices = std::array::from_fn(|_| None);
+                            let mut indices = core::array::from_fn(|_| None);
                             for (&idx, custom) in default_custom_indices()
                                 .iter()
                                 .chain(sp.custom_indices.iter())
@@ -171,7 +171,7 @@ pub(crate) fn load_base_structure<B: Default>(
     dot_vox_data: &DotVoxData,
     mut to_block: impl FnMut(Rgb<u8>) -> B,
 ) -> BaseStructure<B> {
-    let mut palette = std::array::from_fn(|_| B::default());
+    let mut palette = core::array::from_fn(|_| B::default());
     if let Some(model) = dot_vox_data.models.first() {
         for (i, col) in dot_vox_data
             .palette

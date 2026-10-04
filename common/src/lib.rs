@@ -3,6 +3,7 @@
 #![expect(clippy::option_map_unit_fn)]
 #![deny(clippy::clone_on_ref_ptr)]
 #![feature(
+extern crate alloc;
     fundamental,
     trait_alias,
     type_changing_struct_update,

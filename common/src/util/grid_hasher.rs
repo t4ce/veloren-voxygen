@@ -1,4 +1,4 @@
-use std::hash::{BuildHasher, Hasher};
+use core::hash::{BuildHasher, Hasher};
 
 #[derive(Copy, Clone, Default)]
 pub struct GridHasher(u64);

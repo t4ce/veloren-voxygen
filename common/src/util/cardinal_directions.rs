@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub};
+use core::ops::{Add, Sub};
 
 use rand::RngExt;
 use vek::{Aabb, Aabr, Mat3, Vec2, Vec3};
@@ -328,7 +328,7 @@ impl Dir2 {
     pub fn scale(self, vec: impl Into<Vec2<i32>>) -> Vec2<i32> { self.to_vec2() * vec }
 }
 
-impl std::ops::Neg for Dir2 {
+impl core::ops::Neg for Dir2 {
     type Output = Dir2;
 
     fn neg(self) -> Self::Output { self.opposite() }
@@ -578,7 +578,7 @@ impl Dir3 {
         }
     }
 }
-impl std::ops::Neg for Dir3 {
+impl core::ops::Neg for Dir3 {
     type Output = Dir3;
 
     fn neg(self) -> Self::Output { self.opposite() }

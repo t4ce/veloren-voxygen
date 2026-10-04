@@ -1,7 +1,8 @@
 use crate::{ViewDistances, character::CharacterId};
 use serde::{Deserialize, Serialize};
 use specs::Component;
-use std::time::{Duration, Instant};
+use core::time::Duration;
+use std::time::Instant;
 use vek::*;
 
 #[derive(Debug)]

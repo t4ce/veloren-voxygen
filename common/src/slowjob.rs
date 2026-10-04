@@ -753,7 +753,7 @@ mod tests {
         assert_eq!(baz.len(), 1);
     }
 
-    fn work_barrier(counter: &Arc<AtomicU64>, ms: u64) -> impl std::ops::FnOnce() -> () + use<> {
+    fn work_barrier(counter: &Arc<AtomicU64>, ms: u64) -> impl core::ops::FnOnce() -> () + use<> {
         let counter = Arc::clone(counter);
         println!("Create work_barrier");
         move || {

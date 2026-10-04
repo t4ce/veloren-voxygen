@@ -169,7 +169,7 @@ impl Stats {
     /// Resets temporary modifiers to default values
     pub fn reset_temp_modifiers(&mut self) {
         // "consume" name and body and re-create from scratch
-        let name = std::mem::replace(&mut self.name, Content::dummy());
+        let name = core::mem::replace(&mut self.name, Content::dummy());
         let body = self.original_body;
 
         *self = Self::new(name, body);

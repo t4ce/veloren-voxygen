@@ -1293,7 +1293,7 @@ impl ServerChatCommand {
     pub fn help_content(&self) -> Content {
         let data = self.data();
 
-        let usage = std::iter::once(format!("/{}", self.keyword()))
+        let usage = core::iter::once(format!("/{}", self.keyword()))
             .chain(data.args.iter().map(|arg| arg.usage_string()))
             .collect::<Vec<_>>()
             .join(" ");
@@ -1527,7 +1527,7 @@ pub trait CommandEnumArg: FromStr {
 
 macro_rules! impl_from_to_str_cmd {
     ($enum:ident, ($($attribute:ident => $str:expr),*)) => {
-        impl std::str::FromStr for $enum {
+        impl core::str::FromStr for $enum {
             type Err = String;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {

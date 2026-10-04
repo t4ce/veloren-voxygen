@@ -1,7 +1,7 @@
 use crate::{comp::Pos, shared_server_config::ServerConstants, time::DayPeriod};
 use serde::{Deserialize, Serialize};
 use specs::Entity;
-use std::ops::{Mul, MulAssign};
+use core::ops::{Mul, MulAssign};
 use vek::Vec3;
 
 pub const DAY: f64 = 3600.0 * 24.0;
@@ -135,8 +135,8 @@ pub enum MapKind {
     Circle,
 }
 
-impl std::fmt::Display for MapKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for MapKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             MapKind::Square => f.write_str("Square"),
             MapKind::Circle => f.write_str("Circle"),

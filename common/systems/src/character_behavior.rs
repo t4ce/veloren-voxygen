@@ -196,7 +196,7 @@ impl<'a> System<'a> for Sys {
             }
 
             // Controller actions
-            let actions = std::mem::take(&mut controller.actions);
+            let actions = core::mem::take(&mut controller.actions);
 
             let mut join_struct = JoinStruct {
                 entity,

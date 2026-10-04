@@ -58,7 +58,7 @@ pub fn height(num_lines: usize, font_size: FontSize, line_spacing: Scalar) -> Sc
 /// Produce an iterator yielding each line within the given `text` as a new `&str`, where the
 /// start and end indices into each line are provided by the given iterator.
 pub fn lines<I>(text: &str, ranges: I) -> Lines<I>
-    where I: Iterator<Item=std::ops::Range<usize>>,
+    where I: Iterator<Item=core::ops::Range<usize>>,
 {
     Lines {
         text: text,
@@ -91,7 +91,7 @@ pub fn pt_to_scale(font_size_in_points: FontSize) -> Scale {
 
 
 impl<'a, I> Iterator for Lines<'a, I>
-    where I: Iterator<Item=std::ops::Range<usize>>,
+    where I: Iterator<Item=core::ops::Range<usize>>,
 {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
@@ -125,7 +125,7 @@ pub mod font {
     /// An iterator yielding an `Id` for each new `rusttype::Font` inserted into the `Map` via the
     /// `insert_collection` method.
     pub struct NewIds {
-        index_range: std::ops::Range<usize>,
+        index_range: core::ops::Range<usize>,
     }
 
     /// Yields the `Id` for each `Font` within the `Map`.
@@ -250,20 +250,20 @@ pub mod font {
         }
     }
 
-    impl std::error::Error for Error {
+    impl core::error::Error for Error {
         fn description(&self) -> &str {
             match *self {
-                Error::IO(ref e) => std::error::Error::description(e),
+                Error::IO(ref e) => core::error::Error::description(e),
                 Error::NoFont => "No `Font` found in the loaded `FontCollection`.",
             }
         }
     }
 
-    impl std::fmt::Display for Error {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    impl core::fmt::Display for Error {
+        fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
             match *self {
-                Error::IO(ref e) => std::fmt::Display::fmt(e, f),
-                _ => write!(f, "{}", std::error::Error::description(self))
+                Error::IO(ref e) => core::fmt::Display::fmt(e, f),
+                _ => write!(f, "{}", core::error::Error::description(self))
             }
         }
     }
@@ -310,7 +310,7 @@ pub mod glyph {
     ///
     /// All lines that have no selected `Rect`s will be skipped.
     pub struct SelectedRectsPerLine<'a, I> {
-        enumerated_rects_per_line: std::iter::Enumerate<RectsPerLine<'a, I>>,
+        enumerated_rects_per_line: core::iter::Enumerate<RectsPerLine<'a, I>>,
         start_cursor_idx: super::cursor::Index,
         end_cursor_idx: super::cursor::Index,
     }
@@ -319,7 +319,7 @@ pub mod glyph {
     ///
     /// This iterator can only be produced by the `SelectedCharRectsPerLine` iterator.
     pub struct SelectedRects<'a, 'b> {
-        enumerated_rects: std::iter::Enumerate<Rects<'a, 'b>>,
+        enumerated_rects: core::iter::Enumerate<Rects<'a, 'b>>,
         end_char_idx: usize,
     }
 
@@ -659,7 +659,7 @@ pub mod cursor {
             for (i, info) in line_infos.enumerate() {
                 if i == self.line {
                     let num_chars = info.char_range().len();
-                    let char = std::cmp::min(self.char, num_chars);
+                    let char = core::cmp::min(self.char, num_chars);
                     return Index { line: i, char: char };
                 }
                 last = Some((i, info));
@@ -1022,12 +1022,12 @@ pub mod line {
         }
 
         /// The index range for indexing (via bytes) into the original str slice.
-        pub fn byte_range(self) -> std::ops::Range<usize> {
+        pub fn byte_range(self) -> core::ops::Range<usize> {
             self.start_byte..self.end_byte()
         }
 
         /// The index range for indexing into a `char` iterator over the original str slice.
-        pub fn char_range(self) -> std::ops::Range<usize> {
+        pub fn char_range(self) -> core::ops::Range<usize> {
             self.start_char..self.end_char()
         }
 

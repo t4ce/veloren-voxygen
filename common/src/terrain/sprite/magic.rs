@@ -147,15 +147,15 @@ macro_rules! sprites {
                     pub struct Visitor<'a, 'de, O, F> {
                         f: F,
                         expecting: &'a str,
-                        _marker: std::marker::PhantomData<O>,
-                        _lifetime: std::marker::PhantomData<&'de ()>,
+                        _marker: core::marker::PhantomData<O>,
+                        _lifetime: core::marker::PhantomData<&'de ()>,
                     }
 
                     #[automatically_derived]
                     impl<'a, 'de, O, F: FnOnce($category_name) -> O> serde::de::Visitor<'de> for Visitor<'a, 'de, O, F> {
                         type Value = O;
 
-                        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
                             formatter.write_str(&format!("Variant SpriteKind::{}", self.expecting))
                         }
 
@@ -191,8 +191,8 @@ macro_rules! sprites {
                             Visitor {
                                 f,
                                 expecting,
-                                _marker: std::marker::PhantomData,
-                                _lifetime: std::marker::PhantomData,
+                                _marker: core::marker::PhantomData,
+                                _lifetime: core::marker::PhantomData,
                             }
                         }
                     }

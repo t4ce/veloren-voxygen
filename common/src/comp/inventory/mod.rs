@@ -1357,7 +1357,7 @@ impl InventoryUpdateBuffer {
 
     pub fn push(&mut self, event: InventoryUpdateEvent) { self.events.push(event); }
 
-    pub fn take_events(&mut self) -> Vec<InventoryUpdateEvent> { std::mem::take(&mut self.events) }
+    pub fn take_events(&mut self) -> Vec<InventoryUpdateEvent> { core::mem::take(&mut self.events) }
 }
 
 impl Component for InventoryUpdateBuffer {

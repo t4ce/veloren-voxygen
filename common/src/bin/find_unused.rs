@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use core::str::FromStr;
 
 use common_assets::{AssetExt, Ron};
 use hashbrown::HashSet;

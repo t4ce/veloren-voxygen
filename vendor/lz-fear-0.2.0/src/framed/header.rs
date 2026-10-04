@@ -1,6 +1,6 @@
 #![allow(non_upper_case_globals)]
 
-use std::fmt::Debug;
+use core::fmt::Debug;
 use thiserror::Error;
 use culpa::{throw, throws};
 use bitflags::bitflags;

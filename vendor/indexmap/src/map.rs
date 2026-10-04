@@ -40,7 +40,7 @@ use core::mem;
 use core::ops::{Index, IndexMut, RangeBounds};
 
 #[cfg(feature = "std")]
-use std::hash::RandomState;
+use core::hash::RandomState;
 
 use crate::inner::Core;
 use crate::util::{assert_index_le, assert_index_lt, third, try_simplify_range};

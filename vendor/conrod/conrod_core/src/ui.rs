@@ -5,7 +5,7 @@ use input;
 use position::{self, Align, Direction, Dimensions, Padding, Point, Position, Range, Rect, Scalar};
 use render;
 use std;
-use std::sync::atomic::{self, AtomicUsize};
+use core::sync::atomic::{self, AtomicUsize};
 use fnv;
 use text;
 use theme::Theme;
@@ -1066,7 +1066,7 @@ impl Ui {
         {
             self.updated_widget_count = 0;
             let Ui { ref mut updated_widgets, ref mut prev_updated_widgets, .. } = *self;
-            std::mem::swap(updated_widgets, prev_updated_widgets);
+            core::mem::swap(updated_widgets, prev_updated_widgets);
             updated_widgets.clear();
 
         }
@@ -1296,7 +1296,7 @@ impl<'a> Drop for UiCell<'a> {
     }
 }
 
-impl<'a> ::std::ops::Deref for UiCell<'a> {
+impl<'a> core::ops::Deref for UiCell<'a> {
     type Target = Ui;
     fn deref(&self) -> &Ui {
         self.ui

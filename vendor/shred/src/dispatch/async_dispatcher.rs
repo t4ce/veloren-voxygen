@@ -10,7 +10,7 @@ use crate::{
     },
     world::World,
 };
-use std::borrow::BorrowMut;
+use core::borrow::BorrowMut;
 
 pub fn new_async<'a, R>(
     world: R,
@@ -181,7 +181,7 @@ impl<R> Data<R> {
     }
 
     fn sender(&mut self) -> (mpsc::Sender<Inner<R>>, Inner<R>) {
-        use std::mem::replace;
+        use core::mem::replace;
 
         self.inner();
 

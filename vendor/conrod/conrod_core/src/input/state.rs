@@ -140,7 +140,7 @@ pub mod mouse {
     /// An iterator yielding all pressed buttons.
     #[derive(Clone)]
     pub struct PressedButtons<'a> {
-        buttons: ::std::iter::Enumerate<::std::slice::Iter<'a, ButtonPosition>>,
+        buttons: core::iter::Enumerate<core::slice::Iter<'a, ButtonPosition>>,
     }
 
     impl Mouse {
@@ -260,7 +260,7 @@ pub mod mouse {
         (idx as u32).into()
     }
 
-    impl std::ops::Index<Button> for ButtonMap {
+    impl core::ops::Index<Button> for ButtonMap {
         type Output = ButtonPosition;
         fn index(&self, button: Button) -> &Self::Output {
             &self.buttons[button_to_idx(button)]

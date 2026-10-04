@@ -25,7 +25,7 @@ use common::{
 };
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use core::time::Duration;
 use tracing::warn;
 use vek::*;
 

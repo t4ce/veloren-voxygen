@@ -126,7 +126,7 @@ impl Triangle<Point> {
     }
 }
 
-impl<V> std::ops::Deref for Triangle<V>
+impl<V> core::ops::Deref for Triangle<V>
     where V: Vertex,
 {
     type Target = [V; 3];

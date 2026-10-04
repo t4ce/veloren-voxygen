@@ -1,4 +1,4 @@
-use std::time::Duration;
+use core::time::Duration;
 
 use common_assets::{AssetExt, Ron};
 use rand::rng;

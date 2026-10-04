@@ -1,7 +1,7 @@
 use crate::sync::{self, NetSync};
 use common::comp;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 /// This macro defines [`EcsCompPacke`]
 ///

@@ -5,7 +5,7 @@ use crate::{
 };
 use rand::prelude::IndexedRandom;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use alloc::sync::Arc;
 use strum::EnumIter;
 use vek::*;
 

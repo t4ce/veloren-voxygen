@@ -5,7 +5,8 @@ use crate::{
 use common_i18n::Content;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DenseVecStorage};
-use std::time::{Duration, Instant};
+use core::time::Duration;
+use std::time::Instant;
 
 /// A player's current chat mode. These are chat types that can only be sent by
 /// the player.

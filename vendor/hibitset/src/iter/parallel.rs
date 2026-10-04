@@ -197,7 +197,7 @@ mod test_bit_producer {
             }
         }
 
-        let usize_bits = ::std::mem::size_of::<usize>() * 8;
+        let usize_bits = core::mem::size_of::<usize>() * 8;
 
         let mut c = ::BitSet::new();
         for i in 0..(usize_bits.pow(3) * 2) {

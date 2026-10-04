@@ -16,6 +16,7 @@
 #![doc = document_features::document_features!()]
 //!
 
+extern crate alloc;
 pub use wgpu;
 
 /// Low-level painting of [`egui`](https://github.com/emilk/egui) on [`wgpu`].
@@ -37,7 +38,7 @@ pub mod capture;
 #[cfg(feature = "winit")]
 pub mod winit;
 
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 use epaint::mutex::RwLock;
 

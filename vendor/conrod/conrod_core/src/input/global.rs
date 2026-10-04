@@ -27,7 +27,7 @@ pub struct Global {
 /// `Ui::set_widgets` was called.
 #[derive(Clone)]
 pub struct Events<'a> {
-    iter: std::slice::Iter<'a, event::Event>,
+    iter: core::slice::Iter<'a, event::Event>,
 }
 
 /// An iterator yielding all `event::Ui`s that have occurred since the last time `Ui::set_widgets`

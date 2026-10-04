@@ -6,8 +6,8 @@
 use daggy;
 use position::{Axis, Depth, Point, Rect};
 use std;
-use std::any::Any;
-use std::ops::{Index, IndexMut};
+use core::any::Any;
+use core::ops::{Index, IndexMut};
 use widget::{self, Widget};
 
 pub use daggy::Walker;
@@ -30,7 +30,7 @@ pub type Children = daggy::Children<Node, Edge, u32>;
 
 /// An alias for the iterator yielding both **X** and **Y** **Position** parents.
 pub type PositionParents =
-    std::iter::Chain<std::option::IntoIter<widget::Id>, std::option::IntoIter<widget::Id>>;
+    core::iter::Chain<core::option::IntoIter<widget::Id>, core::option::IntoIter<widget::Id>>;
 
 /// An alias for some filtered children walker.
 pub type FilteredChildren =
@@ -72,7 +72,7 @@ pub struct Container {
     /// The unique `TypeId` associated with the `Widget::State`.
     ///
     /// This is equal to `std::any::TypeId::of::<Widget::State>()`.
-    pub type_id: std::any::TypeId,
+    pub type_id: core::any::TypeId,
     /// The rectangle describing the Widget's area.
     pub rect: Rect,
     /// The depth at which the widget will be rendered comparatively to its siblings.
@@ -107,8 +107,8 @@ pub struct Container {
 #[derive(Copy, Clone)]
 pub struct IsOverFn(pub widget::IsOverFn);
 
-impl std::fmt::Debug for IsOverFn {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for IsOverFn {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "IsOverFn")
     }
 }
@@ -795,14 +795,14 @@ impl Walker<Graph> for Parents {
 }
 
 
-impl ::std::ops::Index<widget::Id> for Graph {
+impl core::ops::Index<widget::Id> for Graph {
     type Output = Node;
     fn index<'a>(&'a self, id: widget::Id) -> &'a Node {
         self.node(id).unwrap()
     }
 }
 
-impl ::std::ops::IndexMut<widget::Id> for Graph {
+impl core::ops::IndexMut<widget::Id> for Graph {
     fn index_mut<'a>(&'a mut self, id: widget::Id) -> &'a mut Node {
         self.node_mut(id).unwrap()
     }

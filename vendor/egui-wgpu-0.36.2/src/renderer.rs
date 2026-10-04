@@ -1,5 +1,5 @@
 use core::{num::NonZeroU64, ops::Range};
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 use ahash::HashMap;
 use bytemuck::Zeroable as _;
@@ -36,7 +36,7 @@ impl Callback {
     ) -> epaint::PaintCallback {
         epaint::PaintCallback {
             rect,
-            callback: std::sync::Arc::new(Self(Box::new(callback))),
+            callback: alloc::sync::Arc::new(Self(Box::new(callback))),
         }
     }
 }

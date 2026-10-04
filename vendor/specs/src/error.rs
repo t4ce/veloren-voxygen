@@ -114,5 +114,5 @@ impl Display for WrongGeneration {
 impl StdError for WrongGeneration {}
 
 /// Reexport of `Infallible` for a smoother transition.
-#[deprecated = "Use std::convert::Infallible instead"]
+#[deprecated = "Use core::convert::Infallible instead"]
 pub type NoError = Infallible;

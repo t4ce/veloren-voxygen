@@ -99,7 +99,7 @@ pub struct DispatcherBuilder<'a, 'b> {
     pub(crate) stages_builder: StagesBuilder<'a>,
     thread_local: ThreadLocal<'b>,
     #[cfg(feature = "parallel")]
-    thread_pool: ::std::sync::Arc<::std::sync::RwLock<ThreadPoolWrapper>>,
+    thread_pool: alloc::sync::Arc<::std::sync::RwLock<ThreadPoolWrapper>>,
 }
 
 impl<'a, 'b> DispatcherBuilder<'a, 'b> {
@@ -355,7 +355,7 @@ impl<'a, 'b> DispatcherBuilder<'a, 'b> {
     /// [`add_pool()`](struct.DispatcherBuilder.html#method.add_pool),
     /// but returns `self` to enable method chaining.
     #[cfg(feature = "parallel")]
-    pub fn with_pool(mut self, pool: ::std::sync::Arc<::tokio_parallel::ThreadPool>) -> Self {
+    pub fn with_pool(mut self, pool: alloc::sync::Arc<::tokio_parallel::ThreadPool>) -> Self {
         self.add_pool(pool);
 
         self
@@ -364,7 +364,7 @@ impl<'a, 'b> DispatcherBuilder<'a, 'b> {
     /// Attach a rayon thread pool to the builder
     /// and use that instead of creating one.
     #[cfg(feature = "parallel")]
-    pub fn add_pool(&mut self, pool: ::std::sync::Arc<::tokio_parallel::ThreadPool>) {
+    pub fn add_pool(&mut self, pool: alloc::sync::Arc<::tokio_parallel::ThreadPool>) {
         *self.thread_pool.write().unwrap() = Some(pool);
     }
 
@@ -410,9 +410,9 @@ impl<'a, 'b> DispatcherBuilder<'a, 'b> {
     }
 
     #[cfg(feature = "parallel")]
-    fn create_thread_pool() -> ::std::sync::Arc<::tokio_parallel::ThreadPool> {
+    fn create_thread_pool() -> alloc::sync::Arc<::tokio_parallel::ThreadPool> {
         use tokio_parallel::ThreadPoolBuilder;
-        use std::sync::Arc;
+        use alloc::sync::Arc;
 
         Arc::new(
             ThreadPoolBuilder::new()

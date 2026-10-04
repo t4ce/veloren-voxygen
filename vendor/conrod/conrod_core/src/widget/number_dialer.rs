@@ -12,8 +12,8 @@ use {
     Widget,
 };
 use num_traits::{Float, NumCast};
-use std::cmp::Ordering;
-use std::iter::repeat;
+use core::cmp::Ordering;
+use core::iter::repeat;
 use text;
 use utils::clamp;
 use widget;

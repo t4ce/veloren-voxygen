@@ -31,7 +31,7 @@ use crate::{
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use specs::{Entity as EcsEntity, ReadStorage};
-use std::ops::{Mul, MulAssign};
+use core::ops::{Mul, MulAssign};
 use tracing::error;
 use vek::*;
 

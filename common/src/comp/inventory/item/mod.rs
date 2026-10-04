@@ -343,7 +343,7 @@ impl Effects {
         match self {
             Effects::Any(effects) => effects,
             Effects::All(effects) => effects,
-            Effects::One(effect) => std::slice::from_ref(effect),
+            Effects::One(effect) => core::slice::from_ref(effect),
         }
     }
 }
@@ -527,7 +527,7 @@ pub struct PickupItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThrownItem(pub Item);
 
-use std::hash::{Hash, Hasher};
+use core::hash::{Hash, Hasher};
 
 // Used to find inventory item corresponding to hotbar slot
 impl Hash for Item {

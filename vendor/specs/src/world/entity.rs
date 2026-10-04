@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn test_nonzero_optimization() {
-        use std::mem::size_of;
+        use core::mem::size_of;
         assert_eq!(size_of::<Option<Generation>>(), size_of::<Generation>());
         assert_eq!(size_of::<Option<Entity>>(), size_of::<Entity>());
     }

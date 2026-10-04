@@ -45,6 +45,7 @@
 
 #![deny(missing_docs)]
 
+extern crate alloc;
 #[cfg(test)]
 extern crate rand;
 #[cfg(feature = "parallel")]
@@ -753,7 +754,8 @@ mod test_parallel {
     fn par_iter_random_add() {
         use rand::prelude::*;
         use std::collections::HashSet;
-        use std::sync::{Arc, Mutex};
+        use alloc::sync::{Arc};
+use std::sync::{Mutex};
 
         let mut set = BitSet::new();
         let mut check_set = HashSet::new();
@@ -818,7 +820,8 @@ mod test_parallel {
     #[test]
     fn par_iter_clusters() {
         use std::collections::HashSet;
-        use std::sync::{Arc, Mutex};
+        use alloc::sync::{Arc};
+use std::sync::{Mutex};
         let mut set = BitSet::new();
         let mut check_set = HashSet::new();
         for x in 0..8 {

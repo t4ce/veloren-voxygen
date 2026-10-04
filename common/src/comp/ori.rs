@@ -121,9 +121,9 @@ impl Ori {
     /// let ori = Ori::default().rolled_right(ang).pitched_up(2.0 * ang);
     /// approx::assert_relative_eq!(ori.global_to_local(up).dot(*left), 1.0);
     /// ```
-    pub fn global_to_local<T>(&self, global: T) -> <Quaternion<f32> as std::ops::Mul<T>>::Output
+    pub fn global_to_local<T>(&self, global: T) -> <Quaternion<f32> as core::ops::Mul<T>>::Output
     where
-        Quaternion<f32>: std::ops::Mul<T>,
+        Quaternion<f32>: core::ops::Mul<T>,
     {
         self.to_quat().inverse() * global
     }
@@ -143,9 +143,9 @@ impl Ori {
     /// let ori = Ori::default().rolled_right(ang).pitched_up(2.0 * ang);
     /// approx::assert_relative_eq!(ori.local_to_global(up).dot(*left), 1.0);
     /// ```
-    pub fn local_to_global<T>(&self, local: T) -> <Quaternion<f32> as std::ops::Mul<T>>::Output
+    pub fn local_to_global<T>(&self, local: T) -> <Quaternion<f32> as core::ops::Mul<T>>::Output
     where
-        Quaternion<f32>: std::ops::Mul<T>,
+        Quaternion<f32>: core::ops::Mul<T>,
     {
         self.to_quat() * local
     }

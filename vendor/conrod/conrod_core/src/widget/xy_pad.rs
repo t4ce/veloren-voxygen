@@ -106,8 +106,8 @@ impl<'a, X, Y> XYPad<'a, X, Y> {
 }
 
 impl<'a, X, Y> Widget for XYPad<'a, X, Y>
-    where X: Float + ToString + ::std::fmt::Debug + ::std::any::Any,
-          Y: Float + ToString + ::std::fmt::Debug + ::std::any::Any,
+    where X: Float + ToString + core::fmt::Debug + core::any::Any,
+          Y: Float + ToString + core::fmt::Debug + core::any::Any,
 {
     type State = State;
     type Style = Style;

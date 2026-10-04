@@ -7,13 +7,13 @@ use color::{Color, BLACK, WHITE};
 use position::{Align, Direction, Padding, Position, Relative};
 use fnv;
 use std;
-use std::any::Any;
+use core::any::Any;
 use text;
 use widget;
 
 /// `std::collections::HashMap` with `fnv::FnvHasher` for unique styling
 /// of each widget, index-able by the **Widget::kind**.
-pub type StyleMap = fnv::FnvHashMap<std::any::TypeId, WidgetDefault>;
+pub type StyleMap = fnv::FnvHashMap<core::any::TypeId, WidgetDefault>;
 
 
 /// A serializable collection of canvas and widget styling defaults.
@@ -53,7 +53,7 @@ pub struct Theme {
     pub mouse_drag_threshold: Scalar,
     /// Once the `Duration` that separates two consecutive `Click`s is greater than this value, a
     /// `DoubleClick` event will no longer be generated.
-    pub double_click_threshold: std::time::Duration,
+    pub double_click_threshold: core::time::Duration,
 }
 
 /// The defaults for a specific widget.
@@ -104,7 +104,7 @@ impl Theme {
             font_size_small: 12,
             widget_styling: fnv::FnvHashMap::default(),
             mouse_drag_threshold: 0.0,
-            double_click_threshold: std::time::Duration::from_millis(500),
+            double_click_threshold: core::time::Duration::from_millis(500),
         }
     }
 
@@ -114,7 +114,7 @@ impl Theme {
     pub fn widget_style<T>(&self) -> Option<UniqueDefault<T>>
         where T: widget::Style,
     {
-        let style_id = std::any::TypeId::of::<T>();
+        let style_id = core::any::TypeId::of::<T>();
         self.widget_styling.get(&style_id).and_then(|boxed_default| {
             boxed_default.style.downcast_ref().map(|style| {
                 let common = &boxed_default.common;

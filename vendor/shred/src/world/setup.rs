@@ -18,7 +18,7 @@ macro_rules! fetch_panic {
             [^1]: Full type name: `{resource_name_full}`\
             ",
             resource_name_simple = tynm::type_name::<T>(),
-            resource_name_full = std::any::type_name::<T>(),
+            resource_name_full = core::any::type_name::<T>(),
         )
     }};
 }

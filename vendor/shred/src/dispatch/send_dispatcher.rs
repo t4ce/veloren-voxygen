@@ -10,7 +10,7 @@ use crate::{dispatch::stage::Stage, system::RunNow, world::World};
 pub struct SendDispatcher<'a> {
     pub(super) stages: Vec<Stage<'a>>,
     #[cfg(feature = "parallel")]
-    pub(super) thread_pool: ::std::sync::Arc<::std::sync::RwLock<ThreadPoolWrapper>>,
+    pub(super) thread_pool: alloc::sync::Arc<::std::sync::RwLock<ThreadPoolWrapper>>,
 }
 
 impl<'a> SendDispatcher<'a> {

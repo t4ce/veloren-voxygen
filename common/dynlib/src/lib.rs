@@ -185,7 +185,7 @@ pub fn init(
         .unwrap();
 
     // Let the watcher live forever
-    std::mem::forget(watcher);
+    core::mem::forget(watcher);
 
     lib_storage
 }

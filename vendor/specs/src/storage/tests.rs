@@ -1,9 +1,9 @@
-use std::any::Any;
+use core::any::Any;
 
 use super::*;
 use crate::world::{Component, Entity, Generation, Index, WorldExt};
 use shred::World;
-use std::mem::MaybeUninit;
+use core::mem::MaybeUninit;
 
 // Make tests finish in reasonable time with miri
 const ITERATIONS: u32 = if cfg!(miri) { 100 } else { 1000 };
@@ -520,7 +520,7 @@ mod test {
 
     #[test]
     fn vec_arc() {
-        use std::sync::Arc;
+        use alloc::sync::Arc;
 
         #[derive(Debug)]
         struct A(Arc<()>);

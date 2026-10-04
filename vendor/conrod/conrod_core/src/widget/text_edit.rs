@@ -247,7 +247,7 @@ impl<'a> Widget for TextEdit<'a> {
             },
         };
         let line_spacing = self.style.line_spacing(&ui.theme);
-        let height = text::height(std::cmp::max(num_lines, 1), font_size, line_spacing);
+        let height = text::height(core::cmp::max(num_lines, 1), font_size, line_spacing);
         Dimension::Absolute(height)
     }
 
@@ -268,12 +268,12 @@ impl<'a> Widget for TextEdit<'a> {
         // TODO: don't create new String every update
         let hidden_text = hide_text.map(|s| s.repeat(text.chars().count()));
         let display_text = match hidden_text.as_ref() {
-            Some(t) => std::ops::Deref::deref(t),
+            Some(t) => core::ops::Deref::deref(t),
             None => text,
         };
 
-        let mut display_text = std::borrow::Cow::Borrowed(display_text);
-        let mut text = std::borrow::Cow::Borrowed(text);
+        let mut display_text = alloc::borrow::Cow::Borrowed(display_text);
+        let mut text = alloc::borrow::Cow::Borrowed(text);
 
         // Retrieve the `font_id`, as long as a valid `Font` for it still exists.
         //
@@ -318,7 +318,7 @@ impl<'a> Widget for TextEdit<'a> {
                 let font = ui.fonts.get(font_id).unwrap();
                 let new_line_infos = line_infos(&display_text, font, font_size, line_wrap, rect.w());
                 match utils::write_if_different(line_info_slice, new_line_infos) {
-                    std::borrow::Cow::Owned(new) => Some(new),
+                    alloc::borrow::Cow::Owned(new) => Some(new),
                     _ => None,
                 }
             };
@@ -443,7 +443,7 @@ impl<'a> Widget for TextEdit<'a> {
                 let (cursor_start, cursor_end) = match cursor {
                     Cursor::Idx(idx) => (idx, idx),
                     Cursor::Selection { start, end } => {
-                        (std::cmp::min(start, end), std::cmp::max(start, end))
+                        (core::cmp::min(start, end), core::cmp::max(start, end))
                     }
                 };
 
@@ -586,8 +586,8 @@ impl<'a> Widget for TextEdit<'a> {
 
                             if let (Some(start_idx), Some(end_idx)) = (start_idx, end_idx) {
                                 let (start_idx, end_idx) = (
-                                    std::cmp::min(start_idx, end_idx),
-                                    std::cmp::max(start_idx, end_idx),
+                                    core::cmp::min(start_idx, end_idx),
+                                    core::cmp::max(start_idx, end_idx),
                                 );
 
                                 let new_cursor_char_idx = if start_idx > 0 { start_idx } else { 0 };
@@ -683,10 +683,10 @@ impl<'a> Widget for TextEdit<'a> {
                                         let new_cursor_idx = {
                                             let cursor_idx = match key {
                                                 input::Key::Left | input::Key::Up => {
-                                                    std::cmp::min(start, end)
+                                                    core::cmp::min(start, end)
                                                 }
                                                 input::Key::Right | input::Key::Down => {
-                                                    std::cmp::max(start, end)
+                                                    core::cmp::max(start, end)
                                                 }
                                                 _ => unreachable!(),
                                             };
@@ -752,8 +752,8 @@ impl<'a> Widget for TextEdit<'a> {
                                             (start_idx, end_idx)
                                         {
                                             let (start_idx, end_idx) = (
-                                                std::cmp::min(start_idx, end_idx),
-                                                std::cmp::max(start_idx, end_idx),
+                                                core::cmp::min(start_idx, end_idx),
+                                                core::cmp::max(start_idx, end_idx),
                                             );
 
                                             let text_to_copy: String = text
@@ -963,10 +963,10 @@ impl<'a> Widget for TextEdit<'a> {
         }
 
         // Takes the `String` from the `Cow` if the `Cow` is `Owned`.
-        fn take_if_owned(text: std::borrow::Cow<str>) -> Option<String> {
+        fn take_if_owned(text: alloc::borrow::Cow<str>) -> Option<String> {
             match text {
-                std::borrow::Cow::Borrowed(_) => None,
-                std::borrow::Cow::Owned(s) => Some(s),
+                alloc::borrow::Cow::Borrowed(_) => None,
+                alloc::borrow::Cow::Owned(s) => Some(s),
             }
         }
 
@@ -1051,7 +1051,7 @@ impl<'a> Widget for TextEdit<'a> {
         }
 
         if let Cursor::Selection { start, end } = cursor {
-            let (start, end) = (std::cmp::min(start, end), std::cmp::max(start, end));
+            let (start, end) = (core::cmp::min(start, end), core::cmp::max(start, end));
 
             let selected_rects: Vec<Rect> = {
                 let line_infos = &state.line_infos;

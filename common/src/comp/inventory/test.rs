@@ -5,7 +5,7 @@ use crate::comp::{
     item::ItemDefinitionId,
 };
 use lazy_static::lazy_static;
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 lazy_static! {
     static ref TEST_ITEMS: Vec<Item> = vec![Item::new_from_asset_expect(
         "common.items.debug.admin_stick"

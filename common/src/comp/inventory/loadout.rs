@@ -11,7 +11,7 @@ use crate::{
 };
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::ops::Range;
+use core::ops::Range;
 use tracing::warn;
 
 pub(super) const UNEQUIP_TRACKING_DURATION: f64 = 60.0;

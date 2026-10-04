@@ -256,7 +256,7 @@ impl<V, S: VolSize, M> Chunk<V, S, M> {
         let num_groups = self.vox.len() as u32 / Self::GROUP_VOLUME;
         if u32::from(*base) >= num_groups {
             *base = num_groups as u8;
-            self.vox.extend(std::iter::repeat_n(
+            self.vox.extend(core::iter::repeat_n(
                 self.default.clone(),
                 Self::GROUP_VOLUME as usize,
             ));
@@ -384,7 +384,7 @@ impl<V, S: VolSize, M> Iterator for ChunkPosIter<V, S, M> {
         if self.pos.x != self.ub.x && self.pos.x % Chunk::<V, S, M>::GROUP_SIZE.x as i32 != 0 {
             return res;
         }
-        self.pos.x = std::cmp::max(
+        self.pos.x = core::cmp::max(
             self.lb.x,
             (self.pos.x - 1) & !(Chunk::<V, S, M>::GROUP_SIZE.x as i32 - 1),
         );
@@ -393,7 +393,7 @@ impl<V, S: VolSize, M> Iterator for ChunkPosIter<V, S, M> {
         if self.pos.y != self.ub.y && self.pos.y % Chunk::<V, S, M>::GROUP_SIZE.y as i32 != 0 {
             return res;
         }
-        self.pos.y = std::cmp::max(
+        self.pos.y = core::cmp::max(
             self.lb.y,
             (self.pos.y - 1) & !(Chunk::<V, S, M>::GROUP_SIZE.y as i32 - 1),
         );
@@ -402,7 +402,7 @@ impl<V, S: VolSize, M> Iterator for ChunkPosIter<V, S, M> {
         if self.pos.z != self.ub.z && self.pos.z % Chunk::<V, S, M>::GROUP_SIZE.z as i32 != 0 {
             return res;
         }
-        self.pos.z = std::cmp::max(
+        self.pos.z = core::cmp::max(
             self.lb.z,
             (self.pos.z - 1) & !(Chunk::<V, S, M>::GROUP_SIZE.z as i32 - 1),
         );

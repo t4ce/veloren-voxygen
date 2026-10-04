@@ -32,7 +32,7 @@ impl<T> PartialOrd for Id<T> {
 }
 impl<T> fmt::Debug for Id<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Id<{}>({})", std::any::type_name::<T>(), self.0)
+        write!(f, "Id<{}>({})", core::any::type_name::<T>(), self.0)
     }
 }
 impl<T> hash::Hash for Id<T> {

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::ops::{Index, IndexMut};
+use core::ops::{Index, IndexMut};
 use vek::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

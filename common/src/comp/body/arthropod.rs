@@ -96,7 +96,7 @@ impl<'a, SpeciesMeta> core::ops::Index<&'a Species> for AllSpecies<SpeciesMeta> 
 pub const ALL_SPECIES: [Species; Species::NUM_KINDS] = Species::ALL;
 
 impl<'a, SpeciesMeta: 'a> IntoIterator for &'a AllSpecies<SpeciesMeta> {
-    type IntoIter = std::iter::Copied<std::slice::Iter<'static, Self::Item>>;
+    type IntoIter = core::iter::Copied<core::slice::Iter<'static, Self::Item>>;
     type Item = Species;
 
     fn into_iter(self) -> Self::IntoIter { ALL_SPECIES.iter().copied() }

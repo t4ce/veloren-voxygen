@@ -4,7 +4,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage};
-use std::time::Duration;
+use core::time::Duration;
 
 use super::ability::Dodgeable;
 
@@ -34,7 +34,7 @@ impl Component for Shockwave {
     type Storage = DerefFlaggedStorage<Self, specs::DenseVecStorage<Self>>;
 }
 
-impl std::ops::Deref for Shockwave {
+impl core::ops::Deref for Shockwave {
     type Target = Properties;
 
     fn deref(&self) -> &Properties { &self.properties }

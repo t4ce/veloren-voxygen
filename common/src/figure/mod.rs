@@ -174,8 +174,8 @@ impl<V: FilledVox + Copy> DynaUnionizer<V> {
         let mut max_point = self.0[0].1 + self.0[0].0.size().map(|e| e as i32);
         for (dyna, offset) in self.0.iter().skip(1) {
             let size = dyna.size().map(|e| e as i32);
-            min_point = min_point.map2(*offset, std::cmp::min);
-            max_point = max_point.map2(offset + size, std::cmp::max);
+            min_point = min_point.map2(*offset, core::cmp::min);
+            max_point = max_point.map2(offset + size, core::cmp::max);
         }
         let new_size = (max_point - min_point).map(|e| e as u32);
         // Allocate new segment

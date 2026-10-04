@@ -2,7 +2,7 @@
 
 use Ui;
 use position::{Align, Point, Padding, Range, Rect, Scalar};
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 
 /// Arguments given via a scrollable `Widget`'s builder methods for the scrolling along a single

@@ -87,7 +87,7 @@ impl PluginWrapper {
         mode: common::resources::GameMode,
     ) -> wasmtime::Result<()>
     where
-        <S as wasmtime::AsContext>::Data: std::marker::Send,
+        <S as wasmtime::AsContext>::Data: core::marker::Send,
     {
         let mode = match mode {
             common::resources::GameMode::Server => types::GameMode::Server,
@@ -109,7 +109,7 @@ impl PluginWrapper {
         player: types::Uid,
     ) -> wasmtime::Result<Result<Vec<String>, String>>
     where
-        <S as wasmtime::AsContext>::Data: std::marker::Send,
+        <S as wasmtime::AsContext>::Data: core::marker::Send,
     {
         match self {
             PluginWrapper::Full(pl) => pl

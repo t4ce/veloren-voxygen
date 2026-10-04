@@ -166,7 +166,7 @@ impl Dir {
     }
 }
 
-impl std::ops::Deref for Dir {
+impl core::ops::Deref for Dir {
     type Target = Vec3<f32>;
 
     fn deref(&self) -> &Vec3<f32> { &self.0 }
@@ -193,13 +193,13 @@ impl Projection<Dir> for Vec3<f32> {
     }
 }
 
-impl std::ops::Mul<Dir> for Quaternion<f32> {
+impl core::ops::Mul<Dir> for Quaternion<f32> {
     type Output = Dir;
 
     fn mul(self, dir: Dir) -> Self::Output { Dir((self * *dir).normalized()) }
 }
 
-impl std::ops::Neg for Dir {
+impl core::ops::Neg for Dir {
     type Output = Dir;
 
     fn neg(self) -> Dir { Dir::new(-self.0) }

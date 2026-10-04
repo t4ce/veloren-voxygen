@@ -633,7 +633,7 @@ impl State {
         );
         let mut terrain = self.ecs.write_resource::<TerrainGrid>();
         let mut modified_blocks =
-            std::mem::take(&mut self.ecs.write_resource::<BlockChange>().blocks);
+            core::mem::take(&mut self.ecs.write_resource::<BlockChange>().blocks);
 
         let mut scheduled_changes = self.ecs.write_resource::<ScheduledBlockChange>();
         let current_time: f64 = self.ecs.read_resource::<Time>().0 * SECONDS_TO_MILLISECONDS;
@@ -972,10 +972,10 @@ mod shutdown_tests {
             let _pool = pool;
             let _task_drop = task_drop;
             ready.send(()).unwrap();
-            std::future::pending::<()>().await;
+            core::future::pending::<()>().await;
         });
         entered
-            .recv_timeout(std::time::Duration::from_secs(5))
+            .recv_timeout(core::time::Duration::from_secs(5))
             .unwrap();
         drop(runtime);
         assert_eq!(dropped.load(Ordering::Acquire), 1);

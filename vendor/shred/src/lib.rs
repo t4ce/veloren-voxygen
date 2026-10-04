@@ -86,6 +86,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(missing_docs)]
 
+extern crate alloc;
 /// Re-exports from [`atomic_refcell`]
 ///
 /// Mainly for internals, most users don't need to interact with this.

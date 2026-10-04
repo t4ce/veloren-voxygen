@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 /// A cloneable display handle for use with [`wgpu::InstanceDescriptor`].
 ///

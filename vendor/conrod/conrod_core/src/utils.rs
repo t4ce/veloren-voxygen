@@ -5,8 +5,8 @@
 
 use num_traits::{Float, NumCast, PrimInt, ToPrimitive};
 use position::{Point, Range, Rect};
-use std::borrow::Cow;
-use std::iter::{Chain, once, Once};
+use alloc::borrow::Cow;
+use core::iter::{Chain, once, Once};
 use std;
 
 
@@ -126,14 +126,14 @@ pub fn val_to_string<T: ToString + NumCast>
 
 /// Add `a` and `b`.
 pub fn vec2_add<T>(a: [T; 2], b: [T; 2]) -> [T; 2]
-    where T: std::ops::Add<Output=T> + Copy,
+    where T: core::ops::Add<Output=T> + Copy,
 {
     [a[0] + b[0], a[1] + b[1]]
 }
 
 /// Subtract `b` from `a`.
 pub fn vec2_sub<T>(a: [T; 2], b: [T; 2]) -> [T; 2]
-    where T: std::ops::Sub<Output=T> + Copy,
+    where T: core::ops::Sub<Output=T> + Copy,
 {
     [a[0] - b[0], a[1] - b[1]]
 }

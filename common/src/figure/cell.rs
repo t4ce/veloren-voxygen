@@ -76,8 +76,8 @@ pub struct Cell {
     col: Rgb<u8>,
 }
 
-const _: () = assert!(4 == std::mem::size_of::<Cell>());
-const _: () = assert!(1 == std::mem::align_of::<Cell>());
+const _: () = assert!(4 == core::mem::size_of::<Cell>());
+const _: () = assert!(1 == core::mem::align_of::<Cell>());
 
 impl Cell {
     #[inline]

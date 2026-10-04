@@ -12,7 +12,7 @@ use crate::{
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
+use core::ops::Deref;
 use strum::{Display, EnumIter, EnumString};
 use vek::*;
 
@@ -143,8 +143,8 @@ pub struct Block {
     data: [u8; 3],
 }
 
-impl std::fmt::Debug for Block {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Block {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut s = f.debug_struct("Block");
 
         s.field("kind", &self.kind);

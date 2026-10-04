@@ -437,7 +437,7 @@ impl<T: AsRef<str>> LootSpec<T> {
 
 #[cfg(test)]
 pub mod tests {
-    use std::borrow::Borrow;
+    use core::borrow::Borrow;
 
     use super::*;
     use crate::{assets, comp::Item};

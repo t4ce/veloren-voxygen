@@ -35,7 +35,7 @@ pub struct List<D, S> {
     /// Whether all or only visible items should be instantiated.
     pub item_instantiation: ItemInstantiation,
     num_items: usize,
-    direction: std::marker::PhantomData<D>,
+    direction: core::marker::PhantomData<D>,
     item_size: S,
 }
 
@@ -162,7 +162,7 @@ pub struct Item<D, S> {
     /// `Rectangle`. This field is used for positioning the item's widget.
     first_item_margin: Scalar,
     /// The direction in which the items are laid out.
-    direction: std::marker::PhantomData<D>,
+    direction: core::marker::PhantomData<D>,
 }
 
 /// The way in which a `List` should instantiate its `Item`s.
@@ -191,7 +191,7 @@ pub struct Scrollbar<A> {
 
 /// An `Iterator` yielding each `Item` in the list.
 pub struct Items<D, S> {
-    item_indices: std::ops::Range<usize>,
+    item_indices: core::ops::Range<usize>,
     next_item_indices_index: usize,
     list_id: widget::Id,
     last_id: Option<widget::Id>,
@@ -199,7 +199,7 @@ pub struct Items<D, S> {
     first_item_margin: Scalar,
     item_breadth: Scalar,
     item_size: S,
-    direction: std::marker::PhantomData<D>,
+    direction: core::marker::PhantomData<D>,
 }
 
 
@@ -252,7 +252,7 @@ impl<D, S> List<D, S>
             num_items: num_items,
             item_instantiation: ItemInstantiation::All,
             item_size: item_size,
-            direction: std::marker::PhantomData,
+            direction: core::marker::PhantomData,
         }.crop_kids()
     }
 
@@ -267,7 +267,7 @@ impl<D, S> List<D, S>
             num_items: num_items,
             item_instantiation: ItemInstantiation::OnlyVisible,
             item_size: Fixed { length: length },
-            direction: std::marker::PhantomData,
+            direction: core::marker::PhantomData,
         }
     }
 }
@@ -399,7 +399,7 @@ impl<D, S> Items<D, S>
                     breadth: item_breadth,
                     size: item_size,
                     first_item_margin: first_item_margin,
-                    direction: std::marker::PhantomData,
+                    direction: core::marker::PhantomData,
                 };
                 *last_id = Some(node_index);
                 Some(item)
@@ -576,7 +576,7 @@ impl ItemSize for Fixed {
                 let num_start_hidden_items = hidden_range_length / item_size.length;
                 let num_visible_items = list_length / item_size.length;
                 let first_visible_item_idx = num_start_hidden_items.floor() as usize;
-                let end_visible_item_idx = std::cmp::min(
+                let end_visible_item_idx = core::cmp::min(
                     (num_start_hidden_items + num_visible_items).ceil() as usize,
                     num_items,
                 );
@@ -600,7 +600,7 @@ impl ItemSize for Fixed {
             last_id: None,
             scroll_trigger_id: state.ids.scroll_trigger,
             item_breadth: item_breadth,
-            direction: std::marker::PhantomData,
+            direction: core::marker::PhantomData,
             first_item_margin: first_item_margin,
             item_size: item_size,
         };
@@ -678,7 +678,7 @@ impl ItemSize for Dynamic {
             last_id: None,
             scroll_trigger_id: id,
             item_breadth: item_breadth,
-            direction: std::marker::PhantomData,
+            direction: core::marker::PhantomData,
             first_item_margin: first_item_margin,
             item_size: item_size,
         };

@@ -16,7 +16,7 @@ pub struct Scrollbar<A> {
     common: widget::CommonBuilder,
     style: Style,
     widget: widget::Id,
-    axis: std::marker::PhantomData<A>,
+    axis: core::marker::PhantomData<A>,
 }
 
 /// The axis that is scrolled by the `Scrollbar`.
@@ -75,7 +75,7 @@ impl<A> Scrollbar<A> {
             common: widget::CommonBuilder::default(),
             style: Style::default(),
             widget: widget,
-            axis: std::marker::PhantomData,
+            axis: core::marker::PhantomData,
         }
     }
 

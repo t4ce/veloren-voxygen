@@ -87,7 +87,7 @@ fn copy_overlapping(offset: usize, match_len: usize, prefix: &[u8], output: &mut
             if prefix_needed > prefix.len() {
                 return Err(Error::InvalidDeduplicationOffset);
             }
-            let how_many_bytes_from_prefix = std::cmp::min(prefix_needed, match_len);
+            let how_many_bytes_from_prefix = core::cmp::min(prefix_needed, match_len);
             output.extend_from_slice(
                 &prefix[prefix.len() - prefix_needed..][..how_many_bytes_from_prefix],
             );

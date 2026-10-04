@@ -6,7 +6,7 @@ pub mod site;
 pub mod sprite;
 pub mod structure;
 
-use std::ops::{Add, Mul};
+use core::ops::{Add, Mul};
 
 // Reexports
 pub use self::{

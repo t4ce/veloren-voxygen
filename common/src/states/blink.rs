@@ -7,7 +7,7 @@ use crate::{
     },
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use core::time::Duration;
 
 /// Separated out to condense update portions of character state
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]

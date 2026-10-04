@@ -200,7 +200,7 @@ impl<
 {
     const EXTENSION: &'static str = "ron";
 
-    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Result<Self, BoxedError> { load_ron(&bytes) }
+    fn from_bytes(bytes: alloc::borrow::Cow<[u8]>) -> Result<Self, BoxedError> { load_ron(&bytes) }
 }
 
 /// Semantic gender aka body_type

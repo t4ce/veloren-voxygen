@@ -121,7 +121,7 @@ enum Error {
     NoCommonBuilderField,
 }
 
-impl std::error::Error for Error {
+impl core::error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::NotStruct =>
@@ -142,8 +142,8 @@ impl std::error::Error for Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", std::error::Error::description(self))
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{}", core::error::Error::description(self))
     }
 }

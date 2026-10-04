@@ -1,7 +1,7 @@
 use std::mem;
 use std::cmp;
 use std::io::Write;
-use std::convert::{TryInto, TryFrom};
+use core::convert::{TryInto, TryFrom};
 use byteorder::{ByteOrder, NativeEndian, WriteBytesExt, LE};
 use culpa::{throws};
 

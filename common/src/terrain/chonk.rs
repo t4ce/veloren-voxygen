@@ -244,7 +244,7 @@ impl<V: Clone + PartialEq, S: RectVolSize, M: Clone> WriteVol for Chonk<V, S, M>
             // Prepend exactly sufficiently many SubChunks via Vec::splice
             let c = Chunk::<V, SubChunkSize<S>, M>::filled(self.below.clone(), self.meta.clone());
             let n = (-sub_chunk_idx) as usize;
-            self.sub_chunks.splice(0..0, std::iter::repeat_n(c, n));
+            self.sub_chunks.splice(0..0, core::iter::repeat_n(c, n));
             self.z_offset += sub_chunk_idx * SubChunkSize::<S>::SIZE.z as i32;
             sub_chunk_idx = 0;
         } else if pos.z >= self.get_max_z() {
@@ -255,7 +255,7 @@ impl<V: Clone + PartialEq, S: RectVolSize, M: Clone> WriteVol for Chonk<V, S, M>
             // Append exactly sufficiently many SubChunks via Vec::extend
             let c = Chunk::<V, SubChunkSize<S>, M>::filled(self.above.clone(), self.meta.clone());
             let n = 1 + sub_chunk_idx as usize - self.sub_chunks.len();
-            self.sub_chunks.extend(std::iter::repeat_n(c, n));
+            self.sub_chunks.extend(core::iter::repeat_n(c, n));
         }
 
         let rpos = pos
@@ -286,7 +286,7 @@ impl<V, S: RectVolSize, M: Clone> Iterator for ChonkIterHelper<V, S, M> {
         let current_min_z = self.sub_chunk_min_z;
         lb.z -= current_min_z;
         ub.z -= current_min_z;
-        ub.z = std::cmp::min(ub.z, SubChunkSize::<S>::SIZE.z as i32);
+        ub.z = core::cmp::min(ub.z, SubChunkSize::<S>::SIZE.z as i32);
         self.sub_chunk_min_z += SubChunkSize::<S>::SIZE.z as i32;
         self.lower_bound.z = self.sub_chunk_min_z;
         Some((current_min_z, lb, ub))

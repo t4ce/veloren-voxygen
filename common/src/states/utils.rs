@@ -2038,7 +2038,7 @@ impl ProjectileSpread {
                 }),
             ),
             Self::Horizontal(spread) => Either::Right(if num < 2 {
-                Either::Left(std::iter::once(init_dir))
+                Either::Left(core::iter::once(init_dir))
             } else {
                 let left = -spread.to_radians();
                 let increment = spread.to_radians() * 2.0 / (num as f32 - 1.0);

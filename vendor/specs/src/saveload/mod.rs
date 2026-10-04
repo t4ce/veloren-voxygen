@@ -23,7 +23,7 @@
 //! of these ids is what `MarkerAllocator`s are responsible for. For an example,
 //! see the docs for the `Marker` trait.
 
-use std::convert::Infallible;
+use core::convert::Infallible;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 

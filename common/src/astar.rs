@@ -5,7 +5,7 @@ use core::{
     hash::{BuildHasher, Hash},
 };
 use hashbrown::HashMap;
-use std::collections::BinaryHeap;
+use alloc::collections::BinaryHeap;
 
 #[derive(Copy, Clone, Debug)]
 pub struct PathEntry<S> {

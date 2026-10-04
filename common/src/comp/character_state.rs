@@ -749,7 +749,7 @@ impl CharacterState {
     /// Compares for shallow equality (does not check internal struct equality)
     pub fn same_variant(&self, other: &Self) -> bool {
         // Check if state is the same without looking at the inner data
-        std::mem::discriminant(self) == std::mem::discriminant(other)
+        core::mem::discriminant(self) == core::mem::discriminant(other)
     }
 
     pub fn behavior(&self, j: &JoinData, output_events: &mut OutputEvents) -> StateUpdate {

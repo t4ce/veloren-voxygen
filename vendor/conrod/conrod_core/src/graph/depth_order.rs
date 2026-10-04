@@ -76,7 +76,7 @@ impl DepthOrder {
                 let b_floating = b.maybe_floating.expect("Not floating");
                 a_floating.time_last_clicked.cmp(&b_floating.time_last_clicked)
             },
-            _ => std::cmp::Ordering::Equal,
+            _ => core::cmp::Ordering::Equal,
         });
 
         // Visit all of the floating widgets last.
@@ -110,7 +110,7 @@ fn visit_by_depth(graph: &Graph,
     let mut child_sorter: Vec<widget::Id> = graph.depth_children(idx).iter(&graph).nodes().collect();
 
     child_sorter.sort_by(|&a, &b| {
-        use std::cmp::Ordering;
+        use core::cmp::Ordering;
 
         if let (&Node::Widget(ref a), &Node::Widget(ref b)) = (&graph[a], &graph[b]) {
             match b.depth.partial_cmp(&a.depth).expect("Depth was NaN!") {

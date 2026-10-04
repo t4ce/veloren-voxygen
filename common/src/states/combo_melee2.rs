@@ -14,7 +14,7 @@ use crate::{
     },
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use core::time::Duration;
 use vek::*;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

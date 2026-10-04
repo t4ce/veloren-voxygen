@@ -1,8 +1,8 @@
 use byteorder::{LE, ReadBytesExt};
-use std::hash::Hasher;
+use core::hash::Hasher;
 use std::io::{self, Read, BufRead, ErrorKind};
 use std::cmp;
-use std::convert::TryInto;
+use core::convert::TryInto;
 use twox_hash::XxHash32;
 use thiserror::Error;
 use culpa::{throw, throws};

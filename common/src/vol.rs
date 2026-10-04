@@ -1,5 +1,5 @@
 use crate::{ray::Ray, volumes::scaled::Scaled};
-use std::fmt::Debug;
+use core::fmt::Debug;
 use vek::*;
 
 /// Used to specify a volume's compile-time size. This exists as a substitute

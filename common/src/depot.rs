@@ -22,7 +22,7 @@ impl<T> fmt::Debug for Id<T> {
         write!(
             f,
             "Id<{}>({}, {})",
-            std::any::type_name::<T>(),
+            core::any::type_name::<T>(),
             self.idx,
             self.generation
         )

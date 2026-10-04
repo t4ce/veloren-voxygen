@@ -299,7 +299,7 @@ pub struct CommonState {
 #[allow(missing_copy_implementations)]
 pub struct PreUpdateCache {
     /// The **Widget**'s unique type identifier.
-    pub type_id: std::any::TypeId,
+    pub type_id: core::any::TypeId,
     /// The **Widget**'s unique Id.
     pub id: Id,
     /// The **Widget**'s parent's unique index (if it has a parent).
@@ -384,10 +384,10 @@ pub fn is_over_rect(container: &Container, point: Point, _: &Theme) -> IsOver {
 }
 
 /// The necessary bounds for a **Widget**'s associated **Style** type.
-pub trait Style: std::any::Any + std::fmt::Debug + PartialEq + Sized {}
+pub trait Style: core::any::Any + core::fmt::Debug + PartialEq + Sized {}
 
 /// Auto-implement the **Style** trait for all applicable types.
-impl<T> Style for T where T: std::any::Any + std::fmt::Debug + PartialEq + Sized {}
+impl<T> Style for T where T: core::any::Any + core::fmt::Debug + PartialEq + Sized {}
 
 
 /// Determines the default **Dimension** for a **Widget**.
@@ -515,7 +515,7 @@ pub trait Widget: Common + Sized {
     /// calls to `update`.
     ///
     /// Conrod will never clone the state, it will only ever be moved.
-    type State: std::any::Any + Send;
+    type State: core::any::Any + Send;
     /// Every widget is required to have its own associated `Style` type. This type is intended to
     /// contain high-level styling information for the widget that can be *optionally specified* by
     /// a user of the widget.
@@ -887,7 +887,7 @@ pub trait Widget: Common + Sized {
 fn set_widget<'a, 'b, W>(widget: W, id: Id, ui: &'a mut UiCell<'b>) -> W::Event
     where W: Widget,
 {
-    let type_id = std::any::TypeId::of::<W::State>();
+    let type_id = core::any::TypeId::of::<W::State>();
 
     // Take the previous state of the widget from the cache if there is some to collect.
     let (maybe_prev_unique_state, maybe_prev_common, maybe_prev_style) =
@@ -1227,7 +1227,7 @@ impl<'a, T> State<'a, T> {
 
 }
 
-impl<'a, T> std::ops::Deref for State<'a, T> {
+impl<'a, T> core::ops::Deref for State<'a, T> {
     type Target = T;
     fn deref(&self) -> &T {
         &self.state

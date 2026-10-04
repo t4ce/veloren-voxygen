@@ -45,8 +45,8 @@ mod implementation {
             }
         }
     }
-    impl std::fmt::Debug for ThreadPool {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    impl core::fmt::Debug for ThreadPool {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             f.debug_struct("TokioParallelExecutor")
                 .field("workers", &self.current_num_threads())
                 .finish()
@@ -55,8 +55,8 @@ mod implementation {
     thread_local! { static CURRENT: RefCell<Option<ThreadPool>> = const { RefCell::new(None) }; }
     #[cfg(target_os = "trueos")]
     thread_local! {
-        static LAST_CARRIER_TURN: std::cell::Cell<Option<std::time::Instant>> = const {
-            std::cell::Cell::new(None)
+        static LAST_CARRIER_TURN: core::cell::Cell<Option<std::time::Instant>> = const {
+            core::cell::Cell::new(None)
         };
     }
 
@@ -71,7 +71,7 @@ mod implementation {
         {
             let now = std::time::Instant::now();
             let yield_turn = LAST_CARRIER_TURN.with(|last| match last.get() {
-                Some(previous) => now.duration_since(previous) >= std::time::Duration::from_millis(10),
+                Some(previous) => now.duration_since(previous) >= core::time::Duration::from_millis(10),
                 None => { last.set(Some(now)); false },
             });
             if yield_turn {
@@ -204,10 +204,10 @@ mod implementation {
     #[derive(Debug)]
     /// Failure to create a standalone Tokio runtime.
     pub struct ThreadPoolBuildError(std::io::Error);
-    impl std::fmt::Display for ThreadPoolBuildError {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.0.fmt(f) }
+    impl core::fmt::Display for ThreadPoolBuildError {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { self.0.fmt(f) }
     }
-    impl std::error::Error for ThreadPoolBuildError {}
+    impl core::error::Error for ThreadPoolBuildError {}
     impl ThreadPoolBuilder {
         /// Construct a builder with Tokio defaults.
         pub fn new() -> Self { Self::default() }
@@ -263,7 +263,7 @@ mod implementation {
         /// publishing completion.
         unsafe fn borrowed<'a>(work: Work<'a>) -> Arc<Self> {
             // Only the lifetime of the closure is erased; its Send bound is retained.
-            let work: Work<'static> = unsafe { std::mem::transmute(work) };
+            let work: Work<'static> = unsafe { core::mem::transmute(work) };
             Arc::new(Self {
                 state: Mutex::new(JobState {
                     work: Some(work),

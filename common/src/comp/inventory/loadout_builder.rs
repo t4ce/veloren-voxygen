@@ -1451,7 +1451,7 @@ mod tests {
     #[test]
     fn test_loadout_species() {
         for body in Body::iter() {
-            std::mem::drop(LoadoutBuilder::from_default(&body))
+            core::mem::drop(LoadoutBuilder::from_default(&body))
         }
     }
 

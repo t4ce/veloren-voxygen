@@ -215,7 +215,7 @@ impl Circumference {
     /// `resolution` is clamped to a minimum of `1` as to avoid creating a `Circumference` that
     /// produces `NaN` values.
     pub fn new(rect: Rect, mut resolution: usize) -> Self {
-        resolution = std::cmp::max(resolution, 1);
+        resolution = core::cmp::max(resolution, 1);
         use std::f64::consts::PI;
         let radians = 2.0 * PI;
         Self::new_section(rect, resolution, radians)

@@ -257,7 +257,7 @@ impl<'a, E> Widget for EnvelopeEditor<'a, E>
             ..
         } = self;
 
-        let mut env = std::borrow::Cow::Borrowed(env);
+        let mut env = alloc::borrow::Cow::Borrowed(env);
 
         let point_radius = style.point_radius(ui.theme());
         let border = style.border(ui.theme());

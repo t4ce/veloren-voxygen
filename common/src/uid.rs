@@ -89,7 +89,7 @@ impl IdMaps {
         cid: Option<CharacterId>,
         rid: Option<rtsim::ActorId>,
     ) -> Option<Entity> {
-        use std::fmt::Debug;
+        use core::fmt::Debug;
         #[cold]
         #[inline(never)]
         fn unexpected_entity<ID>() {
@@ -103,7 +103,7 @@ impl IdMaps {
             let kind = core::any::type_name::<ID>();
             error!(
                 "Provided {kind} {id:?} was not mapped to any entity! Caller: {}",
-                std::panic::Location::caller()
+                core::panic::Location::caller()
             );
         }
 

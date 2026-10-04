@@ -29,7 +29,7 @@ where
 
         // let ideal_search_size = Vec3::<f32>::one() / self.scale;
         let range_iter = |i: usize| {
-            std::iter::successors(Some(0), |p| Some(if *p < 0 { -*p } else { -(*p + 1) }))
+            core::iter::successors(Some(0), |p| Some(if *p < 0 { -*p } else { -(*p + 1) }))
                 .take_while(move |p| {
                     (min_pos[i]..max_pos[i])
                     /* ((ideal_pos[i] - ideal_search_size[i] / 2.0).ceil() as i32

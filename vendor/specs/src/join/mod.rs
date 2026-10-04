@@ -2,7 +2,7 @@
 
 use hibitset::{BitIter, BitSetLike};
 use shred::{Fetch, FetchMut, Read, ReadExpect, Resource, Write, WriteExpect};
-use std::ops::{Deref, DerefMut};
+use core::ops::{Deref, DerefMut};
 
 use crate::world::Index;
 
@@ -171,7 +171,7 @@ impl<J: Join> JoinIter<J> {
     }
 }
 
-impl<J: Join> std::iter::Iterator for JoinIter<J> {
+impl<J: Join> core::iter::Iterator for JoinIter<J> {
     type Item = J::Type;
 
     fn next(&mut self) -> Option<J::Type> {

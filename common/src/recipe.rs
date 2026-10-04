@@ -319,7 +319,7 @@ pub fn try_salvage(
         let salvage_output: Vec<_> = salvage_item
             .salvage_output()
             .flat_map(|(material, quantity)| {
-                std::iter::repeat_n(Item::new_from_asset_expect(material), quantity as usize)
+                core::iter::repeat_n(Item::new_from_asset_expect(material), quantity as usize)
             })
             .collect();
         if salvage_output.is_empty() {
@@ -742,7 +742,7 @@ impl ComponentRecipe {
 pub struct ComponentRecipeInputsIterator<'a> {
     material: Option<&'a (RecipeInput, u32)>,
     modifier: Option<&'a (RecipeInput, u32)>,
-    additional_inputs: std::slice::Iter<'a, (RecipeInput, u32)>,
+    additional_inputs: core::slice::Iter<'a, (RecipeInput, u32)>,
 }
 
 impl<'a> Iterator for ComponentRecipeInputsIterator<'a> {

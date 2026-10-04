@@ -19,7 +19,7 @@ use crate::{
 use common_base::dev_panic;
 use serde::{Deserialize, Serialize};
 use specs::Component;
-use std::time::Duration;
+use core::time::Duration;
 use vek::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -187,6 +187,7 @@
 //!
 //! See the repository's examples directory for more examples.
 
+extern crate alloc;
 pub extern crate hibitset;
 #[cfg(feature = "parallel")]
 pub extern crate tokio_parallel;

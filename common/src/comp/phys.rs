@@ -9,7 +9,7 @@ use crate::{
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage, NullStorage, VecStorage};
-use std::sync::Arc;
+use alloc::sync::Arc;
 use vek::*;
 
 /// Position
@@ -205,7 +205,7 @@ pub struct PhysicsState {
 impl PhysicsState {
     pub fn reset(&mut self) {
         // Avoid allocation overhead!
-        let mut touch_entities = std::mem::take(&mut self.touch_entities);
+        let mut touch_entities = core::mem::take(&mut self.touch_entities);
         touch_entities.clear();
         *self = Self {
             touch_entities,

@@ -84,7 +84,7 @@ impl CpuTimeline {
     /// this statement, till the next / end of the System.
     pub fn measure(&mut self, par: ParMode) { self.measures.push((Instant::now(), par)); }
 
-    fn end(&mut self) -> std::time::Duration {
+    fn end(&mut self) -> core::time::Duration {
         let end = Instant::now();
         self.measures.push((end, ParMode::None));
         end.duration_since(
@@ -309,7 +309,7 @@ where
 mod tests {
     use super::*;
     use float_cmp::approx_eq;
-    use std::time::Duration;
+    use core::time::Duration;
 
     fn mock_timelines(
         tick_start: Instant,

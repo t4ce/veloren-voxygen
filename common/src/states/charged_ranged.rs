@@ -13,7 +13,7 @@ use crate::{
 use itertools::Either;
 use rand::rng;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use core::time::Duration;
 
 /// Separated out to condense update portions of character state
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

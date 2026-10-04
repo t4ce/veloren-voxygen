@@ -1,5 +1,5 @@
-use std::iter::{FromIterator, IntoIterator};
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
+use core::iter::{FromIterator, IntoIterator};
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use std::usize;
 
 use util::*;
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn or_assign() {
         use std::collections::HashSet;
-        use std::mem::size_of;
+        use core::mem::size_of;
 
         let usize_bits = size_of::<usize>() as u32 * 8;
         let n = 10_000;
@@ -474,7 +474,7 @@ mod tests {
     #[test]
     fn and_assign() {
         use std::collections::HashSet;
-        use std::mem::size_of;
+        use core::mem::size_of;
 
         let usize_bits = size_of::<usize>() as u32 * 8;
         let n = 10_000;
@@ -571,7 +571,7 @@ mod tests {
     #[test]
     fn xor_assign() {
         use std::collections::HashSet;
-        use std::mem::size_of;
+        use core::mem::size_of;
 
         let usize_bits = size_of::<usize>() as u32 * 8;
         let n = 10_000;

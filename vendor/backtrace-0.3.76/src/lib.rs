@@ -138,7 +138,7 @@ cfg_if::cfg_if! {
 
 #[cfg(feature = "std")]
 mod lock {
-    use std::cell::Cell;
+    use core::cell::Cell;
     use std::sync::{Mutex, MutexGuard};
 
     /// A "Maybe" LockGuard

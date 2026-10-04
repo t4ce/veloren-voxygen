@@ -1,9 +1,9 @@
-use std::default::Default;
-use std::fmt::{Debug, Error as FormatError, Formatter};
-use std::iter::repeat;
-use std::marker::PhantomData;
+use core::default::Default;
+use core::fmt::{Debug, Error as FormatError, Formatter};
+use core::iter::repeat;
+use core::marker::PhantomData;
 use std::ptr;
-use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 use util::*;
 use {BitSetLike, DrainableBitSet};
@@ -63,7 +63,7 @@ impl AtomicBitSet {
     /// already in the set.
     #[inline]
     pub fn add(&mut self, id: Index) -> bool {
-        use std::sync::atomic::Ordering::Relaxed;
+        use core::sync::atomic::Ordering::Relaxed;
 
         let (_, p1, p2) = offsets(id);
         if self.layer1[p1].add(id) {
@@ -81,7 +81,7 @@ impl AtomicBitSet {
     /// to begin with.
     #[inline]
     pub fn remove(&mut self, id: Index) -> bool {
-        use std::sync::atomic::Ordering::Relaxed;
+        use core::sync::atomic::Ordering::Relaxed;
         let (_, p1, p2) = offsets(id);
 
         // if the bitmask was set we need to clear

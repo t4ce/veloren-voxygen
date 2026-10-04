@@ -464,7 +464,7 @@ fn comparisons() {
 
 #[test]
 fn iter_comparisons() {
-    use std::iter::empty;
+    use core::iter::empty;
 
     fn check<'a, I1, I2>(iter1: I1, iter2: I2)
     where

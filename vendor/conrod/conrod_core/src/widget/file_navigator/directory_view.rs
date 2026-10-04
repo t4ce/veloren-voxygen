@@ -18,7 +18,7 @@ use {
 use event;
 use std;
 use widget;
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 /// For viewing, selecting, double-clicking, etc the contents of a directory.
 #[derive(WidgetCommon_)]

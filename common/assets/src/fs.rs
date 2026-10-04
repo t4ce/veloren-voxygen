@@ -46,7 +46,7 @@ impl FileSystem {
                 )
             })?;
 
-            let canary = std::str::from_utf8(canary.as_ref())
+            let canary = core::str::from_utf8(canary.as_ref())
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             canary.starts_with("VELOREN_CANARY_MAGIC")
         };
@@ -227,7 +227,7 @@ mod tests {
         }
 
         pub(super) fn read_to_str(&self, id: &str, ext: &str) -> String {
-            std::str::from_utf8(self.read(id, ext).unwrap().as_ref())
+            core::str::from_utf8(self.read(id, ext).unwrap().as_ref())
                 .unwrap()
                 .to_owned()
         }
@@ -458,7 +458,7 @@ mod integration {
     use assets_manager::{Asset, AssetCache, BoxedError, FileAsset, SharedString};
     use hashbrown::HashSet;
     use serde::Deserialize;
-    use std::borrow::Cow;
+    use alloc::borrow::Cow;
 
     #[derive(Deserialize, Clone, Debug, PartialEq)]
     struct WowManifest {

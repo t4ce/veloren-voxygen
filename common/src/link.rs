@@ -145,8 +145,8 @@ pub struct DynWeakLinkHandle {
     inner: InnerDynWeakLinkHandle,
 }
 
-impl std::fmt::Debug for DynWeakLinkHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for DynWeakLinkHandle {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_tuple("DynWeakLinkHandle")
             .field(&self.exists())
             .finish()
@@ -159,6 +159,6 @@ impl DynWeakLinkHandle {
 
     /// If this is the same link as `link`.
     pub fn is_link(&self, link: &LinkHandle<impl Link>) -> bool {
-        std::ptr::addr_eq(self.inner.0.as_ptr(), Arc::as_ptr(&link.link))
+        core::ptr::addr_eq(self.inner.0.as_ptr(), Arc::as_ptr(&link.link))
     }
 }

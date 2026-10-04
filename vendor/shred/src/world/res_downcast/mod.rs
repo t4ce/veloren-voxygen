@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::any::TypeId;
+use core::any::TypeId;
 
 use crate::Resource;
 

@@ -7,7 +7,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use specs::{Component, FlaggedStorage, VecStorage};
-use std::time::Duration;
+use core::time::Duration;
 use vek::Vec3;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

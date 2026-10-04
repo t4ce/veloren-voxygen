@@ -32,7 +32,7 @@ fn compute_hash(data: &[u8]) -> PluginHash {
     let shasum = sha2::Sha256::digest(data);
     let mut shasum_iter = shasum.iter();
     // a newer generic-array supports into_array ...
-    let shasum: PluginHash = std::array::from_fn(|_| *shasum_iter.next().unwrap());
+    let shasum: PluginHash = core::array::from_fn(|_| *shasum_iter.next().unwrap());
     shasum
 }
 
@@ -99,7 +99,7 @@ impl Plugin {
             .map_err(PluginError::Io)?;
 
         let data = toml::de::from_str::<PluginData>(
-            std::str::from_utf8(
+            core::str::from_utf8(
                 files
                     .get(Path::new("plugin.toml"))
                     .ok_or(PluginError::NoConfig)?,

@@ -8,7 +8,7 @@ use crate::{
     states::behavior::{CharacterBehavior, JoinData},
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use core::time::Duration;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParryWindow {

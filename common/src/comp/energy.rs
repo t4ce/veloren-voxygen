@@ -1,7 +1,7 @@
 use crate::comp;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage};
-use std::ops::Mul;
+use core::ops::Mul;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 /// Energy is represented by u32s within the module, but treated as a float by

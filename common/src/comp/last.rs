@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use specs::{Component, VecStorage};
-use std::marker::Send;
+use core::marker::Send;
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct Last<C: Component + PartialEq>(pub C);

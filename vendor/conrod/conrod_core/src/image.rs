@@ -31,7 +31,7 @@ pub struct Map<Img> {
     /// Whether or not the `image::Map` will trigger a redraw the next time `Ui::draw` is called.
     ///
     /// This is automatically set to `true` when any method that takes `&mut self` is called.
-    pub trigger_redraw: std::cell::Cell<bool>,
+    pub trigger_redraw: core::cell::Cell<bool>,
 }
 
 /// The type of `std::collections::HashMap` with `fnv::FnvHasher` used within the `image::Map`.
@@ -40,11 +40,11 @@ pub type HashMap<Img> = fnv::FnvHashMap<Id, Img>;
 /// An iterator yielding an `Id` for each new `Img` inserted into the `Map` via the `extend`
 /// method.
 pub struct NewIds {
-    index_range: std::ops::Range<u32>,
+    index_range: core::ops::Range<u32>,
 }
 
 
-impl<Img> std::ops::Deref for Map<Img> {
+impl<Img> core::ops::Deref for Map<Img> {
     type Target = HashMap<Img>;
     fn deref(&self) -> &Self::Target {
         &self.map
@@ -59,7 +59,7 @@ impl<Img> Map<Img> {
         Map {
             next_index: 0,
             map: HashMap::<Img>::default(),
-            trigger_redraw: std::cell::Cell::new(true),
+            trigger_redraw: core::cell::Cell::new(true),
         }
     }
 

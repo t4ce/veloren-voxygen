@@ -137,7 +137,7 @@ impl<'a> Widget for CollapsibleArea<'a> {
         let label_font_id = style.label_font_id(&ui.theme).or(ui.fonts.ids().next());
         let label_font_size = match style.label_font_size(&ui.theme) {
             Some(font_size) => font_size,
-            None => std::cmp::max((h / 2.5) as FontSize, 10),
+            None => core::cmp::max((h / 2.5) as FontSize, 10),
         };
 
         // The rectangle in which the triangle is set.

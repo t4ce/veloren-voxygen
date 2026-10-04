@@ -3,8 +3,8 @@
 extern crate rustix;
 extern crate tempfile;
 
-use std::convert::AsRef;
-use std::error::Error as ErrorTrait;
+use core::convert::AsRef;
+use core::error::Error as ErrorTrait;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -227,8 +227,8 @@ mod imp {
         #[cfg(any(target_os = "android", target_os = "linux"))]
         {
             use rustix::fs::RenameFlags;
-            use std::sync::atomic::AtomicBool;
-            use std::sync::atomic::Ordering::Relaxed;
+            use core::sync::atomic::AtomicBool;
+            use core::sync::atomic::Ordering::Relaxed;
 
             static NO_RENAMEAT2: AtomicBool = AtomicBool::new(false);
             if !NO_RENAMEAT2.load(Relaxed) {

@@ -82,7 +82,7 @@ impl List {
 
 }
 
-impl std::ops::Deref for List {
+impl core::ops::Deref for List {
     type Target = [Id];
     fn deref(&self) -> &Self::Target {
         &self.0

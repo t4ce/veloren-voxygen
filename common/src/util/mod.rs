@@ -17,7 +17,7 @@ mod spatial_grid;
 pub const VELOREN_VERSION_STAGE: &str = "Pre-Alpha";
 const VELOREN_GIT_VERSION_BUILD: &str = env!("VELOREN_GIT_VERSION");
 
-use std::str::FromStr;
+use core::str::FromStr;
 lazy_static::lazy_static! {
     static ref VELOREN_GIT_VERSION: String =
         std::env::var("VELOREN_GIT_VERSION").unwrap_or_else(|_| VELOREN_GIT_VERSION_BUILD.to_string());

@@ -1,3 +1,4 @@
+extern crate alloc;
 //#![warn(clippy::pedantic)]
 //! Load assets (images or voxel data) from files
 

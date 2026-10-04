@@ -1,5 +1,5 @@
 use byteorder::{LE, WriteBytesExt};
-use std::hash::Hasher;
+use core::hash::Hasher;
 use std::io::{self, Read, Write, Seek, SeekFrom, ErrorKind};
 use std::mem;
 use twox_hash::XxHash32;

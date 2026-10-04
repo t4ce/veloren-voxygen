@@ -51,7 +51,7 @@ impl Armor {
     /// one another (i.e: one may be substituted for the other in crafting
     /// recipes or item possession checks).
     pub fn superficially_eq(&self, other: &Self) -> bool {
-        std::mem::discriminant(&self.kind) == std::mem::discriminant(&other.kind)
+        core::mem::discriminant(&self.kind) == core::mem::discriminant(&other.kind)
     }
 }
 

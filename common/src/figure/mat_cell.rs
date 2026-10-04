@@ -38,7 +38,7 @@ mod test {
 
     #[test]
     fn met_cell_size() {
-        assert_eq!(5, std::mem::size_of::<MatCell>());
-        assert_eq!(1, std::mem::align_of::<MatCell>());
+        assert_eq!(5, core::mem::size_of::<MatCell>());
+        assert_eq!(1, core::mem::align_of::<MatCell>());
     }
 }

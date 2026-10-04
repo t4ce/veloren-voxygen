@@ -14,7 +14,7 @@ pub struct ListSelect<M, D, S> {
     common: widget::CommonBuilder,
     num_items: usize,
     mode: M,
-    direction: std::marker::PhantomData<D>,
+    direction: core::marker::PhantomData<D>,
     item_size: S,
     style: widget::list::Style,
     item_instantiation: widget::list::ItemInstantiation,
@@ -78,11 +78,11 @@ pub struct State {
     ids: Ids,
     /// Tracking index of last selected entry that has been pressed in order to
     /// perform multi selection when `SHIFT` or `ALT`(Mac) / 'CTRL'(Other OS) is held.
-    last_selected_entry: std::cell::Cell<Option<usize>>,
+    last_selected_entry: core::cell::Cell<Option<usize>>,
 }
 
 /// Buffer used for storing events that have been produced but are yet to be yielded.
-pub type PendingEvents<Selection, D, S> = std::collections::VecDeque<Event<Selection, D, S>>;
+pub type PendingEvents<Selection, D, S> = alloc::collections::VecDeque<Event<Selection, D, S>>;
 
 /// An iterator-like type for yielding `ListSelect` `Event`s.
 pub struct Events<M, D, S>
@@ -123,7 +123,7 @@ pub struct Multiple;
 
 /// Represents some change in item selection for a `ListSelect` in `Multiple` mode.
 #[derive(Clone, Debug)]
-pub enum Selection<H: std::hash::BuildHasher = std::collections::hash_map::RandomState> {
+pub enum Selection<H: core::hash::BuildHasher = std::collections::hash_map::RandomState> {
     /// Items which have been added to the selection.
     Add(std::collections::HashSet<usize, H>),
     /// Items which have been removed from the selection.
@@ -131,7 +131,7 @@ pub enum Selection<H: std::hash::BuildHasher = std::collections::hash_map::Rando
 }
 
 
-impl<H: std::hash::BuildHasher> Selection<H> {
+impl<H: core::hash::BuildHasher> Selection<H> {
 
     /// Update the given slice of `bool`s with this `Selection`.
     ///
@@ -155,7 +155,7 @@ impl<H: std::hash::BuildHasher> Selection<H> {
 
     /// Update the given set of selected indices with this `Selection`.
     pub fn update_index_set<T>(&self, set: &mut std::collections::HashSet<usize, T>)
-        where T: std::hash::BuildHasher
+        where T: core::hash::BuildHasher
     {
         match *self {
             Selection::Add(ref indices) =>
@@ -199,7 +199,7 @@ impl<M, D, S> ListSelect<M, D, S>
             common: common,
             num_items: num_items,
             mode: mode,
-            direction: std::marker::PhantomData,
+            direction: core::marker::PhantomData,
             item_size: item_size,
             style: style,
             item_instantiation: item_instantiation,
@@ -213,7 +213,7 @@ impl<M, D, S> ListSelect<M, D, S>
             common: common,
             num_items: num_items,
             mode: mode,
-            direction: std::marker::PhantomData,
+            direction: core::marker::PhantomData,
             item_size: item_size,
             style: style,
             item_instantiation: item_instantiation,
@@ -227,7 +227,7 @@ impl<M, D, S> ListSelect<M, D, S>
             common: common,
             num_items: num_items,
             mode: mode,
-            direction: std::marker::PhantomData,
+            direction: core::marker::PhantomData,
             item_size: item_size,
             style: style,
             item_instantiation: item_instantiation,
@@ -241,7 +241,7 @@ impl<M, D, S> ListSelect<M, D, S>
             common: common,
             num_items: num_items,
             mode: mode,
-            direction: std::marker::PhantomData,
+            direction: core::marker::PhantomData,
             item_size: item_size,
             style: style,
             item_instantiation: item_instantiation,
@@ -279,7 +279,7 @@ impl<M> ListSelect<M, widget::list::Down, widget::list::Dynamic> {
             num_items: num_items,
             item_size: widget::list::Dynamic {},
             mode: mode,
-            direction: std::marker::PhantomData,
+            direction: core::marker::PhantomData,
             item_instantiation: widget::list::ItemInstantiation::All,
         }
     }
@@ -356,7 +356,7 @@ impl<M, D, S> Widget for ListSelect<M, D, S>
     fn init_state(&self, id_gen: widget::id::Generator) -> Self::State {
         State {
             ids: Ids::new(id_gen),
-            last_selected_entry: std::cell::Cell::new(None),
+            last_selected_entry: core::cell::Cell::new(None),
         }
     }
 
@@ -555,7 +555,7 @@ impl Mode for Single {
 
         let selection = match D::key_direction(press.key) {
             Some(ListDirection::Backward) => if i == 0 { 0 } else { i - 1 },
-            Some(ListDirection::Forward) => std::cmp::min(i + 1, num_items - 1),
+            Some(ListDirection::Forward) => core::cmp::min(i + 1, num_items - 1),
             None => return,
         };
 
@@ -585,8 +585,8 @@ impl Mode for Multiple {
         let event = match state.last_selected_entry.get() {
 
             Some(idx) if shift => {
-                let start = std::cmp::min(idx, i);
-                let end = std::cmp::max(idx, i);
+                let start = core::cmp::min(idx, i);
+                let end = core::cmp::max(idx, i);
 
                 state.last_selected_entry.set(Some(i));
                 let selection = (start..end + 1).collect();
@@ -594,7 +594,7 @@ impl Mode for Multiple {
             },
 
             Some(_) | None if alt => {
-                let selection = std::iter::once(i).collect();
+                let selection = core::iter::once(i).collect();
                 if !is_selected(i) {
                     state.last_selected_entry.set(Some(i));
                     Event::Selection(Selection::Add(selection))
@@ -607,7 +607,7 @@ impl Mode for Multiple {
                 let old_selection = (0..num_items).filter(|&i| is_selected(i)).collect();
                 let event = Event::Selection(Selection::Remove(old_selection));
                 pending.push_back(event);
-                let selection = std::iter::once(i).collect();
+                let selection = core::iter::once(i).collect();
                 state.last_selected_entry.set(Some(i));
                 Event::Selection(Selection::Add(selection))
             },
@@ -647,14 +647,14 @@ impl Mode for Multiple {
         state.last_selected_entry.set(Some(end));
 
         let selection = if press.modifiers.contains(input::keyboard::ModifierKey::SHIFT) {
-            let start = std::cmp::min(i, end);
-            let end = std::cmp::max(i, end) + 1;
+            let start = core::cmp::min(i, end);
+            let end = core::cmp::max(i, end) + 1;
             (start..end).collect()
         } else {
             let old_selection = (0..num_items).filter(|&i| is_selected(i)).collect();
             let event = Event::Selection(Selection::Remove(old_selection));
             pending.push_back(event);
-            std::iter::once(end).collect()
+            core::iter::once(end).collect()
         };
 
         let event = Event::Selection(Selection::Add(selection));

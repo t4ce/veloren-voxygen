@@ -17,7 +17,7 @@ use crate::{
 };
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Sub};
+use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Sub};
 use strum::EnumIter;
 use tracing::error;
 

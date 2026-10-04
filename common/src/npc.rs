@@ -6,7 +6,7 @@ use common_i18n::Content;
 use lazy_static::lazy_static;
 use rand::seq::IndexedRandom;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use core::str::FromStr;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NpcKind {

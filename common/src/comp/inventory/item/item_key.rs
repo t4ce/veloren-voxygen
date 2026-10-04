@@ -3,7 +3,7 @@ use crate::{
     comp::inventory::item::{ItemDef, ItemDefinitionId, ItemDesc, ItemKind, modular},
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 /// ItemKey should only be used for front-end identification purposes
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]

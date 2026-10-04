@@ -6,7 +6,7 @@ use crate::comp::{
         tool::AbilityMap,
     },
 };
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 pub(super) fn get_test_bag(slots: u16) -> Item {
     let item_def = ItemDef::new_test(

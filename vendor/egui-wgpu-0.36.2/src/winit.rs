@@ -10,7 +10,7 @@ use crate::{
 };
 use core::num::NonZeroU32;
 use egui::{Context, Event, UserData, ViewportId, ViewportIdMap, ViewportIdSet};
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 struct SurfaceState {
     surface: wgpu::Surface<'static>,

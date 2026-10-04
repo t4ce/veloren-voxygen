@@ -1,7 +1,7 @@
 use crossbeam_queue::SegQueue;
 
 use crate::{prelude::*, world::EntitiesRes};
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 struct Queue<T>(SegQueue<T>);
 

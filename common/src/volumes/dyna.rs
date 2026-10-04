@@ -19,7 +19,7 @@ pub struct Dyna<V, M, A: Access = ColumnAccess> {
     vox: Vec<V>,
     meta: M,
     pub sz: Vec3<u32>,
-    _phantom: std::marker::PhantomData<A>,
+    _phantom: core::marker::PhantomData<A>,
 }
 
 impl<V: Clone, M: Clone, A: Access> Clone for Dyna<V, M, A> {
@@ -28,7 +28,7 @@ impl<V: Clone, M: Clone, A: Access> Clone for Dyna<V, M, A> {
             vox: self.vox.clone(),
             meta: self.meta.clone(),
             sz: self.sz,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 }
@@ -125,7 +125,7 @@ impl<V: Clone, M, A: Access> Dyna<V, M, A> {
             vox: vec![vox; sz.product() as usize],
             meta,
             sz,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -138,7 +138,7 @@ impl<V: Clone, M, A: Access> Dyna<V, M, A> {
                 .collect(),
             meta,
             sz,
-            _phantom: std::marker::PhantomData,
+            _phantom: core::marker::PhantomData,
         }
     }
 

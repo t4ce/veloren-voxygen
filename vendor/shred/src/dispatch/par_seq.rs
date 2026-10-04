@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use core::borrow::Borrow;
 
 use tokio_parallel::{join, ThreadPool};
 
@@ -391,7 +391,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{atomic::*, Arc};
+    use alloc::sync::{Arc};
+use core::sync::atomic::*;
 
     fn new_tp() -> ThreadPool {
         use tokio_parallel::ThreadPoolBuilder;

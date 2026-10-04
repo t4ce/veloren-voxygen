@@ -1,5 +1,6 @@
 use common_base::span;
-use std::time::{Duration, Instant};
+use core::time::Duration;
+use std::time::Instant;
 use vek::Lerp;
 
 /// A type for maintaining consistent tick/frame pacing.

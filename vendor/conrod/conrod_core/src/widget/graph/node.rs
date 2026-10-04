@@ -3,8 +3,8 @@
 use {widget, color, Color, Point, Positionable, Scalar, Sizeable, Widget, Ui};
 use graph;
 use position::{Axis, Direction, Range, Rect};
-use std::iter::once;
-use std::ops::{Deref, DerefMut};
+use core::iter::once;
+use core::ops::{Deref, DerefMut};
 
 /// A widget that acts as a convenience container for some `Node`'s unique widgets.
 #[derive(Clone, Debug, WidgetCommon_)]

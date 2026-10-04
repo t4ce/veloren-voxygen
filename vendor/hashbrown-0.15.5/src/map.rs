@@ -4766,8 +4766,8 @@ mod test_map {
     use core::ptr::NonNull;
     use core::sync::atomic::{AtomicI8, Ordering};
     use rand::{rngs::SmallRng, Rng, SeedableRng};
-    use std::borrow::ToOwned;
-    use std::cell::RefCell;
+    use alloc::borrow::ToOwned;
+    use core::cell::RefCell;
     use std::vec::Vec;
 
     #[test]
@@ -5723,7 +5723,7 @@ mod test_map {
     #[test]
     #[allow(clippy::needless_borrow)]
     fn test_extend_ref_kv_tuple() {
-        use std::ops::AddAssign;
+        use core::ops::AddAssign;
         let mut a = HashMap::new();
         a.insert(0, 0);
 
@@ -6207,7 +6207,7 @@ mod test_map {
     }
 
     unsafe impl Allocator for MyAlloc {
-        fn allocate(&self, layout: Layout) -> std::result::Result<NonNull<[u8]>, AllocError> {
+        fn allocate(&self, layout: Layout) -> core::result::Result<NonNull<[u8]>, AllocError> {
             let g = Global;
             g.allocate(layout)
         }

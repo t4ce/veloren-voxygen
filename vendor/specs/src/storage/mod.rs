@@ -379,7 +379,7 @@ where
             let id = e.id();
             if self.data.mask.contains(id) {
                 // SAFETY: `id` is in the mask.
-                std::mem::swap(&mut v, unsafe { self.data.inner.get_mut(id) }.access_mut());
+                core::mem::swap(&mut v, unsafe { self.data.inner.get_mut(id) }.access_mut());
                 Ok(Some(v))
             } else {
                 // SAFETY: The mask was previously empty, so this is safe to

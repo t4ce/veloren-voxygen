@@ -9,7 +9,7 @@ use crate::{
 /// This wrapper is used to share a replaceable ThreadPool with other
 /// dispatchers. Useful with batch dispatchers.
 #[cfg(feature = "parallel")]
-pub type ThreadPoolWrapper = Option<::std::sync::Arc<::tokio_parallel::ThreadPool>>;
+pub type ThreadPoolWrapper = Option<alloc::sync::Arc<::tokio_parallel::ThreadPool>>;
 
 /// The dispatcher struct, allowing
 /// systems to be executed in parallel.
@@ -143,7 +143,7 @@ pub type ThreadLocal<'a> = SmallVec<[Box<dyn for<'b> RunNow<'b> + 'a>; 4]>;
 pub fn new_dispatcher<'a, 'b>(
     stages: Vec<Stage<'a>>,
     thread_local: ThreadLocal<'b>,
-    thread_pool: ::std::sync::Arc<::std::sync::RwLock<ThreadPoolWrapper>>,
+    thread_pool: alloc::sync::Arc<::std::sync::RwLock<ThreadPoolWrapper>>,
 ) -> Dispatcher<'a, 'b> {
     Dispatcher {
         inner: SendDispatcher {

@@ -40,7 +40,7 @@ pub struct TradePricing {
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct MaterialUse(Vec<(f32, Good)>);
 
-impl std::ops::Mul<f32> for MaterialUse {
+impl core::ops::Mul<f32> for MaterialUse {
     type Output = Self;
 
     fn mul(self, rhs: f32) -> Self::Output {
@@ -62,7 +62,7 @@ fn vector_add_eq(result: &mut Vec<(f32, Good)>, rhs: &[(f32, Good)]) {
     }
 }
 
-impl std::ops::Add for MaterialUse {
+impl core::ops::Add for MaterialUse {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -72,11 +72,11 @@ impl std::ops::Add for MaterialUse {
     }
 }
 
-impl std::ops::AddAssign for MaterialUse {
+impl core::ops::AddAssign for MaterialUse {
     fn add_assign(&mut self, rhs: Self) { vector_add_eq(&mut self.0, &rhs.0); }
 }
 
-impl std::iter::Sum<MaterialUse> for MaterialUse {
+impl core::iter::Sum<MaterialUse> for MaterialUse {
     fn sum<I>(iter: I) -> Self
     where
         I: Iterator<Item = Self>,
@@ -89,7 +89,7 @@ impl std::iter::Sum<MaterialUse> for MaterialUse {
     }
 }
 
-impl std::ops::Deref for MaterialUse {
+impl core::ops::Deref for MaterialUse {
     type Target = [(f32, Good)];
 
     fn deref(&self) -> &Self::Target { self.0.deref() }
@@ -134,7 +134,7 @@ impl From<MaterialFrequency> for MaterialUse {
     }
 }
 
-impl std::ops::Add for MaterialFrequency {
+impl core::ops::Add for MaterialFrequency {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -144,7 +144,7 @@ impl std::ops::Add for MaterialFrequency {
     }
 }
 
-impl std::ops::AddAssign for MaterialFrequency {
+impl core::ops::AddAssign for MaterialFrequency {
     fn add_assign(&mut self, rhs: Self) { vector_add_eq(&mut self.0, &rhs.0); }
 }
 
@@ -174,7 +174,7 @@ impl PriceEntries {
         // alternatives are added in frequency (gets more frequent)
         let already = self.0.iter_mut().find(|i| i.name == b.name);
         if let Some(entry) = already {
-            let entry_freq: MaterialFrequency = std::mem::take(&mut entry.price).into();
+            let entry_freq: MaterialFrequency = core::mem::take(&mut entry.price).into();
             let b_freq: MaterialFrequency = b.price.into();
             let result = entry_freq + b_freq;
             entry.price = result.into();
@@ -1292,7 +1292,7 @@ mod tests {
         //
         // Weird sort_by because floats are evil. That's also why we can't just
         // use HashSet here.
-        items.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less));
+        items.sort_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Less));
         items.dedup();
 
         assert_eq!(

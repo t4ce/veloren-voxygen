@@ -12,7 +12,7 @@ use common::{
     vol::{BaseVol, ReadVol},
 };
 use specs::Entity;
-use std::ops::Range;
+use core::ops::Range;
 use vek::*;
 
 use super::PhysicsRead;

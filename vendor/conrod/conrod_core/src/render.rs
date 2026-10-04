@@ -31,7 +31,7 @@ use widget::triangles::{ColoredPoint, Triangle};
 /// The `OwnedPrimitives` type can be produced by calling the `Primitives::owned` method.
 pub struct Primitives<'a> {
     crop_stack: Vec<(widget::Id, Rect)>,
-    depth_order: std::slice::Iter<'a, widget::Id>,
+    depth_order: core::slice::Iter<'a, widget::Id>,
     graph: &'a Graph,
     theme: &'a Theme,
     fonts: &'a text::font::Map,
@@ -191,10 +191,10 @@ enum OwnedPrimitiveKind {
     },
     TrianglesSingleColor {
         color: color::Rgba,
-        triangle_range: std::ops::Range<usize>,
+        triangle_range: core::ops::Range<usize>,
     },
     TrianglesMultiColor {
-        triangle_range: std::ops::Range<usize>,
+        triangle_range: core::ops::Range<usize>,
     },
     Image {
         image_id: image::Id,
@@ -210,8 +210,8 @@ enum OwnedPrimitiveKind {
 
 #[derive(Clone)]
 struct OwnedText {
-    str_byte_range: std::ops::Range<usize>,
-    line_infos_range: std::ops::Range<usize>,
+    str_byte_range: core::ops::Range<usize>,
+    line_infos_range: core::ops::Range<usize>,
     window_dim: Dimensions,
     font: text::Font,
     font_size: FontSize,
@@ -223,7 +223,7 @@ struct OwnedText {
 
 /// An iterator-like type for yielding `Primitive`s from an `OwnedPrimitives`.
 pub struct WalkOwnedPrimitives<'a> {
-    primitives: std::slice::Iter<'a, OwnedPrimitive>,
+    primitives: core::slice::Iter<'a, OwnedPrimitive>,
     triangles_single_color: &'a [Triangle<Point>],
     triangles_multi_color: &'a [Triangle<ColoredPoint>],
     line_infos: &'a [text::line::Info],
@@ -330,10 +330,10 @@ impl<'a> Primitives<'a> {
             let (id, scizzor, container) = widget;
             let rect = container.rect;
 
-            fn state_type_id<W>() -> std::any::TypeId
+            fn state_type_id<W>() -> core::any::TypeId
                 where W: Widget,
             {
-                std::any::TypeId::of::<W::State>()
+                core::any::TypeId::of::<W::State>()
             }
 
             // Extract the unique state and style from the container.
@@ -374,7 +374,7 @@ impl<'a> Primitives<'a> {
                     }
                 }
 
-            } else if container.type_id == std::any::TypeId::of::<TrianglesSingleColorState>() {
+            } else if container.type_id == core::any::TypeId::of::<TrianglesSingleColorState>() {
                 type Style = widget::triangles::SingleColor;
                 if let Some(tris) = container.state_and_style::<TrianglesSingleColorState, Style>() {
                     let graph::UniqueWidgetState { ref state, ref style } = *tris;
@@ -386,7 +386,7 @@ impl<'a> Primitives<'a> {
                     return Some(new_primitive(id, kind, scizzor, rect));
                 }
 
-            } else if container.type_id == std::any::TypeId::of::<TrianglesMultiColorState>() {
+            } else if container.type_id == core::any::TypeId::of::<TrianglesMultiColorState>() {
                 type Style = widget::triangles::MultiColor;
                 if let Some(tris) = container.state_and_style::<TrianglesMultiColorState, Style>() {
                     let graph::UniqueWidgetState { ref state, .. } = *tris;
@@ -457,7 +457,7 @@ impl<'a> Primitives<'a> {
                         },
 
                         ShapeStyle::Outline(ref line_style) => {
-                            use std::iter::once;
+                            use core::iter::once;
                             let cap = line_style.get_cap(theme);
                             let thickness = line_style.get_thickness(theme);
                             let middle = rect.xy();
@@ -478,7 +478,7 @@ impl<'a> Primitives<'a> {
                     }
                 }
 
-            } else if container.type_id == std::any::TypeId::of::<PolygonState>() {
+            } else if container.type_id == core::any::TypeId::of::<PolygonState>() {
                 use widget::primitive::shape::Style;
                 if let Some(polygon) = container.state_and_style::<PolygonState, Style>() {
                     let graph::UniqueWidgetState { ref state, ref style } = *polygon;
@@ -529,7 +529,7 @@ impl<'a> Primitives<'a> {
                     let color = style.get_color(theme);
                     let cap = style.get_cap(theme);
                     let thickness = style.get_thickness(theme);
-                    let points = std::iter::once(state.start).chain(std::iter::once(state.end));
+                    let points = core::iter::once(state.start).chain(core::iter::once(state.end));
                     let triangles = match widget::point_path::triangles(points, cap, thickness) {
                         None => &[],
                         Some(iter) => {
@@ -544,7 +544,7 @@ impl<'a> Primitives<'a> {
                     return Some(new_primitive(id, kind, scizzor, rect));
                 }
 
-            } else if container.type_id == std::any::TypeId::of::<PointPathState>() {
+            } else if container.type_id == core::any::TypeId::of::<PointPathState>() {
                 if let Some(point_path) = container.state_and_style::<PointPathState, PointPathStyle>() {
                     let graph::UniqueWidgetState { ref state, ref style } = *point_path;
                     triangles.clear();
@@ -701,7 +701,7 @@ impl<'a> Primitives<'a> {
 
                     // Keep a rough estimate of the maximum number of glyphs so that we know what
                     // capacity we should allocate the `PositionedGlyph` buffer with.
-                    max_glyphs = std::cmp::max(max_glyphs, text.len());
+                    max_glyphs = core::cmp::max(max_glyphs, text.len());
 
                     // Pack the `texts_string`.
                     let start_str_byte = texts_string.len();
@@ -884,7 +884,7 @@ fn new_primitive(id: widget::Id, kind: PrimitiveKind, scizzor: Rect, rect: Rect)
 
 /// Retrieves the next visible widget from the `depth_order`, updating the `crop_stack` as
 /// necessary.
-fn next_widget<'a>(depth_order: &mut std::slice::Iter<widget::Id>,
+fn next_widget<'a>(depth_order: &mut core::slice::Iter<widget::Id>,
                    graph: &'a Graph,
                    crop_stack: &mut Vec<(widget::Id, Rect)>,
                    window_rect: Rect) -> Option<(widget::Id, Rect, &'a graph::Container)>

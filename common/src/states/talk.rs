@@ -8,7 +8,7 @@ use crate::{
     uid::Uid,
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use core::time::Duration;
 
 const TURN_RATE: f32 = 40.0;
 const MIN_TALK_TIME: Duration = Duration::from_millis(500);

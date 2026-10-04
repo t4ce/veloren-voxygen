@@ -8,8 +8,8 @@
 
 use crate::block::Block;
 use std::fmt;
-use std::fmt::Debug;
-use std::ops::{Index, IndexMut};
+use core::fmt::Debug;
+use core::ops::{Index, IndexMut};
 
 /// Structure representing the memory matrix.
 pub struct Memory {

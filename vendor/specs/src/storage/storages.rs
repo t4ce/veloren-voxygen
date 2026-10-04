@@ -1,7 +1,7 @@
 //! Different types of storages you can use for your components.
 
 use core::{marker::PhantomData, mem::MaybeUninit, ptr, ptr::NonNull};
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use ahash::AHashMap as HashMap;
 use hibitset::BitSetLike;

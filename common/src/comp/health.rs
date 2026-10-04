@@ -278,7 +278,7 @@ mod tests {
         resources::Time,
         uid::Uid,
     };
-    use std::num::NonZeroU64;
+    use core::num::NonZeroU64;
 
     #[test]
     fn test_change_by_negative_health_change_adds_to_damage_contributors() {
