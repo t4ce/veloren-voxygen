@@ -34,11 +34,16 @@ use alloc::{
 
 #[cfg(feature = "std")]
 use std::io;
+#[cfg(feature = "std")]
 use std::io::Read;
+#[cfg(feature = "std")]
 use std::io::Write;
+#[cfg(feature = "std")]
 use std::path::Path;
+#[cfg(feature = "std")]
 use std::fs::File;
-use std::error;
+#[cfg(feature = "std")]
+use core::error;
 use hashbrown::HashMap;
 
 /// A number used to index into vertex attribute arrays.

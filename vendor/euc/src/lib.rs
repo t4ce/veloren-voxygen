@@ -40,8 +40,8 @@
 
 #![no_std]
 
-extern crate alloc;
 #[macro_use]
+extern crate alloc;
 
 pub mod buffer;
 pub mod interpolate;

@@ -2,7 +2,7 @@ use borrow::Cow;
 use io::{Read, Write};
 use ops::{Deref, DerefMut};
 use std::borrow;
-use std::error;
+use core::error;
 use std::io;
 use core::fmt;
 use core::mem;

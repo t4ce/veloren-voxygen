@@ -14,7 +14,8 @@ use common::{
 use common_state::State;
 use kira::Tween;
 use serde::Deserialize;
-use core::{time::Duration, time::Instant};
+use core::{time::Duration};
+use std::time::Instant;
 use strum::IntoEnumIterator;
 use tracing::warn;
 use vek::*;

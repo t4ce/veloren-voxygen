@@ -19,7 +19,8 @@ use common::{
 use common_state::State;
 use hashbrown::HashMap;
 use specs::{Entity as EcsEntity, Join, LendJoin, WorldExt};
-use core::{time::Duration, time::Instant};
+use core::{time::Duration};
+use std::time::Instant;
 
 #[derive(Clone)]
 struct PreviousEntityState {

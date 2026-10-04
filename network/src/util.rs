@@ -1,6 +1,6 @@
 use core::hash::Hash;
 use std::collections::HashMap;
-use core::time::Instant;
+use std::time::Instant;
 use tracing::Level;
 
 /// used to collect multiple traces and not spam the console

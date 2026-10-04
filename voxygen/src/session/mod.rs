@@ -119,7 +119,7 @@ pub struct SessionState {
     zoom_lock: bool,
     is_aiming: bool,
     pub(crate) target_entity: Option<specs::Entity>,
-    pub(crate) selected_entity: Option<(specs::Entity, core::time::Instant)>,
+    pub(crate) selected_entity: Option<(specs::Entity, std::time::Instant)>,
     pub(crate) viewpoint_entity: Option<specs::Entity>,
     interactables: interactable::Interactables,
     #[cfg(not(target_os = "macos"))]
@@ -1294,7 +1294,7 @@ impl PlayState for SessionState {
                             GameInput::Select => {
                                 if !state {
                                     self.selected_entity =
-                                        self.target_entity.map(|e| (e, core::time::Instant::now()));
+                                        self.target_entity.map(|e| (e, std::time::Instant::now()));
                                 }
                             },
                             GameInput::AcceptGroupInvite if state => {

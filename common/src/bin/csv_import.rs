@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 use ron::ser::{PrettyConfig, to_string_pretty};
 use serde::Serialize;
 use alloc::borrow::Cow;
-use std::error::Error;
+use core::error::Error;
 use std::fs::File;
 use std::io::Write;
 

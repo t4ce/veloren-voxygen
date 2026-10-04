@@ -2,7 +2,7 @@
 #![expect(deprecated)] // since item i18n
 
 use clap::Parser;
-use std::error::Error;
+use core::error::Error;
 use std::io::Write;
 use core::ops::Div;
 use core::ops::Mul;

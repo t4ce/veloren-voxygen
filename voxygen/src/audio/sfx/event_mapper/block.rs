@@ -13,7 +13,8 @@ use common_state::State;
 use hashbrown::HashMap;
 use rand::{RngExt, prelude::*, rng};
 use rand_chacha::ChaCha8Rng;
-use core::{time::Duration, time::Instant};
+use core::{time::Duration};
+use std::time::Instant;
 use vek::*;
 
 #[derive(Clone, PartialEq)]

@@ -1603,8 +1603,8 @@ impl Renderer {
         if self.other_modes.profiler_enabled {
             let file_name = format!(
                 "frame-trace_{}.json",
-                core::time::SystemTime::now()
-                    .duration_since(core::time::SystemTime::UNIX_EPOCH)
+                std::time::SystemTime::now()
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .map(|d| d.as_millis())
                     .unwrap_or(0)
             );

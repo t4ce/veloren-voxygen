@@ -7,7 +7,8 @@ use common::{
 };
 use hashbrown::HashSet;
 use alloc::sync::Arc;
-use core::{sync::atomic::AtomicU32, sync::atomic::Ordering, time::Duration, time::SystemTime};
+use core::{sync::atomic::AtomicU32, sync::atomic::Ordering, time::Duration};
+use std::time::SystemTime;
 use std::thread;
 use tokio::runtime::Runtime;
 use vek::*;

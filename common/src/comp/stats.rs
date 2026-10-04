@@ -1,7 +1,7 @@
 use common_i18n::Content;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DerefFlaggedStorage};
-use std::error::Error;
+use core::error::Error;
 use core::fmt;
 
 use crate::{

@@ -1,7 +1,8 @@
 use iced::{
     Clipboard, Element, Event, Hasher, Layout, Length, Point, Rectangle, Size, Widget, layout,
 };
-use core::{hash::Hash, time::Duration, time::Instant};
+use core::{hash::Hash, time::Duration};
+use std::time::Instant;
 use std::sync::Mutex;
 use vek::*;
 

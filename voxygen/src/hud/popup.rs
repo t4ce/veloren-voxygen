@@ -8,7 +8,7 @@ use conrod_core::{
 };
 use i18n::Localization;
 use alloc::collections::VecDeque;
-use core::time::Instant;
+use std::time::Instant;
 
 widget_ids! {
     struct Ids {

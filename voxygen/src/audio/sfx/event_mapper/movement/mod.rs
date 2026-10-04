@@ -19,7 +19,8 @@ use common_state::State;
 use hashbrown::HashMap;
 use rand::prelude::*;
 use specs::{Entity as EcsEntity, Join, LendJoin, WorldExt};
-use core::{time::Duration, time::Instant};
+use core::{time::Duration};
+use std::time::Instant;
 use vek::*;
 
 #[derive(Clone)]

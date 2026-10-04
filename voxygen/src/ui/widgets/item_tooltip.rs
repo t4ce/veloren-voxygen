@@ -25,7 +25,8 @@ use conrod_core::{
 };
 use i18n::Localization;
 use lazy_static::lazy_static;
-use core::{borrow::Borrow, time::Duration, time::Instant};
+use core::{borrow::Borrow, time::Duration};
+use std::time::Instant;
 
 #[derive(Copy, Clone)]
 struct Hover(widget::Id, [f64; 2]);

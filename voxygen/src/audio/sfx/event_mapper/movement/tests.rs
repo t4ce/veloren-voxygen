@@ -7,7 +7,8 @@ use common::{
     states,
     terrain::{Block, BlockKind},
 };
-use core::{time::Duration, time::Instant};
+use core::{time::Duration};
+use std::time::Instant;
 
 #[test]
 fn no_item_config_no_emit() {

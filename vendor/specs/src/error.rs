@@ -8,7 +8,7 @@
  use core::fmt::Display;
  use core::fmt::Formatter;
  use core::fmt::Result as FmtResult;
- use std::error::Error as StdError;
+ use core::error::Error as StdError;
 
 use crate::world::{Entity, Generation};
 

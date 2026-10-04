@@ -1,6 +1,7 @@
 use common::slowjob::{SlowJob, SlowJobPool};
 use hashbrown::{HashMap, hash_map::Entry};
-use core::{hash::Hash, time::Duration, time::Instant};
+use core::{hash::Hash, time::Duration};
+use std::time::Instant;
 
 enum KeyedJobTask<V> {
     Pending(Instant, Option<SlowJob>),

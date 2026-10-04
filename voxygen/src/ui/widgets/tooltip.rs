@@ -4,7 +4,8 @@ use conrod_core::{
     WidgetStyle, builder_method, builder_methods, image, input::global::Global,
     position::Dimension, text, widget, widget_ids,
 };
-use core::{time::Duration, time::Instant};
+use core::{time::Duration};
+use std::time::Instant;
 #[derive(Copy, Clone)]
 struct Hover(widget::Id, [f64; 2]);
 #[derive(Copy, Clone)]

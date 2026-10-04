@@ -239,7 +239,7 @@ pub trait Animation {
                     &<Self::Skeleton as Skeleton>::Attr,
                 ) -> Self::Skeleton,
             > = unsafe {
-                //let start = core::time::Instant::now();
+                //let start = std::time::Instant::now();
                 // Overhead of 0.5-5 us (could use hashmap to mitigate if this is an issue)
                 lib.get(Self::UPDATE_FN)
                 //println!("{}", start.elapsed().as_nanos());

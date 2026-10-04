@@ -1208,7 +1208,7 @@ impl Window {
         let sender = self.message_sender.clone();
         let mut path = settings.screenshots_path.clone();
         self.renderer.create_screenshot(move |image| {
-            use core::time::SystemTime;
+            use std::time::SystemTime;
 
             // Handle any error if there was one when generating the image.
             let image = match image {

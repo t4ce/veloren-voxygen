@@ -138,7 +138,8 @@ use i18n::Localization;
 use rand::RngExt;
 use specs::{Entity as EcsEntity, Join, LendJoin, WorldExt};
 use alloc::{borrow::Cow, collections::VecDeque, rc::Rc, sync::Arc};
-use core::{cell::RefCell, cmp::Ordering, time::Duration, time::Instant};
+use core::{cell::RefCell, cmp::Ordering, time::Duration};
+use std::time::Instant;
 use tracing::{instrument, trace, warn};
 use vek::*;
 

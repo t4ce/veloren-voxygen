@@ -87,7 +87,6 @@
 #![deny(missing_docs)]
 #![no_std]
 #![cfg_attr(
-extern crate alloc;
     all(feature = "std", target_env = "sgx", target_vendor = "fortanix"),
     feature(sgx_platform)
 )]
@@ -104,6 +103,7 @@ extern crate std;
 // This is only used for gimli right now, which is only used on some platforms, and miri
 // so don't worry if it's unused in other configurations.
 #[allow(unused_extern_crates)]
+extern crate alloc;
 
 pub use self::backtrace::{trace_unsynchronized, Frame};
 mod backtrace;

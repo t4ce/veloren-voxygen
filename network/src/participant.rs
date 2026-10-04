@@ -12,7 +12,8 @@ use network_protocol::{
     SendProtocol, Sid,
 };
 use alloc::sync::Arc;
-use core::{sync::atomic::AtomicBool, sync::atomic::AtomicI32, sync::atomic::Ordering, time::Duration, time::Instant};
+use core::{sync::atomic::AtomicBool, sync::atomic::AtomicI32, sync::atomic::Ordering, time::Duration};
+use std::time::Instant;
 use tokio::{
     select,
     sync::{Mutex, RwLock, mpsc, oneshot, watch},
