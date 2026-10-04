@@ -1,27 +1,33 @@
-# Offline Voxygen shaders
+# Precompiled Voxygen shaders
 
-Rebuild from the Veloren root with `python3 voxygen/tools/bake_shaders.py`.
-Verify source and binary hashes without a compiler with
-`python3 voxygen/tools/bake_shaders.py --verify`.
+The client always embeds and loads these SPIR-V artifacts. No runtime GLSL
+compiler or shaderc dependency is included. WGPU still processes SPIR-V and
+creates GPU pipelines.
 
-The 82 SPIR-V artifacts cover all 41 active shader stages with
-`RenderMode::default()` settings, both with shadow-map views and with the
-existing cheap-shadow fallback. Other settings and experimental shaders
-require additional baked variants. The bake uses the existing TRUEOS GLSL
-frontend lane: glslc, Vulkan 1.1, forced GLSL 430 core, performance optimization.
-The 440-to-430 compiler warnings match Voxygen's existing shaderc policy.
+Run from the repository root:
 
-Enable Voxygen's `precompiled-shaders` feature to embed these binaries and
-bypass runtime GLSL compilation. The loader hashes the resolved GLSL and
-checks the binary hash before using wgpu's validated SPIR-V module API.
-Unknown configurations and stale source changes fail instead of invoking
-a runtime shader compiler. This feature does not remove the shaderc build
-dependency or port the client.
+```
+cargo run --manifest-path voxygen/Cargo.toml --no-default-features
+```
 
-These are intermediate SPIR-V binaries, **not admitted TRUEOS Intel EU
-executables**. The local wgpu checkout has no TRUEOS backend. Native baking
-and execution admission require concrete pipeline layouts, vertex fetch,
-descriptor mappings, URB/SBE and pixel payload state, and a corresponding
-runtime consumer. The existing fixed-pipeline Mesa bake cannot grant that
-contract to arbitrary Voxygen stages. `native_execution_admitted` remains
-false in the manifest until those contracts are implemented and verified.
+The 123 artifacts cover 41 shader stages for the Minimal preset and the original
+default settings with shadow-map and cheap-shadow variants. New userdata uses
+the Minimal preset: FX upscaling, flat clouds, low fluid/reflections, Lambertian
+lighting, no shadows, no bloom and no point glow. Additional settings and experimental
+shaders require additional baked variants. Source and binary hashes are
+checked at runtime; unsupported or stale variants fail without a compiler
+fallback. GLSL assets remain necessary for variant selection and verification.
+
+Verify without a compiler:
+
+```
+python3 voxygen/tools/bake_shaders.py --verify
+```
+
+Rebuild offline with glslc installed:
+
+```
+python3 voxygen/tools/bake_shaders.py
+```
+
+The bake uses Vulkan 1.1, GLSL 430 core and performance optimization.
