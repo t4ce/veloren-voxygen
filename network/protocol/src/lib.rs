@@ -49,6 +49,7 @@
 //! [`RecvProtocol`]: crate::RecvProtocol
 //! [`InitProtocol`]: crate::InitProtocol
 
+extern crate alloc;
 mod error;
 mod event;
 mod frame;

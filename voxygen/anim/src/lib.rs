@@ -1,5 +1,6 @@
 #![allow(clippy::neg_multiply)]
 #![expect(clippy::single_match)]
+extern crate alloc;
 #[cfg(all(feature = "be-dyn-lib", feature = "use-dyn-lib"))]
 compile_error!("Can't use both \"be-dyn-lib\" and \"use-dyn-lib\" features at once");
 
@@ -100,7 +101,7 @@ use self::vek::*;
 use bytemuck::{Pod, Zeroable};
 #[cfg(feature = "use-dyn-lib")]
 use {
-    common_dynlib::LoadedLib, lazy_static::lazy_static, alloc::ffi::CStr, alloc::sync::Arc,
+    common_dynlib::LoadedLib, lazy_static::lazy_static, core::ffi::CStr, alloc::sync::Arc,
     std::sync::Mutex,
 };
 
