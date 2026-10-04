@@ -32,12 +32,19 @@ use winit::{
 
 const FRAME: Duration = Duration::from_nanos(16_666_667);
 
+fn connection_progress(message: std::fmt::Arguments<'_>) {
+    #[cfg(target_os = "trueos")]
+    trueos::logl::log(trueos::logl::level::INFO, message);
+    #[cfg(not(target_os = "trueos"))]
+    info!("{message}");
+}
+
 #[derive(Parser)]
 #[command(about = "Non-rendering Voxygen: type your password in the blank window and press Enter")]
 struct Args {
     #[cfg_attr(
         target_os = "trueos",
-        arg(long, default_value = "192.168.179.111:14004")
+        arg(long, default_value = "192.168.178.111:14004")
     )]
     #[cfg_attr(
         not(target_os = "trueos"),
@@ -229,7 +236,11 @@ impl App {
         self.pending = Some(receiver);
         self.prompt("Connecting…");
         std::thread::spawn(move || {
+            connection_progress(format_args!(
+                "Voxygen login worker started: {username} @ {server}"
+            ));
             let result = runtime.block_on(async {
+                connection_progress(format_args!("Voxygen login future polling; timeout=60s"));
                 tokio::time::timeout(
                     Duration::from_secs(60),
                     Client::new(
@@ -243,7 +254,9 @@ impl App {
                         &password,
                         None,
                         |endpoint| endpoint.trim_end_matches('/') == auth_server,
-                        &|stage| info!(?stage, "Connecting headless player"),
+                        &|stage| {
+                            connection_progress(format_args!("Voxygen connection stage: {stage:?}"))
+                        },
                         |_| {},
                         std::path::PathBuf::new(),
                         ClientType::Game,
@@ -256,6 +269,12 @@ impl App {
                 Ok(Err(error)) => Err(format!("{error:?}")),
                 Err(_) => Err("Connection timed out".to_owned()),
             };
+            match &result {
+                Ok(_) => connection_progress(format_args!(
+                    "Voxygen login complete; requesting characters next"
+                )),
+                Err(error) => connection_progress(format_args!("Voxygen login failed: {error}")),
+            }
             let _ = sender.send(result);
         });
     }

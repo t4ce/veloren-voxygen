@@ -1,5 +1,5 @@
 [package]
-name = "voxygen-headless"
+name = "voxy"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
@@ -21,7 +21,7 @@ voxygen = { package = "veloren-voxygen", path = "..", default-features = false }
 trueos = { path = "../../TRUEOS-Blueprints/api", features = ["tokio-net-probe", "ui4-scene"] }
 
 [[bin]]
-name = "voxygen-headless"
+name = "voxy"
 path = "main.rs"
 
 [profile.dev]
