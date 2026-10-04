@@ -142,7 +142,7 @@ fn pump(app: &mut App, width: &mut u32, height: &mut u32, paint: &mut bool) -> R
             }
         }
     }
-    if app.character_requested {
+    if app.world_joined {
         let state = app.window.as_ref().expect("UI4 frame").keyboard_state()?;
         if let Some(state) = state {
             if app.captured {
@@ -163,7 +163,7 @@ fn pump(app: &mut App, width: &mut u32, height: &mut u32, paint: &mut bool) -> R
         .expect("UI4 frame")
         .take_pointer_event()?
     {
-        if !app.character_requested {
+        if !app.world_joined {
             continue;
         }
         if !app.captured && event.buttons_pressed != 0 {

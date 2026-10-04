@@ -736,238 +736,244 @@ impl Client {
                 return Err(Error::Other("Server sent a bad altitude map.".into()));
             }
             let [west, east] = world_map.horizons;
-            let scale_angle = |a: u8| (a as f32 / 255.0 * <f32 as FloatConst>::FRAC_PI_2()).tan();
-            let scale_height = |h: u8| h as f32 / 255.0 * max_height;
-            let scale_height_big = |h: u32| (h >> 3) as f32 / 8191.0 * max_height;
-
-            debug!("Preparing image...");
-            let unzip_horizons = |(angles, heights): &(Vec<_>, Vec<_>)| {
-                (
-                    angles.iter().copied().map(scale_angle).collect::<Vec<_>>(),
-                    heights
-                        .iter()
-                        .copied()
-                        .map(scale_height)
-                        .collect::<Vec<_>>(),
-                )
-            };
-            let horizons = [unzip_horizons(&west), unzip_horizons(&east)];
-
-            // Redraw map (with shadows this time).
-            let mut world_map_rgba = vec![0u32; rgba.size().product() as usize];
-            let mut world_map_topo = vec![0u32; rgba.size().product() as usize];
-            let mut map_config = common::terrain::map::MapConfig::orthographic(
-                map_size_lg,
-                core::ops::RangeInclusive::new(0.0, max_height),
-            );
-            map_config.horizons = Some(&horizons);
-            let rescale_height = |h: f32| h / max_height;
-            let bounds_check = |pos: Vec2<i32>| {
-                pos.reduce_partial_min() >= 0
-                    && pos.x < map_size.x as i32
-                    && pos.y < map_size.y as i32
-            };
-            fn sample_pos(
-                map_config: &MapConfig,
-                pos: Vec2<i32>,
-                alt: &Grid<u32>,
-                rgba: &Grid<u32>,
-                map_size: &Vec2<u16>,
-                map_size_lg: &common::terrain::MapSizeLg,
-                max_height: f32,
-            ) -> common::terrain::map::MapSample {
-                let rescale_height = |h: f32| h / max_height;
+            // Headless consumes map/terrain data but never rasterizes UI map images.
+            #[cfg(feature = "headless")]
+            let world_map_layers = Vec::new();
+            #[cfg(not(feature = "headless"))]
+            let world_map_layers = {
+                let scale_angle = |a: u8| (a as f32 / 255.0 * <f32 as FloatConst>::FRAC_PI_2()).tan();
+                let scale_height = |h: u8| h as f32 / 255.0 * max_height;
                 let scale_height_big = |h: u32| (h >> 3) as f32 / 8191.0 * max_height;
+
+                debug!("Preparing image...");
+                let unzip_horizons = |(angles, heights): &(Vec<_>, Vec<_>)| {
+                    (
+                        angles.iter().copied().map(scale_angle).collect::<Vec<_>>(),
+                        heights
+                            .iter()
+                            .copied()
+                            .map(scale_height)
+                            .collect::<Vec<_>>(),
+                    )
+                };
+                let horizons = [unzip_horizons(&west), unzip_horizons(&east)];
+
+                // Redraw map (with shadows this time).
+                let mut world_map_rgba = vec![0u32; rgba.size().product() as usize];
+                let mut world_map_topo = vec![0u32; rgba.size().product() as usize];
+                let mut map_config = common::terrain::map::MapConfig::orthographic(
+                    map_size_lg,
+                    core::ops::RangeInclusive::new(0.0, max_height),
+                );
+                map_config.horizons = Some(&horizons);
+                let rescale_height = |h: f32| h / max_height;
                 let bounds_check = |pos: Vec2<i32>| {
                     pos.reduce_partial_min() >= 0
                         && pos.x < map_size.x as i32
                         && pos.y < map_size.y as i32
                 };
-                let MapConfig {
-                    gain,
-                    is_contours,
-                    is_height_map,
-                    is_stylized_topo,
-                    ..
-                } = *map_config;
-                let mut is_contour_line = false;
-                let mut is_border = false;
-                let (rgb, alt, downhill_wpos) = if bounds_check(pos) {
-                    let posi = pos.y as usize * map_size.x as usize + pos.x as usize;
-                    let [r, g, b, _a] = rgba[pos].to_le_bytes();
-                    let is_water = r == 0 && b > 102 && g < 77;
-                    let alti = alt[pos];
-                    // Compute contours (chunks are assigned in the river code below)
-                    let altj = rescale_height(scale_height_big(alti));
-                    let contour_interval = 150.0;
-                    let chunk_contour = (altj * gain / contour_interval) as u32;
-
-                    // Compute downhill.
-                    let downhill = {
-                        let mut best = -1;
-                        let mut besth = alti;
-                        for nposi in neighbors(*map_size_lg, posi) {
-                            let nbh = alt.raw()[nposi];
-                            let nalt = rescale_height(scale_height_big(nbh));
-                            let nchunk_contour = (nalt * gain / contour_interval) as u32;
-                            if !is_contour_line && chunk_contour > nchunk_contour {
-                                is_contour_line = true;
-                            }
-                            let [nr, ng, nb, _na] = rgba.raw()[nposi].to_le_bytes();
-                            let n_is_water = nr == 0 && nb > 102 && ng < 77;
-
-                            if !is_border && is_water && !n_is_water {
-                                is_border = true;
-                            }
-
-                            if nbh < besth {
-                                besth = nbh;
-                                best = nposi as isize;
-                            }
-                        }
-                        best
+                fn sample_pos(
+                    map_config: &MapConfig,
+                    pos: Vec2<i32>,
+                    alt: &Grid<u32>,
+                    rgba: &Grid<u32>,
+                    map_size: &Vec2<u16>,
+                    map_size_lg: &common::terrain::MapSizeLg,
+                    max_height: f32,
+                ) -> common::terrain::map::MapSample {
+                    let rescale_height = |h: f32| h / max_height;
+                    let scale_height_big = |h: u32| (h >> 3) as f32 / 8191.0 * max_height;
+                    let bounds_check = |pos: Vec2<i32>| {
+                        pos.reduce_partial_min() >= 0
+                            && pos.x < map_size.x as i32
+                            && pos.y < map_size.y as i32
                     };
-                    let downhill_wpos = if downhill < 0 {
-                        None
-                    } else {
-                        Some(
-                            Vec2::new(
-                                (downhill as usize % map_size.x as usize) as i32,
-                                (downhill as usize / map_size.x as usize) as i32,
-                            ) * TerrainChunkSize::RECT_SIZE.map(|e| e as i32),
-                        )
-                    };
-                    (Rgb::new(r, g, b), alti, downhill_wpos)
-                } else {
-                    (Rgb::zero(), 0, None)
-                };
-                let alt = f64::from(rescale_height(scale_height_big(alt)));
-                let wpos = pos * TerrainChunkSize::RECT_SIZE.map(|e| e as i32);
-                let downhill_wpos =
-                    downhill_wpos.unwrap_or(wpos + TerrainChunkSize::RECT_SIZE.map(|e| e as i32));
-                let is_path = rgb.r == 0x37 && rgb.g == 0x29 && rgb.b == 0x23;
-                let rgb = rgb.map(|e: u8| e as f64 / 255.0);
-                let is_water = rgb.r == 0.0 && rgb.b > 0.4 && rgb.g < 0.3;
+                    let MapConfig {
+                        gain,
+                        is_contours,
+                        is_height_map,
+                        is_stylized_topo,
+                        ..
+                    } = *map_config;
+                    let mut is_contour_line = false;
+                    let mut is_border = false;
+                    let (rgb, alt, downhill_wpos) = if bounds_check(pos) {
+                        let posi = pos.y as usize * map_size.x as usize + pos.x as usize;
+                        let [r, g, b, _a] = rgba[pos].to_le_bytes();
+                        let is_water = r == 0 && b > 102 && g < 77;
+                        let alti = alt[pos];
+                        // Compute contours (chunks are assigned in the river code below)
+                        let altj = rescale_height(scale_height_big(alti));
+                        let contour_interval = 150.0;
+                        let chunk_contour = (altj * gain / contour_interval) as u32;
 
-                let rgb = if is_height_map {
-                    if is_path {
-                        // Path color is Rgb::new(0x37, 0x29, 0x23)
-                        Rgb::new(0.9, 0.9, 0.63)
-                    } else if is_water {
-                        Rgb::new(0.23, 0.47, 0.53)
-                    } else if is_contours && is_contour_line {
-                        // Color contour lines
-                        Rgb::new(0.15, 0.15, 0.15)
-                    } else {
-                        // Color hill shading
-                        let lightness = (alt + 0.2).min(1.0);
-                        Rgb::new(lightness, 0.9 * lightness, 0.5 * lightness)
-                    }
-                } else if is_stylized_topo {
-                    if is_path {
-                        Rgb::new(0.9, 0.9, 0.63)
-                    } else if is_water {
-                        if is_border {
-                            Rgb::new(0.10, 0.34, 0.50)
+                        // Compute downhill.
+                        let downhill = {
+                            let mut best = -1;
+                            let mut besth = alti;
+                            for nposi in neighbors(*map_size_lg, posi) {
+                                let nbh = alt.raw()[nposi];
+                                let nalt = rescale_height(scale_height_big(nbh));
+                                let nchunk_contour = (nalt * gain / contour_interval) as u32;
+                                if !is_contour_line && chunk_contour > nchunk_contour {
+                                    is_contour_line = true;
+                                }
+                                let [nr, ng, nb, _na] = rgba.raw()[nposi].to_le_bytes();
+                                let n_is_water = nr == 0 && nb > 102 && ng < 77;
+
+                                if !is_border && is_water && !n_is_water {
+                                    is_border = true;
+                                }
+
+                                if nbh < besth {
+                                    besth = nbh;
+                                    best = nposi as isize;
+                                }
+                            }
+                            best
+                        };
+                        let downhill_wpos = if downhill < 0 {
+                            None
                         } else {
-                            Rgb::new(0.23, 0.47, 0.63)
+                            Some(
+                                Vec2::new(
+                                    (downhill as usize % map_size.x as usize) as i32,
+                                    (downhill as usize / map_size.x as usize) as i32,
+                                ) * TerrainChunkSize::RECT_SIZE.map(|e| e as i32),
+                            )
+                        };
+                        (Rgb::new(r, g, b), alti, downhill_wpos)
+                    } else {
+                        (Rgb::zero(), 0, None)
+                    };
+                    let alt = f64::from(rescale_height(scale_height_big(alt)));
+                    let wpos = pos * TerrainChunkSize::RECT_SIZE.map(|e| e as i32);
+                    let downhill_wpos =
+                        downhill_wpos.unwrap_or(wpos + TerrainChunkSize::RECT_SIZE.map(|e| e as i32));
+                    let is_path = rgb.r == 0x37 && rgb.g == 0x29 && rgb.b == 0x23;
+                    let rgb = rgb.map(|e: u8| e as f64 / 255.0);
+                    let is_water = rgb.r == 0.0 && rgb.b > 0.4 && rgb.g < 0.3;
+
+                    let rgb = if is_height_map {
+                        if is_path {
+                            // Path color is Rgb::new(0x37, 0x29, 0x23)
+                            Rgb::new(0.9, 0.9, 0.63)
+                        } else if is_water {
+                            Rgb::new(0.23, 0.47, 0.53)
+                        } else if is_contours && is_contour_line {
+                            // Color contour lines
+                            Rgb::new(0.15, 0.15, 0.15)
+                        } else {
+                            // Color hill shading
+                            let lightness = (alt + 0.2).min(1.0);
+                            Rgb::new(lightness, 0.9 * lightness, 0.5 * lightness)
                         }
-                    } else if is_contour_line {
-                        Rgb::new(0.25, 0.25, 0.25)
+                    } else if is_stylized_topo {
+                        if is_path {
+                            Rgb::new(0.9, 0.9, 0.63)
+                        } else if is_water {
+                            if is_border {
+                                Rgb::new(0.10, 0.34, 0.50)
+                            } else {
+                                Rgb::new(0.23, 0.47, 0.63)
+                            }
+                        } else if is_contour_line {
+                            Rgb::new(0.25, 0.25, 0.25)
+                        } else {
+                            // Stylized colors
+                            Rgb::new(
+                                (rgb.r + 0.25).min(1.0),
+                                (rgb.g + 0.23).min(1.0),
+                                (rgb.b + 0.10).min(1.0),
+                            )
+                        }
                     } else {
-                        // Stylized colors
-                        Rgb::new(
-                            (rgb.r + 0.25).min(1.0),
-                            (rgb.g + 0.23).min(1.0),
-                            (rgb.b + 0.10).min(1.0),
-                        )
+                        Rgb::new(rgb.r, rgb.g, rgb.b)
                     }
-                } else {
-                    Rgb::new(rgb.r, rgb.g, rgb.b)
+                    .map(|e| (e * 255.0) as u8);
+                    common::terrain::map::MapSample {
+                        rgb,
+                        alt,
+                        downhill_wpos,
+                        connections: None,
+                    }
                 }
-                .map(|e| (e * 255.0) as u8);
-                common::terrain::map::MapSample {
-                    rgb,
-                    alt,
-                    downhill_wpos,
-                    connections: None,
-                }
-            }
-            // Generate standard shaded map
-            map_config.is_shaded = true;
-            map_config.generate(
-                |pos| {
-                    sample_pos(
-                        &map_config,
-                        pos,
-                        &alt,
-                        &rgba,
-                        &map_size,
-                        &map_size_lg,
-                        max_height,
-                    )
-                },
-                |wpos| {
-                    let pos = wpos.wpos_to_cpos();
-                    rescale_height(if bounds_check(pos) {
-                        scale_height_big(alt[pos])
-                    } else {
-                        0.0
-                    })
-                },
-                |pos, (r, g, b, a)| {
-                    world_map_rgba[pos.y * map_size.x as usize + pos.x] =
-                        u32::from_le_bytes([r, g, b, a]);
-                },
-            );
-            // Generate map with topographical lines and stylized colors
-            map_config.is_contours = true;
-            map_config.is_stylized_topo = true;
-            map_config.generate(
-                |pos| {
-                    sample_pos(
-                        &map_config,
-                        pos,
-                        &alt,
-                        &rgba,
-                        &map_size,
-                        &map_size_lg,
-                        max_height,
-                    )
-                },
-                |wpos| {
-                    let pos = wpos.wpos_to_cpos();
-                    rescale_height(if bounds_check(pos) {
-                        scale_height_big(alt[pos])
-                    } else {
-                        0.0
-                    })
-                },
-                |pos, (r, g, b, a)| {
-                    world_map_topo[pos.y * map_size.x as usize + pos.x] =
-                        u32::from_le_bytes([r, g, b, a]);
-                },
-            );
-            let make_raw = |rgb| -> Result<_, Error> {
-                let mut raw = vec![0u8; 4 * world_map_rgba.len()];
-                LittleEndian::write_u32_into(rgb, &mut raw);
-                Ok(Arc::new(
-                    DynamicImage::ImageRgba8({
-                        // Should not fail if the dimensions are correct.
-                        let map =
-                            image::ImageBuffer::from_raw(u32::from(map_size.x), u32::from(map_size.y), raw);
-                        map.ok_or_else(|| Error::Other("Server sent a bad world map image".into()))?
-                    })
-                    // Flip the image, since Voxygen uses an orientation where rotation from
-                    // positive x axis to positive y axis is counterclockwise around the z axis.
-                    .flipv(),
-                ))
+                // Generate standard shaded map
+                map_config.is_shaded = true;
+                map_config.generate(
+                    |pos| {
+                        sample_pos(
+                            &map_config,
+                            pos,
+                            &alt,
+                            &rgba,
+                            &map_size,
+                            &map_size_lg,
+                            max_height,
+                        )
+                    },
+                    |wpos| {
+                        let pos = wpos.wpos_to_cpos();
+                        rescale_height(if bounds_check(pos) {
+                            scale_height_big(alt[pos])
+                        } else {
+                            0.0
+                        })
+                    },
+                    |pos, (r, g, b, a)| {
+                        world_map_rgba[pos.y * map_size.x as usize + pos.x] =
+                            u32::from_le_bytes([r, g, b, a]);
+                    },
+                );
+                // Generate map with topographical lines and stylized colors
+                map_config.is_contours = true;
+                map_config.is_stylized_topo = true;
+                map_config.generate(
+                    |pos| {
+                        sample_pos(
+                            &map_config,
+                            pos,
+                            &alt,
+                            &rgba,
+                            &map_size,
+                            &map_size_lg,
+                            max_height,
+                        )
+                    },
+                    |wpos| {
+                        let pos = wpos.wpos_to_cpos();
+                        rescale_height(if bounds_check(pos) {
+                            scale_height_big(alt[pos])
+                        } else {
+                            0.0
+                        })
+                    },
+                    |pos, (r, g, b, a)| {
+                        world_map_topo[pos.y * map_size.x as usize + pos.x] =
+                            u32::from_le_bytes([r, g, b, a]);
+                    },
+                );
+                let make_raw = |rgb| -> Result<_, Error> {
+                    let mut raw = vec![0u8; 4 * world_map_rgba.len()];
+                    LittleEndian::write_u32_into(rgb, &mut raw);
+                    Ok(Arc::new(
+                        DynamicImage::ImageRgba8({
+                            // Should not fail if the dimensions are correct.
+                            let map =
+                                image::ImageBuffer::from_raw(u32::from(map_size.x), u32::from(map_size.y), raw);
+                            map.ok_or_else(|| Error::Other("Server sent a bad world map image".into()))?
+                        })
+                        // Flip the image, since Voxygen uses an orientation where rotation from
+                        // positive x axis to positive y axis is counterclockwise around the z axis.
+                        .flipv(),
+                    ))
+                };
+                let world_map_rgb_img = make_raw(&world_map_rgba)?;
+                let world_map_topo_img = make_raw(&world_map_topo)?;
+                vec![world_map_rgb_img, world_map_topo_img]
             };
             let lod_base = rgba;
             let lod_alt = alt;
-            let world_map_rgb_img = make_raw(&world_map_rgba)?;
-            let world_map_topo_img = make_raw(&world_map_topo)?;
-            let world_map_layers = vec![world_map_rgb_img, world_map_topo_img];
             let horizons = (west.0, west.1, east.0, east.1)
                 .into_par_iter()
                 .map(|(wa, wh, ea, eh)| u32::from_le_bytes([wa, wh, ea, eh]))

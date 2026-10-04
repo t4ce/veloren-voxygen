@@ -30,6 +30,8 @@ use winit::{
     window::{CursorGrabMode, Window, WindowId},
 };
 
+const MENU_DELAY: Duration = Duration::from_secs(3);
+
 const FRAME: Duration = Duration::from_nanos(16_666_667);
 
 fn connection_progress(message: std::fmt::Arguments<'_>) {
@@ -53,7 +55,7 @@ struct Args {
     server: String,
     #[arg(long, default_value = "t4ce")]
     username: String,
-    /// Existing character ID; otherwise select the first existing character.
+    /// Existing character ID; otherwise create/reuse <username>-headless.
     #[arg(long)]
     character: Option<i64>,
     #[arg(long, default_value_t = 5, value_parser = clap::value_parser!(u32).range(1..=65))]
@@ -98,10 +100,14 @@ struct App {
     window: Option<trueos::ui4_scene::Frame>,
     password: String,
     pending: Option<mpsc::Receiver<Result<Client, String>>>,
+    login_progress: Option<mpsc::Receiver<String>>,
     client: Option<Client>,
     input: Input,
     captured: bool,
     character_requested: bool,
+    character_created: bool,
+    world_joined: bool,
+    menu_due: Option<Instant>,
     #[cfg(not(target_os = "trueos"))]
     next_tick: Instant,
     last_tick: Instant,
@@ -161,10 +167,14 @@ impl App {
             window: None,
             password: String::new(),
             pending: None,
+            login_progress: None,
             client: None,
             input: Input::default(),
             captured: false,
             character_requested: false,
+            character_created: false,
+            world_joined: false,
+            menu_due: None,
             #[cfg(not(target_os = "trueos"))]
             next_tick: Instant::now(),
             last_tick: Instant::now(),
@@ -233,14 +243,18 @@ impl App {
         let auth_server = self.args.auth_server.trim_end_matches('/').to_owned();
         let runtime = Arc::clone(&self.runtime);
         let (sender, receiver) = mpsc::channel();
+        let (progress_sender, progress_receiver) = mpsc::channel();
+        self.login_progress = Some(progress_receiver);
         self.pending = Some(receiver);
         self.prompt("Connecting…");
         std::thread::spawn(move || {
-            connection_progress(format_args!(
-                "Voxygen login worker started: {username} @ {server}"
-            ));
+            let report = |message: String| {
+                connection_progress(format_args!("{message}"));
+                let _ = progress_sender.send(message);
+            };
+            report(format!("Login worker started: {username} @ {server}"));
             let result = runtime.block_on(async {
-                connection_progress(format_args!("Voxygen login future polling; timeout=60s"));
+                report("Login future polling; timeout=60s".to_owned());
                 tokio::time::timeout(
                     Duration::from_secs(60),
                     Client::new(
@@ -254,9 +268,7 @@ impl App {
                         &password,
                         None,
                         |endpoint| endpoint.trim_end_matches('/') == auth_server,
-                        &|stage| {
-                            connection_progress(format_args!("Voxygen connection stage: {stage:?}"))
-                        },
+                        &|stage| report(format!("Connection stage: {stage:?}")),
                         |_| {},
                         std::path::PathBuf::new(),
                         ClientType::Game,
@@ -335,6 +347,11 @@ impl App {
     }
 
     fn tick(&mut self) {
+        if let Some(progress) = &self.login_progress {
+            while let Ok(message) = progress.try_recv() {
+                self.prompt(&message);
+            }
+        }
         let connected = self
             .pending
             .as_ref()
@@ -345,10 +362,15 @@ impl App {
             });
         if let Some(result) = connected {
             self.pending = None;
+            self.login_progress = None;
             match result {
                 Ok(mut client) => {
                     client.load_character_list();
                     self.client = Some(client);
+                    self.character_requested = false;
+                    self.character_created = false;
+                    self.world_joined = false;
+                    self.menu_due = Some(Instant::now() + MENU_DELAY);
                     self.last_tick = Instant::now();
                     self.prompt("Loading characters…");
                 }
@@ -371,6 +393,7 @@ impl App {
                 self.capture(false);
                 self.client = None;
                 self.character_requested = false;
+                self.world_joined = false;
                 self.prompt("Disconnected — type password and press Enter to retry");
                 return;
             }
@@ -382,6 +405,7 @@ impl App {
                     self.capture(false);
                     self.client = None;
                     self.character_requested = false;
+                    self.world_joined = false;
                     self.prompt("Disconnected — type password and press Enter to retry");
                     return;
                 }
@@ -390,26 +414,36 @@ impl App {
                     self.capture(false);
                     self.client = None;
                     self.character_requested = false;
+                    self.world_joined = false;
                     self.prompt(&format!("{error} — type password and Enter to retry"));
                     return;
                 }
-                Event::CharacterJoined(_) => info!("Headless player joined the world"),
+                Event::CharacterJoined(_) => {
+                    self.world_joined = true;
+                    self.capture(true);
+                    self.prompt("World entry confirmed by server — WASD / mouse / Space to jump");
+                    if let Some(position) = self.client.as_ref().and_then(Client::position) {
+                        connection_progress(format_args!(
+                            "Voxygen joined at position {position:?}"
+                        ));
+                    }
+                }
                 _ => {}
             }
         }
         if !self.character_requested {
             let client = self.client.as_mut().expect("connected client");
             let list = client.character_list();
-            if list.loading {
+            if list.loading || self.menu_due.is_some_and(|due| now < due) {
                 return;
             }
+            let alias = headless_character_alias(&self.args.username);
             let character = list
                 .characters
                 .iter()
-                .find(|item| {
-                    self.args
-                        .character
-                        .is_none_or(|id| item.character.id == Some(CharacterId(id)))
+                .find(|item| match self.args.character {
+                    Some(id) => item.character.id == Some(CharacterId(id)),
+                    None => item.character.alias == alias,
                 })
                 .and_then(|item| item.character.id);
             match character {
@@ -422,14 +456,26 @@ impl App {
                         },
                     );
                     self.character_requested = true;
-                    self.capture(true);
-                    self.prompt("Playing — WASD / mouse / Space / Shift; Esc releases mouse");
+                    self.prompt("Entering world — waiting for server confirmation…");
+                }
+                None if self.args.character.is_none() && !self.character_created => {
+                    client.create_character(
+                        alias.clone(),
+                        Some("common.items.weapons.sword.starter".to_owned()),
+                        None,
+                        common::comp::Body::Humanoid(common::comp::humanoid::Body::random()),
+                        false,
+                        None,
+                    );
+                    self.character_created = true;
+                    self.menu_due = Some(now + MENU_DELAY);
+                    self.prompt(&format!(
+                        "Creating {alias} — will enter after server confirmation"
+                    ));
                 }
                 None => {
                     self.client = None;
-                    self.prompt(
-                        "No matching existing character — create one in normal Voxygen first",
-                    );
+                    self.prompt("Character not found after selection/creation — type password and Enter to retry");
                 }
             }
         }
@@ -533,7 +579,7 @@ impl ApplicationHandler for App {
                     self.key(key, pressed, event.repeat);
                 }
             }
-            WindowEvent::MouseInput { state, button, .. } if self.character_requested => {
+            WindowEvent::MouseInput { state, button, .. } if self.world_joined => {
                 let pressed = state == ElementState::Pressed;
                 if !self.captured && pressed {
                     self.capture(true);
@@ -574,6 +620,15 @@ impl ApplicationHandler for App {
     }
 }
 
+fn headless_character_alias(username: &str) -> String {
+    let suffix = "-headless";
+    let prefix: String = username
+        .chars()
+        .take(common::character::MAX_NAME_LENGTH - suffix.len())
+        .collect();
+    format!("{prefix}{suffix}")
+}
+
 /// Returns true when Enter submits the hidden password buffer.
 fn edit_password(password: &mut String, key: KeyCode, text: Option<&str>, composing: bool) -> bool {
     if composing {
@@ -598,6 +653,16 @@ fn edit_password(password: &mut String, key: KeyCode, text: Option<&str>, compos
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_character_alias_is_stable_and_fits_the_server_name_limit() {
+        assert_eq!(headless_character_alias("t4ce"), "t4ce-headless");
+        let long_name = "é".repeat(common::character::MAX_NAME_LENGTH * 2);
+        let alias = headless_character_alias(&long_name);
+        assert!(common::character::verify_character_name(&alias));
+        assert_eq!(alias.chars().count(), common::character::MAX_NAME_LENGTH);
+        assert!(alias.ends_with("-headless"));
+    }
 
     #[test]
     fn password_unicode_editing_and_enter_submission() {

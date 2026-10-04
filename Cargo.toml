@@ -61,6 +61,8 @@ image = { version = "0.25", default-features = false, features = ["png", "ico"] 
 
 [target.'cfg(target_os = "trueos")'.dependencies]
 trueos = { path = "../TRUEOS-Blueprints/api", features = ["ui4-scene", "tokio-net-probe"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "ring"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 
 [target.'cfg(not(target_os = "trueos"))'.dependencies]
 mumble-link = "0.2.0"

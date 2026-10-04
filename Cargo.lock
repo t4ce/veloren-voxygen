@@ -5695,6 +5695,8 @@ dependencies = [
  "guillotiere",
  "hashbrown 0.17.1",
  "hickory-resolver",
+ "hyper-rustls",
+ "hyper-util",
  "iced_native",
  "image",
  "inline_tweak",
