@@ -1,6 +1,6 @@
 use super::Show;
 use crate::{GlobalState, ui::fonts::Fonts};
-use client::{self, Client, UserNotification};
+use crate::client::{Client, UserNotification};
 use conrod_core::{
     Color, Colorable, Positionable, Widget, WidgetCommon,
     widget::{self, Text},

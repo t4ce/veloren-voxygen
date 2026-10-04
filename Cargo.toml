@@ -10,9 +10,14 @@ autobenches = false
 autotests = false
 
 [dependencies]
+authc = { git = "https://gitlab.com/veloren/auth.git", rev = "ae0e16783a9f9041951296885f082308e155db79" }
+hickory-resolver = { version = "0.26.1", features = ["system-config", "tokio"] }
+rustls = { version = "0.23", default-features = false, features = ["std"] }
+quinn = { version = "0.11", features = ["rustls"] }
+byteorder = "1.3.2"
+network = { package = "veloren-network", path = "network", features = ["compression", "quic"], default-features = false }
 mumble-link = "0.2.0"
-client = { package = "veloren-client", path = "client" }
-common = { package = "veloren-common", path = "common" }
+common = { package = "veloren-common", path = "common", features = ["no-assets"] }
 common-base = { package = "veloren-common-base", path = "common/base" }
 common-ecs = { package = "veloren-common-ecs", path = "common/ecs" }
 common-frontend = { package = "veloren-common-frontend", path = "common/frontend" }
@@ -21,7 +26,7 @@ common-net = { package = "veloren-common-net", path = "common/net" }
 common-state = { package = "veloren-common-state", path = "common/state" }
 common-systems = { package = "veloren-common-systems", path = "common/systems" }
 anim = { package = "veloren-voxygen-anim", path = "anim" }
-i18n = { package = "veloren-client-i18n", path = "client/i18n" }
+i18n = { package = "veloren-client-i18n", path = "common/client-i18n" }
 i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
 winit = { version = "0.30.12", features = ["serde"] }
 wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", features = ["spirv"] }
@@ -33,7 +38,7 @@ iced = { package = "iced_native", git = "https://github.com/Imberflur/iced", tag
 glyph_brush = "0.7.0"
 
 # ECS
-specs = { version = "0.20", features = ["nightly", "serde", "storage-event-control"] }
+specs = { version = "0.20", features = ["nightly", "serde", "storage-event-control", "derive"] }
 
 # Mathematics
 vek = { version = "0.17.0", features = ["serde", "mint"] }
@@ -62,7 +67,7 @@ kira = { version = "0.12", default-features = false, features = [
     "vorbis",
 ] }
 lazy_static = "1.4.0"
-num-traits = "0.2"
+num-traits = { version = "0.2" }
 num-integer = "0.1"
 ordered-float = { version = "5", default-features = true }
 regex = "1.11"
@@ -74,7 +79,7 @@ serde = { version = "1.0.118", features = ["derive", "rc"] }
 serde_with = { version = "3", features = ["hashbrown_0_17"] }
 slab = "0.4.2"
 strum = { version = "0.28", features = ["derive"] }
-tracing = "0.1"
+tracing = { version = "0.1" }
 treeculler = "0.4"
 tokio = { version = "=1.52.3", default-features = false, features = ["rt", "rt-multi-thread"] }
 num_cpus = "1.0"

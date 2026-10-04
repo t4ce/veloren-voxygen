@@ -16,7 +16,7 @@ use crate::{
         slot::{ContentSize, SlotMaker},
     },
 };
-use client::{self, Client};
+use crate::client::{Client};
 use common::{
     assets::AssetExt,
     comp::inventory::{

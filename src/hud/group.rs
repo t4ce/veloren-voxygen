@@ -13,7 +13,7 @@ use crate::{
     ui::{ImageFrame, RichText, Tooltip, TooltipManager, Tooltipable, fonts::Fonts},
     window::LastInput,
 };
-use client::{self, Client};
+use crate::client::{Client};
 use common::{
     combat,
     comp::{Stats, group::Role, inventory::item::MaterialStatManifest, invite::InviteKind},

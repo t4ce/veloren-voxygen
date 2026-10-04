@@ -2,7 +2,7 @@ use core::cmp::Ordering;
 use alloc::collections::VecDeque;
 
 use crate::{settings::Settings, ui::fonts::Fonts};
-use client::Client;
+use crate::client::Client;
 use conrod_core::{
     Colorable, Positionable, UiCell, Widget, WidgetCommon,
     widget::{self, Id, Rectangle, Text},

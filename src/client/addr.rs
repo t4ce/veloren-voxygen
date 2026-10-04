@@ -66,11 +66,11 @@ pub(crate) async fn try_connect<F>(
     override_port: Option<u16>,
     prefer_ipv6: bool,
     f: F,
-) -> Result<network::Participant, crate::error::Error>
+) -> Result<network::Participant, crate::client::error::Error>
 where
     F: Fn(SocketAddr) -> network::ConnectAddr,
 {
-    use crate::error::Error;
+    use crate::client::error::Error;
     let mut participant = None;
     for mut addr in resolve(address, prefer_ipv6)
         .await

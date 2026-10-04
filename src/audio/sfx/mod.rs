@@ -84,7 +84,7 @@ use crate::{
     scene::{Camera, FigureMgr, Terrain},
 };
 
-use client::Client;
+use crate::client::Client;
 use common::{
     DamageSource,
     assets::{AssetExt, AssetHandle, Ron},

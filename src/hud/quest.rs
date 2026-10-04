@@ -1,4 +1,4 @@
-use client::{Client, EcsEntity};
+use crate::client::{Client, EcsEntity};
 use common::{
     comp::{self, ItemKey},
     rtsim,

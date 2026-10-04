@@ -44,7 +44,7 @@
 //! - If you are not the author of the track, ensure that the song's licensing
 //!   permits usage of the track for non-commercial use
 use crate::audio::{AudioFrontend, MusicChannelTag};
-use client::Client;
+use crate::client::Client;
 use common::{
     assets::{Asset, AssetCache, AssetExt, AssetHandle, BoxedError, Ron, SharedString},
     calendar::{Calendar, CalendarEvent},

@@ -4,7 +4,7 @@ mod combat;
 mod movement;
 mod vehicle;
 
-use client::Client;
+use crate::client::Client;
 use common::terrain::TerrainChunk;
 use common_state::State;
 

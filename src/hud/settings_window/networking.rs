@@ -104,7 +104,7 @@ impl Widget for Networking<'_> {
         if let Some(new_val) = ImageSlider::discrete(
             terrain_view_distance,
             1,
-            client::MAX_SELECTABLE_VIEW_DISTANCE,
+            crate::client::MAX_SELECTABLE_VIEW_DISTANCE,
             self.imgs.slider_indicator,
             self.imgs.slider,
         )
@@ -150,7 +150,7 @@ impl Widget for Networking<'_> {
         if let Some(new_val) = ImageSlider::discrete(
             entity_view_distance,
             1,
-            client::MAX_SELECTABLE_VIEW_DISTANCE,
+            crate::client::MAX_SELECTABLE_VIEW_DISTANCE,
             self.imgs.slider_indicator,
             self.imgs.slider,
         )

@@ -25,7 +25,7 @@ use crate::{
     },
     window::{LastInput, MenuInput},
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     combat::{Damage, combat_rating, perception_dist_multiplier_from_stealth},
     comp::{

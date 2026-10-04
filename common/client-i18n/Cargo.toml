@@ -10,8 +10,8 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 [dependencies]
 # Assets
-common-assets = {package = "veloren-common-assets", path = "../../common/assets"}
-common-i18n = { package = "veloren-common-i18n", path = "../../common/i18n" }
+common-assets = {package = "veloren-common-assets", path = "../assets"}
+common-i18n = { package = "veloren-common-i18n", path = "../i18n" }
 serde = { version = "1.0.118", features = ["derive"] }
 # Localization
 unic-langid = { version = "0.9"}

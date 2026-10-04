@@ -12,7 +12,7 @@ use crate::{
     settings::Settings,
     window::Event as WinEvent,
 };
-use client::{self, Client};
+use crate::client::{Client};
 use common::{comp, event::UpdateCharacterMetadata, resources::DeltaTime};
 use common_base::span;
 use specs::WorldExt;
@@ -260,8 +260,8 @@ impl PlayState for CharSelectionState {
                     let mut join_metadata = None;
                     for event in events {
                         match event {
-                            client::Event::SetViewDistance(_vd) => {},
-                            client::Event::Disconnect => {
+                            crate::client::Event::SetViewDistance(_vd) => {},
+                            crate::client::Event::Disconnect => {
                                 global_state.info_message = Some(
                                     localized_strings
                                         .get_msg("main-login-server_shut_down")
@@ -269,27 +269,27 @@ impl PlayState for CharSelectionState {
                                 );
                                 return PlayStateResult::Pop;
                             },
-                            client::Event::Chat(m) => self
+                            crate::client::Event::Chat(m) => self
                                 .persisted_state
                                 .borrow_mut()
                                 .message_backlog
                                 .new_message(&self.client.borrow(), &global_state.profile, m),
-                            client::Event::MapMarker(marker_event) => self
+                            crate::client::Event::MapMarker(marker_event) => self
                                 .persisted_state
                                 .borrow_mut()
                                 .location_markers
                                 .update(marker_event),
-                            client::Event::CharacterCreated(character_id) => {
+                            crate::client::Event::CharacterCreated(character_id) => {
                                 self.char_selection_ui.select_character(character_id);
                             },
-                            client::Event::CharacterError(error) => {
+                            crate::client::Event::CharacterError(error) => {
                                 self.char_selection_ui.display_error(error);
                             },
-                            client::Event::CharacterJoined(metadata) => {
+                            crate::client::Event::CharacterJoined(metadata) => {
                                 join_metadata = Some(metadata);
                             },
                             #[expect(unused_variables)]
-                            client::Event::PluginDataReceived(data) => {
+                            crate::client::Event::PluginDataReceived(data) => {
                             },
                             // TODO: See if we should handle StartSpectate here instead.
                             _ => {},

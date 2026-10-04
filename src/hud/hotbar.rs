@@ -67,7 +67,7 @@ impl State {
     // TODO: remove pending UI
     // Adds ability slots if missing and should be present
     // Removes ability slots if not there and shouldn't be present
-    pub fn maintain_abilities(&mut self, client: &client::Client, info: &HudInfo) {
+    pub fn maintain_abilities(&mut self, client: &crate::client::Client, info: &HudInfo) {
         use specs::WorldExt;
         if let Some(active_abilities) = client
             .state()

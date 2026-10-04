@@ -12,7 +12,7 @@ use crate::{
     },
 };
 use chrono::{DateTime, Local};
-use client::Client;
+use crate::client::Client;
 use common::{
     cmd::ServerChatCommand,
     comp::{ChatMode, ChatMsg, ChatType, group::Role},

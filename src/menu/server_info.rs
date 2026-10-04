@@ -12,7 +12,7 @@ use crate::{
     },
     window::{self, Event},
 };
-use client::ServerInfo;
+use crate::client::ServerInfo;
 use common::{
     assets::{self, AssetExt},
     comp,

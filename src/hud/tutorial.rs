@@ -5,7 +5,7 @@ use crate::{
     ui::{ImageFrame, RichText, Tooltip, TooltipManager, Tooltipable, fonts::Fonts},
     window::{ControllerType, KeyMouse, LastInput},
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     DamageSource,
     comp::{self, Vel},

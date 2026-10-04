@@ -21,7 +21,7 @@ use crate::{
     },
     window,
 };
-use client::{Client, ServerInfo};
+use crate::client::{Client, ServerInfo};
 use common::{
     LoadoutBuilder,
     character::{CharacterId, CharacterItem, MAX_CHARACTERS_PER_PLAYER, MAX_NAME_LENGTH},

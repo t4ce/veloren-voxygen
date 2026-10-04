@@ -15,7 +15,7 @@ use crate::{
     window::{Event, PressState},
 };
 use anim::{Animation, character::CharacterSkeleton, ship::ShipSkeleton};
-use client::Client;
+use crate::client::Client;
 use common::{
     comp::{
         humanoid,

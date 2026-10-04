@@ -7,7 +7,7 @@ use crate::{
     settings::Settings,
 };
 use alloc::{boxed::Box, string::String, vec::Vec};
-use client::Client;
+use crate::client::Client;
 use common::{cmd::ServerChatCommand, comp::Body};
 use core::time::Duration;
 

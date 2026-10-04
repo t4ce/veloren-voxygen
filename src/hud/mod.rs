@@ -92,7 +92,7 @@ use crate::{
     },
     window::{Event as WinEvent, MenuInput},
 };
-use client::{Client, UserNotification};
+use crate::client::{Client, UserNotification};
 use common::{
     combat,
     comp::{

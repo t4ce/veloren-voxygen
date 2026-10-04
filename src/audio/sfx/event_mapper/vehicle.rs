@@ -10,7 +10,7 @@ use crate::{
 
 use super::EventMapper;
 
-use client::Client;
+use crate::client::Client;
 use common::{
     comp::{Body, Pos, Vel, ship},
     terrain::TerrainChunk,

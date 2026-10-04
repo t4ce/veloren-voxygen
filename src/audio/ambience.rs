@@ -5,7 +5,7 @@ use crate::{
     scene::{Camera, Terrain},
     settings::AudioSettings,
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     assets::{AssetExt, AssetHandle, Ron},
     terrain::{Block, CoordinateConversions, TerrainChunk, site::SiteKindMeta},

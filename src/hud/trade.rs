@@ -7,7 +7,7 @@ use conrod_core::{
 use specs::{Entity as EcsEntity, WorldExt};
 use vek::*;
 
-use client::Client;
+use crate::client::Client;
 use common::{
     comp::{
         Inventory, Stats,

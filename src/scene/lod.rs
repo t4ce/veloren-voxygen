@@ -7,7 +7,7 @@ use crate::{
     scene::{Camera, camera},
     settings::Settings,
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     assets::{AssetExt, Obj},
     lod,

@@ -7,7 +7,7 @@ use crate::{
     settings::HudPositionSettings,
     ui::{ImageFrame, Tooltip, TooltipManager, Tooltipable, fonts::Fonts},
 };
-use client::{self, Client};
+use crate::client::{Client};
 use common::{comp::group, resources::BattleMode, uid::Uid};
 use conrod_core::{
     Color, Colorable, Labelable, Positionable, Sizeable, Widget, WidgetCommon, color,

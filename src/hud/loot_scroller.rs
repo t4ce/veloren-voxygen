@@ -5,7 +5,7 @@ use super::{
     util,
 };
 use crate::ui::{ImageFrame, ItemTooltip, ItemTooltipManager, ItemTooltipable, fonts::Fonts};
-use client::Client;
+use crate::client::Client;
 use common::{
     comp::{
         FrontendItem, Inventory,

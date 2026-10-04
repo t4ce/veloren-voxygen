@@ -39,7 +39,7 @@ use crate::{
     settings::Settings,
     window::{AnalogGameInput, Event},
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     calendar::Calendar,
     comp::{

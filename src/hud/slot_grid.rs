@@ -15,7 +15,7 @@ use crate::{
     },
     window::MenuInput,
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     assets::AssetExt,
     comp::{

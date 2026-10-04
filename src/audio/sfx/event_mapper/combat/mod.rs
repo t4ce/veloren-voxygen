@@ -8,7 +8,7 @@ use crate::{
 
 use super::EventMapper;
 
-use client::Client;
+use crate::client::Client;
 use common::{
     comp::{
         CharacterAbilityType, CharacterState, Inventory, Pos, inventory::slot::EquipSlot,

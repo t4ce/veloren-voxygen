@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::EventMapper;
-use client::Client;
+use crate::client::Client;
 use common::{comp::Pos, spiral::Spiral2d, terrain::TerrainChunk, vol::RectRasterableVol};
 use common_state::State;
 use hashbrown::HashMap;

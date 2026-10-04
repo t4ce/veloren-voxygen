@@ -10,7 +10,7 @@ use crate::{
     settings::HudPositionSettings,
     ui::{KeyedJobs, fonts::Fonts, img_ids},
 };
-use client::{self, Client};
+use crate::client::{Client};
 use common::{
     comp,
     comp::group::Role,

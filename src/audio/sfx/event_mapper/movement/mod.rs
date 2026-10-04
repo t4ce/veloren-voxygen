@@ -8,7 +8,7 @@ use crate::{
     ecs::comp::{Footsteps, Interpolated},
     scene::{Camera, FigureMgr, Terrain},
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     comp::{Body, CharacterState, PhysicsState, Scale, Vel},
     resources::DeltaTime,

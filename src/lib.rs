@@ -14,6 +14,7 @@ extern crate alloc;
 pub mod ui;
 pub mod audio;
 pub mod cli;
+pub mod client;
 pub mod cmd;
 mod credits;
 mod ecs;

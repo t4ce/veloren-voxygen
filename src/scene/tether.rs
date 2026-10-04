@@ -2,7 +2,7 @@ use crate::render::{
     FirstPassDrawer, Mesh, Model, Quad, Renderer,
     pipelines::rope::{BoundLocals, Locals, Vertex},
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     comp,
     link::Is,

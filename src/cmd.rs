@@ -17,7 +17,7 @@ use crate::{
     render::ExperimentalShader,
     session::{SessionState, settings_change::change_render_mode},
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     cmd::*,
     comp::Admin,

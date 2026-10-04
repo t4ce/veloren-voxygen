@@ -10,7 +10,7 @@ use crate::{
     window::Event,
 };
 use chrono::{DateTime, Local, Utc};
-use client::{
+use crate::client::{
     Client, ClientInitStage, ServerInfo,
     addr::ConnectionArgs,
     error::{InitProtocolError, NetworkConnectError, NetworkError},
@@ -161,8 +161,8 @@ impl PlayState for MainMenuState {
                 Ok(events) => {
                     for event in events {
                         match event {
-                            client::Event::SetViewDistance(_vd) => {},
-                            client::Event::Disconnect => {
+                            crate::client::Event::SetViewDistance(_vd) => {},
+                            crate::client::Event::Disconnect => {
                                 global_state.info_message = Some(
                                     localized_strings
                                         .get_msg("main-login-server_shut_down")
@@ -170,7 +170,7 @@ impl PlayState for MainMenuState {
                                 );
                                 self.init = InitState::None;
                             },
-                            client::Event::Chat(m) => {
+                            crate::client::Event::Chat(m) => {
                                 if let InitState::Pipeline(client, persisted_state) = &mut self.init
                                 {
                                     persisted_state.message_backlog.new_message(
@@ -180,7 +180,7 @@ impl PlayState for MainMenuState {
                                     )
                                 }
                             },
-                            client::Event::MapMarker(marker_event) => {
+                            crate::client::Event::MapMarker(marker_event) => {
                                 if let InitState::Pipeline(_client, persisted_state) =
                                     &mut self.init
                                 {
@@ -188,7 +188,7 @@ impl PlayState for MainMenuState {
                                 }
                             },
                             #[expect(unused_variables)]
-                            client::Event::PluginDataReceived(data) => {
+                            crate::client::Event::PluginDataReceived(data) => {
                             },
                             _ => {},
                         }
@@ -392,7 +392,7 @@ impl PlayState for MainMenuState {
 }
 
 pub(crate) fn get_client_msg_error(
-    error: client::Error,
+    error: crate::client::Error,
     mismatched_server_info: Option<ServerInfo>,
     localization: &LocalizationGuard,
 ) -> String {
@@ -421,7 +421,7 @@ pub(crate) fn get_client_msg_error(
         }
     };
 
-    use client::Error;
+    use crate::client::Error;
     match error {
         Error::SpecsErr(e) => {
             format!(
@@ -489,30 +489,30 @@ pub(crate) fn get_client_msg_error(
         },
         Error::AuthClientError(e) => match e {
             // TODO: remove parentheses
-            client::AuthClientError::RequestError(e) => format!(
+            crate::client::AuthClientError::RequestError(e) => format!(
                 "{}: {}",
                 localization.get_msg("main-login-failed_sending_request"),
                 e
             ),
-            client::AuthClientError::ResponseError(e) => format!(
+            crate::client::AuthClientError::ResponseError(e) => format!(
                 "{}: {}",
                 localization.get_msg("main-login-failed_sending_request"),
                 e
             ),
-            client::AuthClientError::CertificateLoad(e) => format!(
+            crate::client::AuthClientError::CertificateLoad(e) => format!(
                 "{}: {}",
                 localization.get_msg("main-login-failed_sending_request"),
                 e
             ),
-            client::AuthClientError::JsonError(e) => format!(
+            crate::client::AuthClientError::JsonError(e) => format!(
                 "{}: {}",
                 localization.get_msg("main-login-failed_sending_request"),
                 e
             ),
-            client::AuthClientError::InsecureSchema => localization
+            crate::client::AuthClientError::InsecureSchema => localization
                 .get_msg("main-login-insecure_auth_scheme")
                 .into(),
-            client::AuthClientError::ServerError(_, e) => String::from_utf8_lossy(&e).into(),
+            crate::client::AuthClientError::ServerError(_, e) => String::from_utf8_lossy(&e).into(),
         },
         Error::AuthServerUrlInvalid(e) => {
             format!(

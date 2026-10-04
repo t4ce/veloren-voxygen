@@ -6,14 +6,14 @@ pub mod addr;
 pub mod error;
 
 // Reexports
-pub use crate::error::Error;
+pub use crate::client::error::Error;
 pub use authc::AuthClientError;
 pub use common_net::msg::ServerInfo;
 pub use specs::{
     Builder, DispatcherBuilder, Entity as EcsEntity, Join, LendJoin, ReadStorage, World, WorldExt,
 };
 
-use crate::addr::ConnectionArgs;
+use crate::client::addr::ConnectionArgs;
 use byteorder::{ByteOrder, LittleEndian};
 use common::{
     character::{CharacterId, CharacterItem},
@@ -371,7 +371,7 @@ async fn connect_quic(
     override_port: Option<u16>,
     prefer_ipv6: bool,
     validate_tls: bool,
-) -> Result<network::Participant, crate::error::Error> {
+) -> Result<network::Participant, crate::client::error::Error> {
     let config = if validate_tls {
         quinn::ClientConfig::try_with_platform_verifier()?
     } else {
@@ -3411,8 +3411,7 @@ impl Client {
     /// The game state is purposefully not simulated to reduce the overhead of
     /// running the client. This method is for use in testing a server with
     /// many clients connected.
-    #[cfg(feature = "tick_network")]
-    #[expect(clippy::needless_collect)] // False positive
+    
     pub fn tick_network(&mut self, dt: Duration) -> Result<(), Error> {
         span!(_guard, "tick_network", "Client::tick_network");
         // Advance state time manually since we aren't calling `State::tick`

@@ -1,7 +1,7 @@
 use specs::{Join, LendJoin, WorldExt};
 use vek::*;
 
-use client::{self, Client};
+use crate::client::{Client};
 use common::{
     comp::{self, CapsulePrism, Health, tool::ToolKind},
     consts::{MAX_INTERACT_RANGE, MAX_PICKUP_RANGE},

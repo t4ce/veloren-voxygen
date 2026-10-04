@@ -16,7 +16,7 @@ use specs::WorldExt;
 use tracing::{error, info};
 use vek::*;
 
-use client::{self, Client};
+use crate::client::{Client};
 use common::{
     CachedSpatialGrid,
     comp::{
@@ -287,17 +287,17 @@ impl SessionState {
 
         for event in client.tick(self.inputs.clone(), dt)? {
             match event {
-                client::Event::Chat(m) => {
+                crate::client::Event::Chat(m) => {
                     self.hud.new_message(m);
                 },
-                client::Event::GroupInventoryUpdate(item, uid) => {
+                crate::client::Event::GroupInventoryUpdate(item, uid) => {
                     self.hud.new_loot_message(LootMessage {
                         amount: item.amount(),
                         item,
                         taken_by: uid,
                     });
                 },
-                client::Event::InviteComplete {
+                crate::client::Event::InviteComplete {
                     target,
                     answer,
                     kind,
@@ -333,7 +333,7 @@ impl SessionState {
 
                     self.hud.new_message(ChatType::Meta.into_plain_msg(msg));
                 },
-                client::Event::TradeComplete { result, trade: _ } => {
+                crate::client::Event::TradeComplete { result, trade: _ } => {
                     self.hud.clear_cursor();
                     self.hud
                         .new_message(ChatType::Meta.into_msg(Content::localized(match result {
@@ -342,7 +342,7 @@ impl SessionState {
                             TradeResult::NotEnoughSpace => "hud-trade-result-nospace",
                         })));
                 },
-                client::Event::InventoryUpdated(inv_events) => {
+                crate::client::Event::InventoryUpdated(inv_events) => {
                     let sfx_triggers = self.scene.sfx_mgr.triggers.read();
 
                     for inv_event in inv_events {
@@ -388,13 +388,13 @@ impl SessionState {
                         };
                     }
                 },
-                client::Event::Dialogue(sender_uid, dialogue) => {
+                crate::client::Event::Dialogue(sender_uid, dialogue) => {
                     if let Some(sender) = client.state().ecs().entity_from_uid(sender_uid) {
                         self.hud.dialogue(sender, pos, dialogue, global_state);
                     }
                 },
-                client::Event::Disconnect => return Ok(TickAction::Disconnect),
-                client::Event::DisconnectionNotification(time) => {
+                crate::client::Event::Disconnect => return Ok(TickAction::Disconnect),
+                crate::client::Event::DisconnectionNotification(time) => {
                     self.hud
                         .new_message(ChatType::CommandError.into_msg(match time {
                             0 => Content::localized("hud-chat-goodbye"),
@@ -403,32 +403,32 @@ impl SessionState {
                             )]),
                         }));
                 },
-                client::Event::Notification(n) => {
+                crate::client::Event::Notification(n) => {
                     global_state.profile.tutorial.event_notification(&n);
                     self.hud.new_notification(n);
                 },
-                client::Event::SetViewDistance(_vd) => {},
-                client::Event::Outcome(outcome) => {
+                crate::client::Event::SetViewDistance(_vd) => {},
+                crate::client::Event::Outcome(outcome) => {
                     global_state
                         .profile
                         .tutorial
                         .event_outcome(&client, &outcome);
                     outcomes.push(outcome);
                 },
-                client::Event::CharacterCreated(_) => {},
-                client::Event::CharacterEdited(_) => {},
-                client::Event::CharacterError(_) => {},
-                client::Event::CharacterJoined(_) => {
+                crate::client::Event::CharacterCreated(_) => {},
+                crate::client::Event::CharacterEdited(_) => {},
+                crate::client::Event::CharacterError(_) => {},
+                crate::client::Event::CharacterJoined(_) => {
                     self.scene.music_mgr.reset_track(&mut global_state.audio);
                 },
-                client::Event::MapMarker(event) => {
+                crate::client::Event::MapMarker(event) => {
                     self.hud
                         .persisted_state
                         .borrow_mut()
                         .location_markers
                         .update(event);
                 },
-                client::Event::StartSpectate(spawn_point) => {
+                crate::client::Event::StartSpectate(spawn_point) => {
                     let server_name = &client.server_info().name;
                     let spawn_point = global_state
                         .profile
@@ -444,13 +444,13 @@ impl SessionState {
 
                     self.scene.camera_mut().force_focus_pos(spawn_point);
                 },
-                client::Event::SpectatePosition(pos) => {
+                crate::client::Event::SpectatePosition(pos) => {
                     self.scene.camera_mut().force_focus_pos(pos);
                 },
-                client::Event::PluginDataReceived(data) => {
+                crate::client::Event::PluginDataReceived(data) => {
                     tracing::warn!("Received plugin data at wrong time {}", data.len());
                 },
-                client::Event::Gizmos(gizmos) => {
+                crate::client::Event::Gizmos(gizmos) => {
                     self.gizmos.retain(|gizmos| {
                         let keep = gizmos.2;
                         if !keep {

@@ -5192,32 +5192,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "veloren-client"
-version = "0.18.0"
-dependencies = [
- "authc",
- "byteorder",
- "hashbrown 0.17.1",
- "hickory-resolver",
- "image",
- "num-traits",
- "quinn",
- "rustls",
- "specs",
- "tokio",
- "tracing",
- "vek",
- "veloren-common",
- "veloren-common-base",
- "veloren-common-i18n",
- "veloren-common-net",
- "veloren-common-state",
- "veloren-common-systems",
- "veloren-network",
- "veloren-tokio-parallel",
-]
-
-[[package]]
 name = "veloren-client-i18n"
 version = "0.18.0"
 dependencies = [
@@ -5430,8 +5404,10 @@ dependencies = [
 name = "veloren-voxygen"
 version = "0.18.0"
 dependencies = [
+ "authc",
  "bitflags 2.13.0",
  "bytemuck",
+ "byteorder",
  "chrono",
  "chumsky",
  "clap",
@@ -5447,6 +5423,7 @@ dependencies = [
  "glyph_brush",
  "guillotiere",
  "hashbrown 0.17.1",
+ "hickory-resolver",
  "iced_native",
  "image",
  "inline_tweak",
@@ -5459,10 +5436,12 @@ dependencies = [
  "num_cpus",
  "open",
  "ordered-float 5.3.0",
+ "quinn",
  "rand 0.10.1",
  "rand_chacha 0.10.0",
  "regex",
  "ron",
+ "rustls",
  "serde",
  "serde_with",
  "sha2",
@@ -5473,7 +5452,6 @@ dependencies = [
  "tracing",
  "treeculler",
  "vek",
- "veloren-client",
  "veloren-client-i18n",
  "veloren-common",
  "veloren-common-base",
@@ -5483,6 +5461,7 @@ dependencies = [
  "veloren-common-net",
  "veloren-common-state",
  "veloren-common-systems",
+ "veloren-network",
  "veloren-tokio-parallel",
  "veloren-voxygen-anim",
  "veloren-voxygen-i18n-helpers",

@@ -10,7 +10,7 @@ use crate::{
         ice::{Element, IcedUi as Ui, Id, component::neat_button, style, widget::Image},
     },
 };
-use client::ClientInitStage;
+use crate::client::ClientInitStage;
 use common::assets::{self, AssetExt, Ron};
 use i18n::Localization;
 use iced::{Align, Column, Container, Length, Row, Space, Text, button};

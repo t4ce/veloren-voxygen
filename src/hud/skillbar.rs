@@ -24,7 +24,7 @@ use crate::{
 };
 use i18n::Localization;
 
-use client::{self, Client};
+use crate::client::{Client};
 use common::{
     comp::{
         self, Ability, ActiveAbilities, Body, Buffs, CharacterState, Combo, Energy, Hardcore,

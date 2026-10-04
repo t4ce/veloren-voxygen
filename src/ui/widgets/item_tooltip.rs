@@ -5,7 +5,7 @@ use crate::hud::{
     item_imgs::{ItemImgs, animate_by_pulse},
     util,
 };
-use client::Client;
+use crate::client::Client;
 use common::{
     comp::{
         Energy, Inventory,

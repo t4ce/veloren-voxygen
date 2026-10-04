@@ -5,7 +5,7 @@ use specs::{Join, LendJoin, ReadStorage, WorldExt};
 use vek::*;
 
 use super::target::{self, Target};
-use client::Client;
+use crate::client::Client;
 use common::{
     CachedSpatialGrid,
     comp::{

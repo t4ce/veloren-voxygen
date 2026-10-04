@@ -10,7 +10,7 @@ use crate::{
     ui::{ImageFrame, Tooltip, TooltipManager, Tooltipable, fonts::Fonts, img_ids},
     window::KeyMouse,
 };
-use client::{self, Client, SiteMarker};
+use crate::client::{Client, SiteMarker};
 use common::{
     comp,
     comp::group::Role,
