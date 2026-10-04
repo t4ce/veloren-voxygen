@@ -233,8 +233,6 @@ impl PlayState for ServerInfoState {
             self.ui.render(&mut ui_drawer);
         };
     }
-
-    fn egui_enabled(&self) -> bool { false }
 }
 
 impl Controls {

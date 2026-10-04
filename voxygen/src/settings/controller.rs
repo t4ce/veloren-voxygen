@@ -478,8 +478,7 @@ impl ControllerSettings {
             GameInput::Controls => Some(Button::Simple(GilButton::Unknown)),
             GameInput::ToggleInterface => Some(Button::Simple(GilButton::Unknown)),
             GameInput::ToggleDebug => Some(Button::Simple(GilButton::Unknown)),
-            #[cfg(feature = "egui-ui")]
-            GameInput::ToggleEguiDebug => Some(Button::Simple(GilButton::Unknown)),
+            
             GameInput::ToggleChat => Some(Button::Simple(GilButton::Unknown)),
             GameInput::Fullscreen => Some(Button::Simple(GilButton::Unknown)),
             GameInput::Screenshot => Some(Button::Simple(GilButton::Unknown)),
@@ -761,12 +760,7 @@ impl ControllerSettings {
                 mod1: Button::Simple(GilButton::Unknown),
                 mod2: Button::Simple(GilButton::Unknown),
             }),
-            #[cfg(feature = "egui-ui")]
-            GameInput::ToggleEguiDebug => Some(LayerEntry {
-                button: Button::Simple(GilButton::Unknown),
-                mod1: Button::Simple(GilButton::Unknown),
-                mod2: Button::Simple(GilButton::Unknown),
-            }),
+            
             GameInput::ToggleChat => Some(LayerEntry {
                 button: Button::Simple(GilButton::Unknown),
                 mod1: Button::Simple(GilButton::Unknown),

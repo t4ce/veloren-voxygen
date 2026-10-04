@@ -5,7 +5,6 @@ extern crate alloc;
 #[cfg(all(
     target_os = "windows",
     not(feature = "tracy-memory"),
-    not(feature = "hot-egui"),
     not(feature = "hot-anim"),
 ))]
 #[global_allocator]
@@ -36,8 +35,7 @@ use common::clock::Clock;
 use std::panic;
 use std::path::PathBuf;
 use tracing::{info, warn};
-#[cfg(feature = "egui-ui")]
-use veloren_voxygen::ui::egui::EguiState;
+
 use wgpu::{Backends, Instance};
 
 fn main() {
@@ -148,12 +146,7 @@ fn main() {
     {
         anim::init();
     }
-
-    // Initialise watcher for egui hot-reloading
-    #[cfg(feature = "hot-egui")]
-    {
-        voxygen_egui::init();
-    }
+    
 
     // Setup audio
     let mut audio = match settings.audio.output {
@@ -222,8 +215,7 @@ fn main() {
 
     let lazy_init = SpriteRenderContext::new(window.renderer_mut());
 
-    #[cfg(feature = "egui-ui")]
-    let egui_state = EguiState::new(&window);
+    
 
     #[cfg(feature = "discord")]
     let discord = if settings.networking.enable_discord_integration {
@@ -239,8 +231,7 @@ fn main() {
         profile,
         window,
         tokio_runtime,
-        #[cfg(feature = "egui-ui")]
-        egui_state,
+        
         lazy_init,
         clock: Clock::new(core::time::Duration::from_secs_f64(
             1.0 / get_fps(settings.graphics.max_fps) as f64,

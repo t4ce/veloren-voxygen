@@ -39,8 +39,7 @@ pub mod window;
 use crate::singleplayer::Singleplayer;
 #[cfg(feature = "singleplayer")]
 use crate::singleplayer::SingleplayerState;
-#[cfg(feature = "egui-ui")]
-use crate::ui::egui::EguiState;
+
 use crate::{
     audio::AudioFrontend,
     profile::Profile,
@@ -64,8 +63,7 @@ pub struct GlobalState {
     pub profile: Profile,
     pub window: Window,
     pub tokio_runtime: Arc<Runtime>,
-    #[cfg(feature = "egui-ui")]
-    pub egui_state: EguiState,
+    
     pub lazy_init: scene::terrain::SpriteRenderContextLazy,
     pub audio: AudioFrontend,
     pub info_message: Option<String>,
@@ -156,7 +154,7 @@ pub trait PlayState {
 
     /// Draw the play state.
     fn render(&self, drawer: &mut Drawer<'_>, settings: &Settings);
-
-    /// Determines whether egui will be rendered for this play state
-    fn egui_enabled(&self) -> bool;
 }
+
+#[allow(dead_code)]
+mod debug_overlay;

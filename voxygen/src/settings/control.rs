@@ -248,8 +248,7 @@ impl ControlSettings {
             GameInput::Controls => Key::Named(NamedKey::F1),
             GameInput::ToggleInterface => Key::Named(NamedKey::F2),
             GameInput::ToggleDebug => Key::Named(NamedKey::F3),
-            #[cfg(feature = "egui-ui")]
-            GameInput::ToggleEguiDebug => Key::Named(NamedKey::F7),
+            
             GameInput::ToggleChat => Key::Named(NamedKey::F5),
             GameInput::Fullscreen => Key::Named(NamedKey::F11),
             GameInput::Screenshot => Key::Named(NamedKey::F4),

@@ -36,22 +36,6 @@ pub fn run(
         // Continuously run loop since we handle sleeping
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-        #[cfg(feature = "egui-ui")]
-        if let winit::event::Event::WindowEvent { event, .. } = &event {
-            let enabled_for_current_state = states.last().is_some_and(|state| state.egui_enabled());
-
-            // Only send events to the egui UI when it is being displayed.
-            if enabled_for_current_state && global_state.settings.interface.egui_enabled() {
-                let response = global_state
-                    .egui_state
-                    .winit_state
-                    .on_window_event(global_state.window.window(), event);
-                if response.consumed {
-                    return;
-                }
-            }
-        }
-
         // Don't pass resize events to the ui, `Window` is responsible for:
         // - deduplicating them
         // - generating resize events for the ui
@@ -211,16 +195,14 @@ fn handle_main_events_cleared(
 
     drop(guard);
 
-    #[cfg(feature = "egui-ui")]
-    let scale_factor = global_state.window.scale_factor() as f32;
+    
 
     if let Some(last) = states.last_mut() {
         capped_fps = last.capped_fps();
 
         span!(guard, "Render");
 
-        #[cfg(feature = "egui-ui")]
-        let mut platform_output = None;
+        
 
         // Render the screen using the global renderer
         if let Some(mut drawer) = global_state
@@ -235,20 +217,10 @@ fn handle_main_events_cleared(
 
             last.render(&mut drawer, &global_state.settings);
 
-            #[cfg(feature = "egui-ui")]
-            if last.egui_enabled() && global_state.settings.interface.egui_enabled() {
-                platform_output =
-                    Some(drawer.draw_egui(&mut global_state.egui_state.winit_state, scale_factor));
-            }
+            
         };
 
-        #[cfg(feature = "egui-ui")]
-        if let Some(output) = platform_output {
-            global_state
-                .egui_state
-                .winit_state
-                .handle_platform_output(global_state.window.window(), output);
-        }
+        
 
         if global_state.clear_shadows_next_frame {
             global_state.clear_shadows_next_frame = false;

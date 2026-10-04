@@ -62,8 +62,7 @@ use hashbrown::HashMap;
 use interactable::{BlockInteraction, EntityInteraction, Interactable, get_interactables};
 use settings_change::Language::ChangeLanguage;
 use target::targets_under_cursor;
-#[cfg(feature = "egui-ui")]
-use voxygen_egui::EguiDebugInfo;
+
 
 /** The zoom scroll delta that is considered an "intent"
     to zoom, rather than the accidental zooming that Zoom Lock
@@ -1746,25 +1745,7 @@ impl PlayState for SessionState {
                 },
                 inverted_interactable_map,
             );
-
-            // Maintain egui (debug interface)
-            #[cfg(feature = "egui-ui")]
-            if global_state.settings.interface.egui_enabled() {
-                let settings_change = global_state.egui_state.maintain(
-                    &mut self.client.borrow_mut(),
-                    &mut self.scene,
-                    global_state.window.window(),
-                    debug_info.map(|debug_info| EguiDebugInfo {
-                        frame_time: debug_info.frame_time,
-                        ping_ms: debug_info.ping_ms,
-                    }),
-                    &global_state.settings,
-                );
-
-                if let Some(settings_change) = settings_change {
-                    settings_change.process(global_state, self);
-                }
-            }
+            
 
             // Look for changes in the localization files
             if global_state.i18n.reloaded() {
@@ -2376,8 +2357,6 @@ impl PlayState for SessionState {
             // dropped before it's lifetime ends
         }
     }
-
-    fn egui_enabled(&self) -> bool { true }
 }
 
 // TODO: Can probably be exported in some way for AI, somehow

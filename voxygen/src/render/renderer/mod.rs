@@ -177,8 +177,7 @@ pub struct Renderer {
 
     ui_premultiply_uploads: ui::BatchedUploads,
 
-    #[cfg(feature = "egui-ui")]
-    egui_renderer: egui_wgpu::Renderer,
+    
 
     // This checks is added because windows resizes the window to 0,0 when
     // minimizing and this causes a bunch of validation errors
@@ -611,8 +610,7 @@ impl Renderer {
         )
         .expect("Error creating profiler");
 
-        #[cfg(feature = "egui-ui")]
-        let egui_renderer = egui_wgpu::Renderer::new(&device, format, Default::default());
+        
 
         let present_modes = surface
             .get_capabilities(&adapter)
@@ -658,8 +656,7 @@ impl Renderer {
 
             ui_premultiply_uploads: Default::default(),
 
-            #[cfg(feature = "egui-ui")]
-            egui_renderer,
+            
 
             is_minimized: false,
 

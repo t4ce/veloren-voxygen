@@ -377,6 +377,4 @@ impl PlayState for CharSelectionState {
             self.char_selection_ui.render(&mut ui_drawer);
         };
     }
-
-    fn egui_enabled(&self) -> bool { false }
 }

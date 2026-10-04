@@ -22,7 +22,6 @@ This package includes the official client, Voxygen.
 
 [features]
 hot-anim = ["anim/use-dyn-lib"]
-hot-egui = ["voxygen-egui/use-dyn-lib", "egui"]
 hot-reloading = ["common/hot-reloading"]
 singleplayer = []
 simd = ["vek/platform_intrinsics"]
@@ -30,11 +29,9 @@ tracy = ["common-frontend/tracy", "client/tracy", "wgpu-profiler/tracy"]
 # enables heap profiling with tracy
 tracy-memory = ["tracy"]
 plugins = ["client/plugins", "anim/plugins", "common/plugins"]
-egui-ui = ["voxygen-egui", "egui", "egui-wgpu", "egui-winit"]
 discord = ["discord-sdk"]
 bin_cmd_doc_gen = []
 
-# We don't ship egui with published release builds so a separate feature is required that excludes it.
 default-publish = [
     "native-dialog",
     "plugins",
@@ -58,7 +55,6 @@ common-systems = { package = "veloren-common-systems", path = "../common/systems
 anim = { package = "veloren-voxygen-anim", path = "anim" }
 i18n = { package = "veloren-client-i18n", path = "../client/i18n" }
 i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "i18n-helpers" }
-voxygen-egui = { package = "veloren-voxygen-egui", path = "egui", optional = true }
 
 # Graphics
 winit = { version = "0.30.12", features = ["serde"] }
@@ -73,10 +69,6 @@ euc = { path = "../vendor/euc" }
 # Note: this does not depend on the version of `winit` anymore, all dependent code was moved into Voxygen
 iced = { package = "iced_native", git = "https://github.com/Imberflur/iced", tag = "veloren-winit-0.28" }
 glyph_brush = "0.7.0"
-# EGUI
-egui = { version = "0.36", optional = true }
-egui-wgpu = { version = "0.36", optional = true }
-egui-winit = { version = "0.36", optional = true }
 
 # ECS
 specs = { version = "0.20", features = ["nightly", "serde", "storage-event-control"] }
@@ -147,11 +139,10 @@ path = "src/main.rs"
 opt-level = 0
 
 [profile.release]
-opt-level = 0
+opt-level = 2
 
 [patch.crates-io]
 wgpu = { path = "../../wgpu/wgpu" }
-egui-wgpu = { path = "../vendor/egui-wgpu-0.36.2" }
 tynm = { path = "../vendor/tynm-0.1.10" }
 wavefront = { path = "../vendor/wavefront-0.2.3" }
 lz-fear = { path = "../vendor/lz-fear-0.2.0" }

@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct InterfaceSettings {
     pub toggle_debug: bool,
-    pub toggle_egui_debug: bool,
     pub toggle_hitboxes: bool,
     pub toggle_chat: bool,
     pub slots_use_prefixes: bool,
@@ -68,7 +67,6 @@ impl Default for InterfaceSettings {
     fn default() -> Self {
         Self {
             toggle_debug: false,
-            toggle_egui_debug: false,
             toggle_hitboxes: false,
             toggle_chat: true,
             slots_use_prefixes: true,
@@ -124,7 +122,4 @@ impl Default for InterfaceSettings {
     }
 }
 
-#[cfg(feature = "egui-ui")]
-impl InterfaceSettings {
-    pub fn egui_enabled(&self) -> bool { self.toggle_egui_debug }
-}
+
