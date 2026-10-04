@@ -3,12 +3,13 @@
 #![expect(clippy::option_map_unit_fn)]
 #![deny(clippy::clone_on_ref_ptr)]
 #![feature(
-extern crate alloc;
     fundamental,
     trait_alias,
     type_changing_struct_update,
     macro_metavar_expr
 )]
+
+extern crate alloc;
 
 pub use common_assets as assets;
 pub use uuid;
