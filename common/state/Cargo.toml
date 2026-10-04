@@ -8,7 +8,6 @@ version = "0.18.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 
-
 [dependencies]
 common = { package = "veloren-common", path = ".." }
 common-net = { package = "veloren-common-net", path = "../net" }
@@ -27,10 +26,7 @@ hashbrown = { version = "0.17", default-features = false, features = ["rayon", "
 specs = { version = "0.20", features = ["nightly", "serde", "storage-event-control", "derive"] }
 
 # Plugins
-scopeguard = "1.1.0"
 timer-queue = "0.1.0"
-async-trait = "0.1.42"
-futures = "0.3.30"
 
 # Tweak running code
 #inline_tweak = { version = "1.0.8", features = ["release_tweak"] }

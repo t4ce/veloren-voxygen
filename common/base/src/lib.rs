@@ -14,12 +14,6 @@ macro_rules! dev_panic {
     };
 }
 
-
-/// Allows downstream crates to conditionally do things based on whether tracy
-/// is enabled without having to expose a cargo feature themselves.
-pub const TRACY_ENABLED: bool = false;
-
-
 #[macro_export]
 macro_rules! plot {
     ($name:expr, $value:expr) => {
@@ -27,7 +21,6 @@ macro_rules! plot {
         let _: f64 = $value;
     };
 }
-
 
 // https://discordapp.com/channels/676678179678715904/676685797524766720/723358438943621151
 
@@ -45,12 +38,10 @@ macro_rules! span {
         let span = tracing::span!(tracing::Level::TRACE, $name);
         let $guard_name = span.enter();
     };
-    ($guard_name:tt, $no_tracy_name:expr, $tracy_name:expr) => {
-        $crate::span!($guard_name, $no_tracy_name);
+    ($guard_name:tt, $name:expr, $unused_name:expr) => {
+        $crate::span!($guard_name, $name);
     };
 }
-
-
 
 pub struct ProfSpan;
 
@@ -60,7 +51,6 @@ pub struct ProfSpan;
 impl Drop for ProfSpan {
     fn drop(&mut self) {}
 }
-
 
 /// Like the span macro but only used when profiling and not in regular tracing
 /// operations

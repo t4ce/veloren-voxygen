@@ -308,8 +308,8 @@ impl FigureMgrStates {
                 .get_mut(entity)
                 .map(DerefMut::deref_mut),
             Body::Plugin(_body) => {
-                
-                unreachable!("Plugins require feature");
+
+                unreachable!("Plugin bodies are unsupported by this client");
             },
         }
     }
@@ -347,8 +347,8 @@ impl FigureMgrStates {
             Body::Arthropod(_) => self.arthropod_states.remove(entity).map(|e| e.meta),
             Body::Crustacean(_) => self.crustacean_states.remove(entity).map(|e| e.meta),
             Body::Plugin(_) => {
-                
-                unreachable!("Plugins require feature");
+
+                unreachable!("Plugin bodies are unsupported by this client");
             },
         }
     }
@@ -377,7 +377,7 @@ impl FigureMgrStates {
     }
 
     fn count(&self) -> usize {
-        
+
         let plugin_states = 0;
         self.character_states.len()
             + self.quadruped_small_states.len()
@@ -403,7 +403,7 @@ impl FigureMgrStates {
     }
 
     fn count_visible(&self) -> usize {
-        
+
         let plugin_states = 0;
         self.character_states
             .iter()
@@ -755,7 +755,7 @@ impl FigureMgr {
     pub fn atlas(&self) -> &FigureAtlas { &self.atlas }
 
     fn any_watcher_reloaded(&mut self) -> bool {
-        
+
         let plugin_reloaded = false;
         self.character_model_cache.watcher_reloaded()
             || self.theropod_model_cache.watcher_reloaded()
@@ -993,7 +993,7 @@ impl FigureMgr {
             let collides_with_aabr = |a: math::Aabr<f32>, b: math::Aabr<f32>| {
                 let min = math::Vec4::new(a.min.x, a.min.y, b.min.x, b.min.y);
                 let max = math::Vec4::new(b.max.x, b.max.y, a.max.x, a.max.y);
-                
+
                 return min.partial_cmple(&max).reduce_and();
             };
 
@@ -6779,7 +6779,7 @@ impl FigureMgr {
                 );
             },
             Body::Plugin(body) => {
-                
+
                 let _ = body;
             },
         }
@@ -7146,8 +7146,6 @@ impl FigureMgr {
             volume_model_cache,
             arthropod_model_cache,
             crustacean_model_cache,
-            #[cfg(feature = "plugins")]
-            plugin_model_cache,
             states:
                 FigureMgrStates {
                     character_states,
@@ -7542,10 +7540,10 @@ impl FigureMgr {
                 }
             },
             Body::Plugin(body) => {
-                
+
                 {
                     let _ = body;
-                    unreachable!("Plugins require feature");
+                    unreachable!("Plugin bodies are unsupported by this client");
                 }
             },
         } {
@@ -7758,8 +7756,8 @@ impl FigureMgr {
                     .map(|state| &state.computed_skeleton)
                     .map(|skeleton| (skeleton.chest * Vec4::new(0.0, 7.0, 0.0, 1.0)).xyz()),
                 Body::Plugin(_) => {
-                    
-                    unreachable!("Plugins require feature");
+
+                    unreachable!("Plugin bodies are unsupported by this client");
                 },
             })
             .unwrap_or_else(Vec3::zero)
@@ -7852,8 +7850,8 @@ impl FigureMgr {
                     crustacean::mount_transform(b, &state.computed_skeleton, &state.skeleton)
                 }),
                 Body::Plugin(_) => {
-                    
-                    unreachable!("Plugins require feature");
+
+                    unreachable!("Plugin bodies are unsupported by this client");
                 },
             })
     }
