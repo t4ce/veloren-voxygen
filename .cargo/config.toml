@@ -1,0 +1,23 @@
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.x86_64-pc-windows-gnu]
+rustflags = [
+    # Required for mimalloc
+    "-C",
+    "link-arg=-lpsapi",
+]
+
+# Clever way to get workspace dir, from https://github.com/rust-lang/cargo/issues/3946#issuecomment-973132993
+[env]
+CARGO_WORKSPACE_DIR = { value = "", relative = true }
+# This snapshot has no .git directory for automatic asset discovery.
+VELOREN_ASSETS = { value = "assets", relative = true }
+
+
+# Preserve the source snapshot version without copying Git history.
+VELOREN_GIT_VERSION = "/a5560adc/1791134315"
