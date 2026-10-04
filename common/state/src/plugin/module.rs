@@ -1,7 +1,7 @@
 use std::io;
 use std::sync::Mutex;
-use std::task::Context;
-use std::task::Poll;
+use core::task::Context;
+use core::task::Poll;
 use core::num::NonZeroU64;
 use core::pin::Pin;
 use alloc::sync::Arc;

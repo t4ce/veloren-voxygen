@@ -12,7 +12,7 @@ mod implementation {
     use core::marker::PhantomData;
     use alloc::collections::VecDeque;
     use alloc::sync::Arc;
-    use std::panic::AssertUnwindSafe;
+    use core::panic::AssertUnwindSafe;
     use std::panic::catch_unwind;
     use std::panic::resume_unwind;
     use std::sync::Condvar;

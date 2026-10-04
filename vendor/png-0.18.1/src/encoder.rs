@@ -1,7 +1,6 @@
-use borrow::Cow;
+use alloc::borrow::Cow;
 use io::{Read, Write};
 use ops::{Deref, DerefMut};
-use std::borrow;
 use core::error;
 use std::io;
 use core::fmt;
