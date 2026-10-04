@@ -26,9 +26,6 @@ hashbrown = { version = "0.17", default-features = false, features = ["rayon", "
 # asset tweak
 serde = { version = "1.0.118", features = ["derive"], optional = true }
 
-[target.'cfg(target_os = "trueos")'.dependencies]
-trueos = { path = "../../../TRUEOS-Blueprints/api", default-features = false }
-
 
 [features]
 hot-reloading = ["assets_manager/hot-reloading"]

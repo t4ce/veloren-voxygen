@@ -8,12 +8,6 @@ rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 linker = "aarch64-linux-gnu-gcc"
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
-[target.x86_64-pc-windows-gnu]
-rustflags = [
-    # Required for mimalloc
-    "-C",
-    "link-arg=-lpsapi",
-]
 
 # Keep the existing client userdata location.
 [env]
