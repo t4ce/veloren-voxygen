@@ -170,6 +170,3 @@ mod debug_overlay;
 
 #[cfg(feature = "headless")]
 pub mod headless;
-
-#[cfg(all(feature = "minimal-wgpu", not(target_os = "trueos")))]
-mod minimal_wgpu;

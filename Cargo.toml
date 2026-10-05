@@ -12,9 +12,8 @@ autotests = false
 [features]
 default = ["audio"]
 audio = ["dep:kira", "dep:cpal"]
-headless = ["dep:softbuffer"]
-# Reuse the lean game client, but present geometry with wgpu instead of softbuffer.
-minimal-wgpu = ["headless", "wgpu/wgsl"]
+# The existing headless client keeps a small live GPU surface on Ubuntu.
+headless = ["wgpu/wgsl"]
 picasso-assets = ["common/picasso-assets"]
 # Cargo features are additive: select this with default features disabled.
 noaudio = ["headless"]
@@ -73,7 +72,6 @@ anim = { package = "veloren-voxygen-anim", path = "anim" }
 i18n = { package = "veloren-client-i18n", path = "common/client-i18n" }
 i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
 winit = { version = "0.30.12", features = ["serde"] }
-softbuffer = { version = "0.4.8", optional = true }
 wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", features = ["spirv"] }
 wgpu-profiler = "0.28"
 bytemuck = { version = "1.7", features = ["derive"] }

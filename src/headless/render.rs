@@ -1,32 +1,13 @@
 //! Small, independent GPU path for the real lean game client.
 //! One pipeline, one uniform binding, one depth target, two vertex buffers.
 //!
-//! Ubuntu: `cargo run --no-default-features --features minimal-wgpu -- --server
-//! HOST:14004 --username NAME [--character ID]`. Password entry stays hidden.
-//! This feature reuses the headless client for networking/input, replacing its
-//! blank softbuffer window with a real wgpu surface. Full-renderer code is gated
-//! out. Without this feature, the existing full and headless modes are preserved.
-//!
-//! The GPU path needs no optional features, sampled textures, samplers, index
-//! buffers, immediates, query sets, offscreen color targets or extra passes.
-//! Geometry and bitmap-style text share one WGSL pipeline and camera uniform.
-//! There is one depth attachment, one command encoder/submission/present per frame,
-//! and at most two draws: terrain, then entity proxies and text.
-//!
-//! Live terrain is a +/-40-block XY, +/-32-block Z snapshot around the player,
-//! rebuilt at most twice per second off-thread from Arc-backed game chunks.
-//! Only exposed solid voxel faces are emitted (including solid sprite blocks as
-//! cubes); missing chunks are empty. Budget: 600,000 vertices, visibly reported
-//! when exceeded. Entities use box proxies rather than animated figure meshes.
-//! This is a first-scene bring-up mode: chat, inventory, equipment menus, sprites,
-//! liquids, sky, lighting, shadows, particles and postprocessing are omitted.
-//! Networking, character selection/creation, simulation and existing lean-client
-//! movement/combat controls remain active. Existing -headless character aliases
-//! are reused unless --character selects another character.
-//!
-//! `--render-smoke-test` is explicitly offline: it uses the live voxel mesher on
-//! a fixture, presents 60 frames, exercises two resizes, and exits. No fixture is
-//! substituted for missing live world data. Use RUST_LOG=info for GPU diagnostics.
+//! Ubuntu: `cargo run --features headless` uses this renderer directly.
+//! The existing client supplies networking, simulation and gameplay input.
+//! One pipeline/pass draws terrain, entity box proxies and text without sampled
+//! textures, lights, optional GPU features or postprocessing. Terrain is bounded
+//! to +/-40 blocks XY and +/-32 blocks Z, with at most 600,000 vertices. Meshing
+//! runs off-thread at most twice per second. Character aliases and controls stay
+//! the same as the existing headless client. Missing world data stays empty.
 use crate::client::Client;
 use common::{comp, terrain::TerrainGrid, vol::ReadVol};
 use specs::{Join, WorldExt};
@@ -74,8 +55,6 @@ pub(crate) struct Renderer {
     pending_mesh: Option<mpsc::Receiver<Mesh>>,
     next_mesh: Instant,
     truncated: bool,
-    smoke_test: bool,
-    frames: u32,
     had_position: bool,
 }
 
@@ -84,7 +63,6 @@ impl Renderer {
         window: Arc<Window>,
         display: OwnedDisplayHandle,
         runtime: &tokio::runtime::Runtime,
-        smoke_test: bool,
     ) -> Result<Self, Error> {
         let instance = wgpu::Instance::new(
             wgpu::InstanceDescriptor::new_with_display_handle_from_env(Box::new(display)),
@@ -112,7 +90,7 @@ impl Renderer {
         surface.configure(&device, &config);
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("minimal geometry and text"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("minimal_wgpu.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("render.wgsl"))),
         });
         let camera = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("minimal camera"),
@@ -163,7 +141,7 @@ impl Renderer {
         let depth = depth_target(&device, &config);
         let terrain_buffer = vertex_buffer(&device, MAX_VERTICES, "minimal terrain");
         let overlay_buffer = vertex_buffer(&device, 180_000, "minimal entities and text");
-        let mut renderer = Self {
+        Ok(Self {
             instance,
             window,
             surface,
@@ -180,23 +158,8 @@ impl Renderer {
             pending_mesh: None,
             next_mesh: Instant::now(),
             truncated: false,
-            smoke_test,
-            frames: 0,
             had_position: false,
-        };
-        if smoke_test {
-            // Use the same exposed-voxel-face mesher as the live world.
-            renderer.upload_mesh(voxel_mesh(Vec3::zero(), |p| {
-                (p.z == -1 && (-8..8).contains(&p.x) && (-4..16).contains(&p.y))
-                    || ((-3..-1).contains(&p.x) && (2..4).contains(&p.y) && (0..3).contains(&p.z))
-                    || ((2..4).contains(&p.x) && (5..7).contains(&p.y) && (0..2).contains(&p.z))
-            }));
-        }
-        Ok(renderer)
-    }
-
-    pub(crate) fn smoke_test_complete(&self) -> bool {
-        self.frames >= 60
+        })
     }
 
     fn upload_mesh(&mut self, mesh: Mesh) {
@@ -217,10 +180,10 @@ impl Renderer {
         yaw: f32,
         pitch: f32,
         status: &str,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         let size = self.window.inner_size();
         if size.width == 0 || size.height == 0 {
-            return Ok(false);
+            return Ok(());
         }
         if (size.width, size.height) != (self.config.width, self.config.height) {
             self.config.width = size.width;
@@ -229,7 +192,7 @@ impl Renderer {
             self.depth = depth_target(&self.device, &self.config);
         }
         let position = client.and_then(Client::position);
-        if !self.smoke_test && position.is_none() {
+        if position.is_none() {
             self.terrain_len = 0;
             // Discard pending work from the previous session after disconnect.
             self.pending_mesh = None;
@@ -240,9 +203,7 @@ impl Renderer {
             self.pending_mesh = None;
             self.upload_mesh(mesh);
         }
-        if !self.smoke_test
-            && let (Some(client), Some(position)) = (client, position)
-        {
+        if let (Some(client), Some(position)) = (client, position) {
             self.had_position = true;
             if self.pending_mesh.is_none() && Instant::now() >= self.next_mesh {
                 // Arc-backed chunk snapshot: meshing never blocks input or the network tick.
@@ -256,16 +217,7 @@ impl Renderer {
                 });
             }
         }
-        let eye = if self.smoke_test {
-            Vec3::new(0.0, -8.0, 3.0)
-        } else {
-            position.unwrap_or_default() + Vec3::new(0.0, 0.0, 1.65)
-        };
-        let (yaw, pitch) = if self.smoke_test {
-            (0.0_f32, -0.12_f32)
-        } else {
-            (yaw, pitch)
-        };
+        let eye = position.unwrap_or_default() + Vec3::new(0.0, 0.0, 1.65);
         let forward = Vec3::new(
             yaw.sin() * pitch.cos(),
             yaw.cos() * pitch.cos(),
@@ -304,11 +256,7 @@ impl Renderer {
                 }
             }
         }
-        let header = if self.smoke_test {
-            "MINIMAL WGPU - OFFLINE SURFACE TEST"
-        } else {
-            "MINIMAL WGPU - LIVE GAME GEOMETRY"
-        };
+        let header = "VOXYGEN HEADLESS - LIVE GAME GEOMETRY";
         let geometry = format!(
             "{} TRIANGLES  RADIUS {}  NO TEXTURES / LIGHTS",
             self.terrain_len / 3,
@@ -325,11 +273,6 @@ impl Renderer {
             )
         } else {
             location
-        };
-        let status = if self.smoke_test {
-            "OFFLINE FIXTURE - NO SERVER CONNECTION"
-        } else {
-            status
         };
         for (line, text) in [
             header,
@@ -361,7 +304,7 @@ impl Renderer {
                 size.height,
             );
         }
-        if self.had_position || self.smoke_test {
+        if self.had_position {
             text_mesh(
                 &mut overlay,
                 "+",
@@ -378,19 +321,19 @@ impl Renderer {
             wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
                 drop(frame);
                 self.surface.configure(&self.device, &self.config);
-                return Ok(false);
+                return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
-                return Ok(false);
+                return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Lost => {
                 self.surface = self.instance.create_surface(Arc::clone(&self.window))?;
                 self.surface.configure(&self.device, &self.config);
-                return Ok(false);
+                return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
-                return Ok(false);
+                return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Validation => {
                 return Err("Surface validation failed".into());
@@ -443,26 +386,7 @@ impl Renderer {
         self.queue.submit(Some(encoder.finish()));
         self.window.pre_present_notify();
         self.queue.present(frame);
-        self.frames += 1;
-        if self.smoke_test && (self.frames == 20 || self.frames == 40) {
-            let (w, h) = if self.frames == 20 {
-                (800, 600)
-            } else {
-                (960, 640)
-            };
-            let _ = self
-                .window
-                .request_inner_size(winit::dpi::LogicalSize::new(w, h));
-        }
-        if self.smoke_test && self.frames == 60 {
-            tracing::info!(
-                frames = self.frames,
-                triangles = self.terrain_len / 3,
-                "Minimal wgpu surface smoke test passed"
-            );
-            return Ok(true);
-        }
-        Ok(false)
+        Ok(())
     }
 }
 
