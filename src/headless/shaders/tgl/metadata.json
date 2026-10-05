@@ -1,7 +1,6 @@
 {
-  "format": "voxy-headless-tgl-v1",
+  "format": "voxy-headless-intel-gen12-v2",
   "vendor_id": "0x8086",
-  "device_id": "0x9A49",
   "source_sha256": "58a18fed6a1af95c1ed12e7235203cc524448ead02e775510ac2bed862dfa709",
   "source_fnv1a64": "0x2EAA72CFCA1B1C77",
   "vertex_sha256": "3f12e447eb4afb6197938b5e8f676ffe714639dedd66e3d03c2c11f43da537d2",
@@ -18,5 +17,66 @@
   "compiler": "Naga 30 / instrumented Mesa ANV 26.0.4 no-op DRM shim",
   "compile_only": true,
   "host_render_verified": false,
-  "baremetal_render_verified": false
+  "baremetal_render_verified": false,
+  "targets": [
+    {
+      "device_id": "0x9A49",
+      "revision": "0x01",
+      "family": "TGL GT2"
+    },
+    {
+      "device_id": "0x4680",
+      "revision": "0x0C",
+      "family": "ADL-S GT1"
+    }
+  ],
+  "shared_native_code": true,
+  "compiler_validation": {
+    "device_ids": [
+      "0x9A49",
+      "0x4680"
+    ],
+    "revision_scope": "Physical device revisions are admission policy; the compile-only Vulkan shim does not report revision.",
+    "native_code_identical": true,
+    "vertex_state_identical": true,
+    "fragment_state_identical": true,
+    "vertex_push_map_identical": true,
+    "push_map_comparison": "Captured text without its terminating NUL.",
+    "adl_s": {
+      "device": {
+        "vendor_id": 32902,
+        "device_id": 18048,
+        "name": "Intel(R) UHD Graphics 770 (ADL-S GT1)"
+      },
+      "stages": {
+        "simple_cube_vs.bin": {
+          "bytes": 528,
+          "sha256": "3f12e447eb4afb6197938b5e8f676ffe714639dedd66e3d03c2c11f43da537d2",
+          "same_as_tgl": true
+        },
+        "simple_cube_ps_simd8.bin": {
+          "bytes": 112,
+          "sha256": "e5bf95bb7ea1e3c187d5bb6f98da538e095a22f7935a2cba43a78fe0062a40c7",
+          "same_as_tgl": true
+        },
+        "simple_cube_ps_simd16.bin": {
+          "bytes": 176,
+          "sha256": "12c24b2afccf9dda46550d69ebc9d80cd354f93b12b923de1bf0307ed5b10c70",
+          "same_as_tgl": true
+        }
+      },
+      "vertex_TRUEOS_VS_state_v1.txt": {
+        "text": "TRUEOS_VS_STATE_V1 ver=12 verx10=120 max_threads=546 dispatch_grf_start=2 urb_read_length=1 urb_entry_64b=1 vue_slots=3 position_slot=1 uv_slot=2 vf_packing0=0x000000ff uses_vertexid=0 uses_instanceid=0 binding_table_entries=2 sampler_count=0 scratch_bytes=0\nVUE_MAP location0_slot=2 location1_slot=-1 location2_slot=-1 location3_slot=-1\n3DSTATE_VS 78100007 00000000 00000000 00080000 00000000 00000000 00200800 88400405 00000000\n",
+        "same_as_tgl": true
+      },
+      "fragment_TRUEOS_PS_state_v1.txt": {
+        "text": "TRUEOS_PS_STATE_V1 ver=12 verx10=120 dispatch8=1 dispatch16=1 dispatch32=0 grf_start8=4 grf_start16=6 grf_start32=0 offset16=128 num_varying_inputs=1 barycentric_interp_modes=0x1 uses_vmask=1 uses_src_depth=0 uses_src_w=0 uses_depth_w_coefficients=0 uses_pc_bary_coefficients=0 uses_npc_bary_coefficients=0 computed_depth_mode=0 computed_stencil=0 flat_inputs=0x0 binding_table_entries=1 sampler_prefetch_count=0 sampler_count=0 push_bytes=0 scratch_bytes=0\nURB_SETUP location0_attribute=0 location1_attribute=-1 location2_attribute=-1 location3_attribute=-1\n",
+        "same_as_tgl": true
+      },
+      "00_vertex_01_Shader_push_map.txt": {
+        "text": "Push constant ranges:\n    RANGE0 (96B): UBO (set=0 binding=0 start=0B)\n\n",
+        "same_as_tgl": true
+      }
+    }
+  }
 }
