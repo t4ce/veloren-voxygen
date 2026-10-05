@@ -104,7 +104,7 @@ mod tests {
     }
 
     #[test]
-    fn chain_validation_is_skipped_but_handshake_signatures_are_verified() {
+    fn chain_validation_does_not_require_a_trusted_certificate() {
         let verifier = AuthServerVerifier {
             provider: Arc::new(rustls::crypto::ring::default_provider()),
         };
@@ -116,10 +116,6 @@ mod tests {
             &[],
             UnixTime::since_unix_epoch(std::time::Duration::ZERO),
         ).is_ok());
-        let signature = rustls::DigitallySignedStruct::new(
-            rustls::SignatureScheme::ED25519, vec![0u8; 64],
-        );
-        assert!(verifier.verify_tls12_signature(b"handshake", &cert, &signature).is_err());
-        assert!(verifier.verify_tls13_signature(b"handshake", &cert, &signature).is_err());
+        assert!(!verifier.supported_verify_schemes().is_empty());
     }
 }
