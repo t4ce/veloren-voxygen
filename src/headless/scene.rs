@@ -8,6 +8,17 @@ use std::{
 };
 use vek::{Vec3, Vec4};
 
+pub(super) fn placement(display_width: u32, display_height: u32) -> (i32, i32, u32, u32) {
+    let units = (display_width / 32).min(display_height / 18).clamp(1, 80);
+    let (width, height) = (units * 16, units * 9);
+    (
+        ((display_width.saturating_sub(width)) / 2) as i32,
+        ((display_height.saturating_sub(height)) / 2) as i32,
+        width,
+        height,
+    )
+}
+
 const RADIUS: i32 = 40;
 const VERTICAL_RADIUS: i32 = 32;
 pub(super) const MAX_VERTICES: usize = 600_000;
@@ -375,6 +386,12 @@ fn glyph(c: char) -> [u8; 7] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn frame_is_centered_quarter_area_and_stays_bounded_on_large_outputs() {
+        assert_eq!(placement(2560, 1440), (640, 360, 1280, 720));
+        assert_eq!(placement(1920, 1080), (480, 270, 960, 540));
+        assert_eq!(placement(3840, 2160), (1280, 720, 1280, 720));
+    }
     #[test]
     fn adjacent_voxels_have_no_internal_faces() {
         let mesh = voxel_mesh(Vec3::zero(), |p| p == Vec3::zero() || p == Vec3::unit_x());

@@ -65,10 +65,7 @@ fn held(state: &KeyboardState, usage: u8) -> bool {
 
 pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
     let (display_width, display_height) = output_dimensions().map_err(ui_error)?;
-    let units = (display_width / 32).min(display_height / 18).clamp(1, 80);
-    let (mut width, mut height) = (units * 16, units * 9);
-    let x = ((display_width.saturating_sub(width)) / 2) as i32;
-    let y = ((display_height.saturating_sub(height)) / 2) as i32;
+    let (x, y, mut width, mut height) = super::scene::placement(display_width, display_height);
     let mut frame = Frame::open_streaming(x, y, width, height).map_err(ui_error)?;
     frame.set_position(x, y).map_err(ui_error)?;
     let mut renderer = render_trueos::Renderer::new(width, height)?;

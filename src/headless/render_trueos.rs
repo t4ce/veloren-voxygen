@@ -40,7 +40,7 @@ impl Renderer {
         let gpu = Gpu::new(
             context.device().clone(),
             context.queue().clone(),
-            wgpu::TextureFormat::Bgra8Unorm,
+            wgpu::TextureFormat::Rgba8Unorm,
             width,
             height,
         );

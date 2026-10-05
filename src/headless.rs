@@ -507,9 +507,20 @@ impl ApplicationHandler for App {
             match event_loop.create_window(
                 Window::default_attributes()
                     .with_title("Voxygen headless — password input")
-                    .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0)),
+                    .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720)),
             ) {
                 Ok(window) => {
+                    if let Some(monitor) = window.current_monitor() {
+                        let size = monitor.size();
+                        let (x, y, width, height) = scene::placement(size.width, size.height);
+                        let origin = monitor.position();
+                        let _ =
+                            window.request_inner_size(winit::dpi::PhysicalSize::new(width, height));
+                        window.set_outer_position(winit::dpi::PhysicalPosition::new(
+                            origin.x + x,
+                            origin.y + y,
+                        ));
+                    }
                     let window = Arc::new(window);
                     match render::Renderer::new(
                         Arc::clone(&window),
