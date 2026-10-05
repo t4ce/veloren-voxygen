@@ -7,7 +7,7 @@ use common::{
     comp::{ControllerInputs, InputKind},
     util::Dir,
 };
-#[cfg(not(target_os = "trueos"))]
+#[cfg(all(not(target_os = "trueos"), not(feature = "minimal-wgpu")))]
 use std::num::NonZeroU32;
 use std::{
     collections::{BTreeSet, HashSet},
@@ -42,7 +42,18 @@ fn connection_progress(message: std::fmt::Arguments<'_>) {
 }
 
 #[derive(Parser)]
-#[command(about = "Non-rendering Voxygen: type your password in the blank window and press Enter")]
+#[cfg_attr(
+    not(feature = "minimal-wgpu"),
+    command(
+        about = "Non-rendering Voxygen: type your password in the blank window and press Enter"
+    )
+)]
+#[cfg_attr(
+    feature = "minimal-wgpu",
+    command(
+        about = "Minimal wgpu Voxygen: live terrain geometry and text UI. Type your password in the window, then press Enter."
+    )
+)]
 struct Args {
     #[cfg_attr(
         target_os = "trueos",
@@ -63,6 +74,10 @@ struct Args {
     /// Authentication endpoint allowed to receive the login credentials.
     #[arg(long, default_value = "https://auth.veloren.net")]
     auth_server: String,
+    /// Present an offline geometry fixture for 60 frames, then exit (no login).
+    #[cfg(all(feature = "minimal-wgpu", not(target_os = "trueos")))]
+    #[arg(long)]
+    render_smoke_test: bool,
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -85,6 +100,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let event_loop = EventLoop::new()?;
         let mut app = app;
         event_loop.run_app(&mut app)?;
+        #[cfg(feature = "minimal-wgpu")]
+        {
+            if let Some(error) = app.render_error {
+                return Err(error.into());
+            }
+            if app.args.render_smoke_test
+                && app
+                    .renderer
+                    .as_ref()
+                    .is_none_or(|r| !r.smoke_test_complete())
+            {
+                return Err("Surface smoke test stopped before 60 presented frames".into());
+            }
+        }
         Ok(())
     }
     #[cfg(target_os = "trueos")]
@@ -94,8 +123,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 struct App {
     args: Args,
     runtime: Arc<Runtime>,
-    #[cfg(not(target_os = "trueos"))]
+    #[cfg(all(not(target_os = "trueos"), not(feature = "minimal-wgpu")))]
     surface: Option<softbuffer::Surface<Arc<Window>, Arc<Window>>>,
+    #[cfg(all(not(target_os = "trueos"), feature = "minimal-wgpu"))]
+    renderer: Option<crate::minimal_wgpu::Renderer>,
+    status: String,
+    #[cfg(all(not(target_os = "trueos"), feature = "minimal-wgpu"))]
+    render_error: Option<String>,
     #[cfg(not(target_os = "trueos"))]
     window: Option<Arc<Window>>,
     #[cfg(target_os = "trueos")]
@@ -164,8 +198,13 @@ impl App {
         Self {
             args,
             runtime,
-            #[cfg(not(target_os = "trueos"))]
+            #[cfg(all(not(target_os = "trueos"), not(feature = "minimal-wgpu")))]
             surface: None,
+            #[cfg(all(not(target_os = "trueos"), feature = "minimal-wgpu"))]
+            renderer: None,
+            status: "Type password and press Enter (input is hidden)".into(),
+            #[cfg(all(not(target_os = "trueos"), feature = "minimal-wgpu"))]
+            render_error: None,
             window: None,
             password: String::new(),
             pending: None,
@@ -185,7 +224,8 @@ impl App {
         }
     }
 
-    fn prompt(&self, message: &str) {
+    fn prompt(&mut self, message: &str) {
+        self.status = message.to_owned();
         #[cfg(target_os = "trueos")]
         trueos::logl::log(
             trueos::logl::level::INFO,
@@ -197,8 +237,14 @@ impl App {
         #[cfg(not(target_os = "trueos"))]
         if let Some(window) = &self.window {
             window.set_title(&format!(
-                "Voxygen headless — {} @ {} — {message}",
-                self.args.username, self.args.server
+                "Voxygen {} — {} @ {} — {message}",
+                if cfg!(feature = "minimal-wgpu") {
+                    "minimal wgpu"
+                } else {
+                    "headless"
+                },
+                self.args.username,
+                self.args.server
             ));
         }
     }
@@ -236,6 +282,10 @@ impl App {
     }
 
     fn login(&mut self) {
+        #[cfg(all(feature = "minimal-wgpu", not(target_os = "trueos")))]
+        if self.args.render_smoke_test {
+            return;
+        }
         if self.pending.is_some() || self.client.is_some() {
             return;
         }
@@ -349,10 +399,8 @@ impl App {
     }
 
     fn tick(&mut self) {
-        if let Some(progress) = &self.login_progress {
-            while let Ok(message) = progress.try_recv() {
-                self.prompt(&message);
-            }
+        while let Some(message) = self.login_progress.as_ref().and_then(|p| p.try_recv().ok()) {
+            self.prompt(&message);
         }
         let connected = self
             .pending
@@ -491,24 +539,51 @@ impl ApplicationHandler for App {
             match event_loop.create_window(
                 Window::default_attributes()
                     .with_title("Voxygen headless — password input")
-                    .with_inner_size(winit::dpi::LogicalSize::new(640.0, 160.0)),
+                    .with_inner_size(if cfg!(feature = "minimal-wgpu") {
+                        winit::dpi::LogicalSize::new(960.0, 640.0)
+                    } else {
+                        winit::dpi::LogicalSize::new(640.0, 160.0)
+                    }),
             ) {
                 Ok(window) => {
                     let window = Arc::new(window);
-                    let surface =
-                        softbuffer::Context::new(Arc::clone(&window)).and_then(|context| {
-                            softbuffer::Surface::new(&context, Arc::clone(&window))
-                        });
-                    match surface {
-                        Ok(surface) => self.surface = Some(surface),
+                    #[cfg(not(feature = "minimal-wgpu"))]
+                    {
+                        let surface =
+                            softbuffer::Context::new(Arc::clone(&window)).and_then(|context| {
+                                softbuffer::Surface::new(&context, Arc::clone(&window))
+                            });
+                        match surface {
+                            Ok(surface) => self.surface = Some(surface),
+                            Err(error) => {
+                                warn!(%error, "Could not create blank window surface");
+                                event_loop.exit();
+                                return;
+                            }
+                        }
+                    }
+                    #[cfg(feature = "minimal-wgpu")]
+                    match crate::minimal_wgpu::Renderer::new(
+                        Arc::clone(&window),
+                        event_loop.owned_display_handle(),
+                        &self.runtime,
+                        self.args.render_smoke_test,
+                    ) {
+                        Ok(renderer) => self.renderer = Some(renderer),
                         Err(error) => {
-                            warn!(%error, "Could not create blank window surface");
+                            warn!(%error, "Could not initialize minimal wgpu renderer");
+                            self.render_error = Some(error.to_string());
                             event_loop.exit();
                             return;
                         }
                     }
                     window.set_ime_allowed(true);
+                    #[cfg(not(feature = "minimal-wgpu"))]
                     window.focus_window();
+                    #[cfg(feature = "minimal-wgpu")]
+                    if !self.args.render_smoke_test {
+                        window.focus_window();
+                    }
                     window.request_redraw();
                     self.window = Some(window);
                     self.prompt("Type password and press Enter (input is hidden)");
@@ -527,22 +602,46 @@ impl ApplicationHandler for App {
         }
         match event {
             WindowEvent::RedrawRequested => {
-                let window = self.window.as_ref().expect("input window");
-                let size = window.inner_size();
-                if let (Some(width), Some(height)) =
-                    (NonZeroU32::new(size.width), NonZeroU32::new(size.height))
+                #[cfg(not(feature = "minimal-wgpu"))]
                 {
-                    let surface = self.surface.as_mut().expect("blank window surface");
-                    let result = (|| {
-                        surface.resize(width, height)?;
-                        let mut buffer = surface.buffer_mut()?;
-                        buffer.fill(0x00202020);
-                        window.pre_present_notify();
-                        buffer.present()
-                    })();
-                    if let Err(error) = result {
-                        warn!(%error, "Could not present blank window");
-                        event_loop.exit();
+                    let window = self.window.as_ref().expect("input window");
+                    let size = window.inner_size();
+                    if let (Some(width), Some(height)) =
+                        (NonZeroU32::new(size.width), NonZeroU32::new(size.height))
+                    {
+                        let surface = self.surface.as_mut().expect("blank window surface");
+                        let result = (|| {
+                            surface.resize(width, height)?;
+                            let mut buffer = surface.buffer_mut()?;
+                            buffer.fill(0x00202020);
+                            window.pre_present_notify();
+                            buffer.present()
+                        })();
+                        if let Err(error) = result {
+                            warn!(%error, "Could not present blank window");
+                            event_loop.exit();
+                        }
+                    }
+                }
+                #[cfg(feature = "minimal-wgpu")]
+                {
+                    let renderer = self.renderer.as_mut().expect("minimal renderer");
+                    match renderer.draw(
+                        self.client.as_ref(),
+                        self.input.yaw,
+                        self.input.pitch,
+                        &self.status,
+                    ) {
+                        Ok(done) => {
+                            if done {
+                                event_loop.exit();
+                            }
+                        }
+                        Err(error) => {
+                            warn!(%error, "Minimal wgpu frame failed");
+                            self.render_error = Some(error.to_string());
+                            event_loop.exit();
+                        }
                     }
                 }
             }
@@ -617,6 +716,10 @@ impl ApplicationHandler for App {
         if now >= self.next_tick {
             self.tick();
             self.next_tick = Instant::now() + FRAME;
+            #[cfg(feature = "minimal-wgpu")]
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
         }
         event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_tick));
     }

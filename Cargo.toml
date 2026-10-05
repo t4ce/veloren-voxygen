@@ -13,6 +13,8 @@ autotests = false
 default = ["audio"]
 audio = ["dep:kira", "dep:cpal"]
 headless = ["dep:softbuffer"]
+# Reuse the lean game client, but present geometry with wgpu instead of softbuffer.
+minimal-wgpu = ["headless", "wgpu/wgsl"]
 picasso-assets = ["common/picasso-assets"]
 # Cargo features are additive: select this with default features disabled.
 noaudio = ["headless"]
