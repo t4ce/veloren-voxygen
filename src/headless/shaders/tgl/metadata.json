@@ -6,7 +6,7 @@
   "source_fnv1a64": "0x2EAA72CFCA1B1C77",
   "vertex_sha256": "3f12e447eb4afb6197938b5e8f676ffe714639dedd66e3d03c2c11f43da537d2",
   "fragment_sha256": "12c24b2afccf9dda46550d69ebc9d80cd354f93b12b923de1bf0307ed5b10c70",
-  "source": "../render.wgsl",
+  "source": "../../render.wgsl",
   "vertex_stride": 32,
   "position_offset": 0,
   "color_offset": 16,
