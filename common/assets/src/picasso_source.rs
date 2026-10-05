@@ -68,9 +68,35 @@ impl PicassoSource {
         let path = std::env::var("VOXYGEN_ASSET_ARCHIVE")
             .unwrap_or_else(|_| "/apps/voxy/voxygen-assets.tar.lz4".into());
         eprintln!("Voxygen assets: phase=decode-request path={path}");
-        let bytes = trueos::async_fs::block_on(trueos::archive::decode_lz4_to_memory(
+        let started = trueos::clock::Instant::now();
+        let mut last_update = started;
+        let mut copying = false;
+        let bytes = trueos::async_fs::block_on(trueos::archive::decode_lz4_to_memory_with_progress(
             path.as_bytes(),
             MAX_TAR_BYTES,
+            |progress| {
+                use trueos::archive::MemoryProgress;
+                let is_copy = matches!(progress, MemoryProgress::Copying { .. });
+                let finished = match progress {
+                    MemoryProgress::Decoding { percent } => percent == 100,
+                    MemoryProgress::Copying { copied, total } => copied == total,
+                };
+                if is_copy != copying || finished || last_update.elapsed().as_millis() >= 5000 {
+                    match progress {
+                        MemoryProgress::Decoding { percent } => eprintln!(
+                            "Voxygen assets: phase=decode-progress percent={percent} elapsed_seconds={}",
+                            started.elapsed().as_millis() / 1000
+                        ),
+                        MemoryProgress::Copying { copied, total } => eprintln!(
+                            "Voxygen assets: phase=ram-copy copied_mib={} total_mib={} elapsed_seconds={}",
+                            copied / (1024 * 1024), total.div_ceil(1024 * 1024),
+                            started.elapsed().as_millis() / 1000
+                        ),
+                    }
+                    copying = is_copy;
+                    last_update = trueos::clock::Instant::now();
+                }
+            },
         ))
         .map_err(|code| {
             io::Error::other(format!(
@@ -87,11 +113,26 @@ impl PicassoSource {
             archive.validate_canary()?;
             Self::import(&archive)?
         } else {
-            eprintln!(
-                "Voxygen assets: phase=common-import path={}/common",
-                super::ASSETS_PATH.display()
-            );
-            let common = super::fs::FileSystem::new()?;
+            // The original graphics-only seed omitted common. Probe explicitly
+            // rather than invoking ASSETS_PATH, whose missing-directory panic
+            // obscures the otherwise successful RAM decode.
+            let mut paths = Vec::new();
+            if let Some(path) = std::env::var_os("VELOREN_ASSETS") {
+                paths.push(std::path::PathBuf::from(path));
+            }
+            paths.push(std::path::PathBuf::from("assets"));
+            paths.push(std::path::PathBuf::from("/apps/voxy"));
+            paths.push(std::env::var_os("TRUEOS_APP_COMMON")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| "/common".into())
+                .join("veloren/assets"));
+            let common = paths.iter().find_map(|path| {
+                super::fs::FileSystem::with_path(path).ok().map(|source| {
+                    eprintln!("Voxygen assets: phase=common-import path={}/common", path.display());
+                    source
+                })
+            }).ok_or_else(|| io::Error::new(io::ErrorKind::NotFound,
+                "asset archive omits common/ and no loose common assets are installed; replace /apps/voxy/voxygen-assets.tar.lz4 with the complete archive including common/canary.canary"))?;
             Self::import(&ArchiveWithCommon {
                 archive: &archive,
                 common: &common,
@@ -115,6 +156,10 @@ impl PicassoSource {
             files: BTreeSet::new(),
             bytes: 0,
         };
+        #[cfg(target_os = "trueos")]
+        let mut last_update = trueos::clock::Instant::now();
+        #[cfg(target_os = "trueos")]
+        eprintln!("Voxygen assets: phase=db-import");
         let mut pending = vec![String::new()];
         while let Some(directory) = pending.pop() {
             let mut entries = Vec::new();
@@ -140,12 +185,13 @@ impl PicassoSource {
                         result.files.insert(key);
                         result.bytes += content.as_ref().len() as u64;
                         #[cfg(target_os = "trueos")]
-                        if result.files.len() % 1024 == 0 {
+                        if result.files.len() % 1024 == 0 || last_update.elapsed().as_millis() >= 5000 {
                             eprintln!(
                                 "Voxygen assets: phase=db-progress files={} bytes={}",
                                 result.files.len(),
                                 result.bytes
                             );
+                            last_update = trueos::clock::Instant::now();
                             trueos::vsys::poll_once();
                         }
                     }

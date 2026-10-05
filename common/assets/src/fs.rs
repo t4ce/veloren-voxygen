@@ -22,7 +22,10 @@ pub struct FileSystem {
 
 impl FileSystem {
     pub fn new() -> io::Result<Self> {
-        let path = &*super::ASSETS_PATH;
+        Self::with_path(&super::ASSETS_PATH)
+    }
+
+    pub(super) fn with_path(path: &Path) -> io::Result<Self> {
         let default = RawFs::new(path).map_err(|err| {
             io::Error::new(
                 err.kind(),

@@ -1,3 +1,5 @@
 /target/
 /userdata/
 blueprint/target/
+/assets/*.tar.lz4
+/assets/*.tar.lz4.sha256
