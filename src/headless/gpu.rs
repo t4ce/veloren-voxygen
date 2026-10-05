@@ -1,5 +1,5 @@
 //! The same wgpu pipeline and render pass on every target.
-use super::scene::{FrameInfo, MAX_VERTICES, Scene, Vertex};
+use super::scene::{ATLAS_SIZE, FrameInfo, MAX_VERTICES, Scene, Vertex};
 use crate::client::Client;
 
 pub(super) struct Gpu {
@@ -8,6 +8,7 @@ pub(super) struct Gpu {
     pipeline: wgpu::RenderPipeline,
     camera: wgpu::Buffer,
     camera_bind: wgpu::BindGroup,
+    atlas: wgpu::Texture,
     depth: wgpu::TextureView,
     size: (u32, u32),
     terrain_buffer: wgpu::Buffer,
@@ -28,7 +29,7 @@ impl Gpu {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("minimal geometry"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "render.wgsl"
+                "render_textured.wgsl"
             ))),
         });
         let camera = device.create_buffer(&wgpu::BufferDescriptor {
@@ -69,13 +70,48 @@ impl Gpu {
             multiview_mask: None,
             cache: None,
         });
+        let atlas = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Voxygen voxel-color atlas"),
+            size: wgpu::Extent3d {
+                width: ATLAS_SIZE,
+                height: ATLAS_SIZE,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let atlas_view = atlas.create_view(&Default::default());
+        let atlas_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Voxygen voxel-color nearest sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
         let camera_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("minimal camera"),
             layout: &pipeline.get_bind_group_layout(0),
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: camera.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&atlas_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&atlas_sampler),
+                },
+            ],
         });
         let depth = depth_target(&device, width, height);
         let terrain_buffer = vertex_buffer(&device, MAX_VERTICES, "minimal terrain");
@@ -86,13 +122,15 @@ impl Gpu {
             pipeline,
             camera,
             camera_bind,
+            atlas,
             depth,
             size: (width, height),
             terrain_buffer,
             terrain_len: 0,
             overlay_buffer,
             scene: Scene::new(),
-            mesh_revision: 0,
+            // Also initialize the proxy palette before a clear-only first frame.
+            mesh_revision: u64::MAX,
         }
     }
 
@@ -111,6 +149,25 @@ impl Gpu {
         }
         let prepared = self.scene.prepare(client, yaw, pitch, width, height);
         if prepared.revision != self.mesh_revision {
+            self.queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &self.atlas,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                bytemuck::cast_slice(prepared.atlas),
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(ATLAS_SIZE * 4),
+                    rows_per_image: Some(ATLAS_SIZE),
+                },
+                wgpu::Extent3d {
+                    width: ATLAS_SIZE,
+                    height: ATLAS_SIZE,
+                    depth_or_array_layers: 1,
+                },
+            );
             self.terrain_len = prepared.terrain.len() as u32;
             self.mesh_revision = prepared.revision;
             if !prepared.terrain.is_empty() {

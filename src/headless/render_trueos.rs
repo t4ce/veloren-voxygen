@@ -5,6 +5,12 @@ use crate::client::Client;
 use std::fmt;
 use trueos::ui4_scene::{Damage, Error as UiError, Frame};
 
+const SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64: u64 = 0xF84D_E655_632E_F102;
+const _: () = assert!(
+    super::shader::fnv1a64(include_bytes!("render_textured.wgsl"))
+        == SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64
+);
+
 #[derive(Debug)]
 pub(super) enum Error {
     Ui(UiError),
@@ -37,8 +43,8 @@ pub(super) struct Renderer {
 impl Renderer {
     pub(super) fn new(width: u32, height: u32) -> Result<Self, Error> {
         let package = trueos_wgpu::ShaderPackage::new(
-            include_str!("render.wgsl"),
-            super::shader::PACKAGE_FNV1A64,
+            include_str!("render_textured.wgsl"),
+            SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64,
         );
         let context = trueos_wgpu::Context::open_with_package(package)
             .map_err(|e| Error::Gpu(e.to_string()))?;
