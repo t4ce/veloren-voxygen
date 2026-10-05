@@ -12,7 +12,7 @@ replicatable = false
 CARGO_WORKSPACE_DIR = ".."
 
 [features]
-trueos-blueprint = ["voxygen/headless", "noaudio"]
+trueos-blueprint = ["voxygen/headless", "voxygen/picasso-assets", "noaudio"]
 noaudio = ["voxygen/noaudio"]
 default = ["trueos-blueprint"]
 

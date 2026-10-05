@@ -20,6 +20,8 @@ pub use assets_manager::{
 mod fs;
 #[cfg(feature = "picasso-assets")]
 mod picasso_source;
+#[cfg(feature = "picasso-assets")]
+mod tar_source;
 mod walk;
 pub use walk::{Walk, walk_tree};
 

@@ -16,14 +16,14 @@ pub(super) struct PicassoSource {
     bytes: u64,
 }
 
-#[derive(Debug)]
-enum Entry {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum Entry {
     File(String, String),
     Directory(String),
 }
 
 impl Entry {
-    fn borrowed(&self) -> DirEntry<'_> {
+    pub(super) fn borrowed(&self) -> DirEntry<'_> {
         match self {
             Self::File(id, ext) => DirEntry::File(id, ext),
             Self::Directory(id) => DirEntry::Directory(id),
@@ -49,7 +49,10 @@ impl PicassoSource {
         tracing::info!("Importing assets into Picasso's RAM database");
         // Preserve canary validation and override precedence at ingestion.
         // Neither filesystem source nor a path is retained by PicassoSource.
+        #[cfg(not(target_os = "trueos"))]
         let source = Self::import(&super::fs::FileSystem::new()?)?;
+        #[cfg(target_os = "trueos")]
+        let source = Self::from_runtime_archive()?;
         tracing::info!(
             files = source.files.len(),
             bytes = source.bytes,
@@ -57,6 +60,52 @@ impl PicassoSource {
             "Picasso asset import complete; serving assets from RAM"
         );
         Ok(source)
+    }
+
+    #[cfg(target_os = "trueos")]
+    fn from_runtime_archive() -> io::Result<Self> {
+        use super::tar_source::{ArchiveWithCommon, MAX_TAR_BYTES, TarSource};
+        let path = std::env::var("VOXYGEN_ASSET_ARCHIVE")
+            .unwrap_or_else(|_| "/apps/voxy/voxygen-assets.tar.lz4".into());
+        eprintln!("Voxygen assets: phase=decode-request path={path}");
+        let bytes = trueos::async_fs::block_on(trueos::archive::decode_lz4_to_memory(
+            path.as_bytes(),
+            MAX_TAR_BYTES,
+        ))
+        .map_err(|code| {
+            io::Error::other(format!(
+                "RAM decode of {path} failed (code {code}); requires kernel archive RAM API v1"
+            ))
+        })?;
+        eprintln!("Voxygen assets: phase=decoded tar_bytes={}", bytes.len());
+        let archive = TarSource::new(&bytes)?;
+        eprintln!(
+            "Voxygen assets: phase=catalog archive_files={}",
+            archive.file_count()
+        );
+        let result = if archive.exists(DirEntry::File("common.canary", "canary")) {
+            archive.validate_canary()?;
+            Self::import(&archive)?
+        } else {
+            eprintln!(
+                "Voxygen assets: phase=common-import path={}/common",
+                super::ASSETS_PATH.display()
+            );
+            let common = super::fs::FileSystem::new()?;
+            Self::import(&ArchiveWithCommon {
+                archive: &archive,
+                common: &common,
+            })?
+        };
+        // The importer retains only Picasso and its directory index.
+        drop(archive);
+        drop(bytes);
+        eprintln!(
+            "Voxygen assets: phase=db-ready files={} bytes={} staging_released=true",
+            result.files.len(),
+            result.bytes
+        );
+        Ok(result)
     }
 
     pub(super) fn import(source: &impl Source) -> io::Result<Self> {
@@ -90,6 +139,15 @@ impl PicassoSource {
                             .map_err(storage_error)?;
                         result.files.insert(key);
                         result.bytes += content.as_ref().len() as u64;
+                        #[cfg(target_os = "trueos")]
+                        if result.files.len() % 1024 == 0 {
+                            eprintln!(
+                                "Voxygen assets: phase=db-progress files={} bytes={}",
+                                result.files.len(),
+                                result.bytes
+                            );
+                            trueos::vsys::poll_once();
+                        }
                     }
                 }
             }

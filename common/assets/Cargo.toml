@@ -9,10 +9,11 @@ version = "0.18.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 [features]
-picasso-assets = ["dep:picasso"]
+picasso-assets = ["dep:picasso", "dep:tar"]
 
 [dependencies]
 lazy_static = "1.4.0"
+tar = { version = "0.4", default-features = false, optional = true }
 assets_manager = { version = "0.13", features = [
     "ab_glyph",
     "bincode",
