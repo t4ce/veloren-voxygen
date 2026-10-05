@@ -1,9 +1,9 @@
 //! TRUEOS frame-broker transport; login and game simulation remain in App.
-use super::{App, FRAME, edit_password};
+use super::{App, FRAME, edit_password, render_trueos};
 use std::{io, time::Instant};
 use trueos::{
     input,
-    ui4_scene::{Damage, Error, Frame, KeyboardState, rgba},
+    ui4_scene::{Error, Frame, KeyboardState, output_dimensions},
     ui4_solara_text::FrameEscapeKeyAction,
 };
 
@@ -64,17 +64,32 @@ fn held(state: &KeyboardState, usage: u8) -> bool {
 }
 
 pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
-    let mut frame = Frame::open(80, 80, 640, 160).map_err(ui_error)?;
+    let (display_width, display_height) = output_dimensions().map_err(ui_error)?;
+    let units = (display_width / 32).min(display_height / 18).clamp(1, 80);
+    let (mut width, mut height) = (units * 16, units * 9);
+    let x = ((display_width.saturating_sub(width)) / 2) as i32;
+    let y = ((display_height.saturating_sub(height)) / 2) as i32;
+    let mut frame = Frame::open_streaming(x, y, width, height).map_err(ui_error)?;
+    frame.set_position(x, y).map_err(ui_error)?;
+    let mut renderer = render_trueos::Renderer::new(width, height)?;
     frame
         .set_escape_key_action(FrameEscapeKeyAction::DeliverToApplication)
         .map_err(ui_error)?;
     app.window = Some(frame);
     app.prompt("Type password and press Enter (input is hidden)");
-    let (mut width, mut height) = (640, 160);
-    let mut paint = true;
     loop {
         let started = Instant::now();
-        let result = pump(&mut app, &mut width, &mut height, &mut paint);
+        // Publication must retire before a resize or a fresh write lease.
+        match renderer.publish(app.window.as_mut().expect("UI4 frame"), width, height) {
+            Ok(()) => {}
+            Err(render_trueos::Error::Ui(Error::Busy)) => {
+                std::thread::sleep(FRAME);
+                continue;
+            }
+            Err(render_trueos::Error::Ui(Error::NotFound | Error::InvalidState)) => break,
+            Err(error) => return Err(error.into()),
+        }
+        let result = pump(&mut app, &mut width, &mut height);
         match result {
             Ok(()) | Err(Error::Busy) => {}
             // The broker revoked the frame after a user close or Blueprint stop.
@@ -82,6 +97,20 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
             Err(error) => return Err(ui_error(error).into()),
         }
         app.tick();
+        let result = renderer.draw(
+            app.window.as_mut().expect("UI4 frame"),
+            width,
+            height,
+            app.client.as_ref(),
+            app.input.yaw,
+            app.input.pitch,
+            &app.status,
+        );
+        match result {
+            Ok(()) | Err(render_trueos::Error::Ui(Error::Busy)) => {}
+            Err(render_trueos::Error::Ui(Error::NotFound | Error::InvalidState)) => break,
+            Err(error) => return Err(error.into()),
+        }
         if let Some(remaining) = FRAME.checked_sub(started.elapsed()) {
             std::thread::sleep(remaining);
         }
@@ -90,7 +119,7 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn pump(app: &mut App, width: &mut u32, height: &mut u32, paint: &mut bool) -> Result<(), Error> {
+fn pump(app: &mut App, width: &mut u32, height: &mut u32) -> Result<(), Error> {
     if let Some(size) = app
         .window
         .as_mut()
@@ -103,13 +132,6 @@ fn pump(app: &mut App, width: &mut u32, height: &mut u32, paint: &mut bool) -> R
             .resize(size.width, size.height)?;
         *width = size.width;
         *height = size.height;
-        *paint = true;
-    }
-    if *paint {
-        let frame = app.window.as_mut().expect("UI4 frame");
-        frame.begin(rgba(0, 0, 0, 255))?;
-        frame.publish(Damage::full(*width, *height))?;
-        *paint = false;
     }
     while let Some(event) = app
         .window

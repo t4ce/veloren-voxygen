@@ -15,8 +15,12 @@ use std::{
 use tokio::runtime::Runtime;
 use tracing::{info, warn};
 use vek::{Vec2, Vec3};
+mod gpu;
 #[cfg(not(target_os = "trueos"))]
 mod render;
+#[cfg(target_os = "trueos")]
+mod render_trueos;
+mod scene;
 #[cfg(any(target_os = "trueos", test))]
 pub mod shader;
 #[cfg(target_os = "trueos")]
@@ -503,7 +507,7 @@ impl ApplicationHandler for App {
             match event_loop.create_window(
                 Window::default_attributes()
                     .with_title("Voxygen headless — password input")
-                    .with_inner_size(winit::dpi::LogicalSize::new(960.0, 640.0)),
+                    .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0)),
             ) {
                 Ok(window) => {
                     let window = Arc::new(window);

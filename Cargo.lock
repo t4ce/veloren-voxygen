@@ -5171,6 +5171,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "trueos-wgpu"
+version = "0.1.0"
+dependencies = [
+ "v",
+ "wgpu",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5631,6 +5639,7 @@ dependencies = [
  "tracing",
  "treeculler",
  "trueos",
+ "trueos-wgpu",
  "vek",
  "veloren-client-i18n",
  "veloren-common",

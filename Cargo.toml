@@ -61,7 +61,11 @@ sha2 = "0.11"
 bitflags = { version = "2.2.1", features = ["serde"] }
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 
+bytemuck = { version = "1.7", features = ["derive"] }
+
 [target.'cfg(target_os = "trueos")'.dependencies]
+wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", default-features = false, features = ["std", "custom", "wgsl"] }
+trueos-wgpu = { path = "../TRUEOS-Blueprints/crates/trueos-wgpu" }
 trueos = { path = "../TRUEOS-Blueprints/api", features = ["ui4-scene", "tokio-net-probe"] }
 hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "ring"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
@@ -74,7 +78,6 @@ i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-h
 winit = { version = "0.30.12", features = ["serde"] }
 wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", features = ["spirv"] }
 wgpu-profiler = "0.28"
-bytemuck = { version = "1.7", features = ["derive"] }
 conrod_core = { path = "vendor/conrod/conrod_core" }
 euc = { path = "vendor/euc" }
 iced = { package = "iced_native", git = "https://github.com/Imberflur/iced", tag = "veloren-winit-0.28" }

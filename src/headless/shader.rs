@@ -12,7 +12,10 @@ pub const METADATA: &[u8] = include_bytes!("shaders/tgl/metadata.json");
 pub const fn fnv1a64(bytes: &[u8]) -> u64 {
     let mut digest = 0xcbf29ce484222325u64;
     let mut i = 0;
-    while i < bytes.len() { digest = (digest ^ bytes[i] as u64).wrapping_mul(0x100000001b3); i += 1; }
+    while i < bytes.len() {
+        digest = (digest ^ bytes[i] as u64).wrapping_mul(0x100000001b3);
+        i += 1;
+    }
     digest
 }
 const _: () = assert!(fnv1a64(WGSL) == PACKAGE_FNV1A64);
