@@ -73,7 +73,16 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
         .set_escape_key_action(FrameEscapeKeyAction::DeliverToApplication)
         .map_err(ui_error)?;
     app.window = Some(frame);
-    app.prompt("Type password and press Enter (input is hidden)");
+    app.password = super::file_password(
+        trueos::async_fs::block_on(trueos::async_fs::read_file_utf8(b"/apps/voxy/voxy.pw"))
+            .map_err(|code| {
+                io::Error::other(format!("Voxygen password file read failed (code {code})"))
+            })?,
+    )?;
+    super::connection_progress(format_args!(
+        "Voxygen headless: automatic login from /apps/voxy/voxy.pw"
+    ));
+    app.login();
     loop {
         let started = Instant::now();
         // Publication must retire before a resize or a fresh write lease.

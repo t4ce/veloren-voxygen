@@ -48,6 +48,19 @@ fn connection_progress(message: std::fmt::Arguments<'_>) {
     eprintln!("{message}");
 }
 
+#[cfg(any(target_os = "trueos", test))]
+fn file_password(mut password: String) -> std::io::Result<String> {
+    // Strip text-file line endings, preserving spaces that belong to the password.
+    password.truncate(password.trim_end_matches(['\r', '\n']).len());
+    if password.is_empty() || password.len() > 4096 || password.chars().any(char::is_control) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Voxygen password file must contain one nonempty password line",
+        ));
+    }
+    Ok(password)
+}
+
 #[derive(Parser)]
 #[command(
     about = "Voxygen headless: live geometry and console status. Type your password in the window and press Enter."
@@ -674,6 +687,15 @@ fn edit_password(password: &mut String, key: KeyCode, text: Option<&str>, compos
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn password_file_preserves_spaces_and_strips_only_line_endings() {
+        assert_eq!(file_password(" example \r\n".into()).unwrap(), " example ");
+        assert_eq!(file_password("example".into()).unwrap(), "example");
+        for invalid in ["", "\n", "first\nsecond", "tab\tpassword"] {
+            assert!(file_password(invalid.into()).is_err());
+        }
+    }
 
     #[test]
     fn test_character_alias_is_stable_and_fits_the_server_name_limit() {
