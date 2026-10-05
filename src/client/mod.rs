@@ -4,6 +4,8 @@
 extern crate alloc;
 pub mod addr;
 pub mod error;
+#[cfg(target_os = "trueos")]
+mod auth;
 
 // Reexports
 pub use crate::client::error::Error;
@@ -1142,7 +1144,12 @@ impl Client {
                         Err(_) => return Err(Error::AuthServerUrlInvalid(addr.to_string())),
                     };
 
-                    Ok(authc::AuthClient::new(scheme, authority)?
+                    #[cfg(target_os = "trueos")]
+                    let auth_client = auth::client(scheme, authority)?;
+                    #[cfg(not(target_os = "trueos"))]
+                    let auth_client = authc::AuthClient::new(scheme, authority)?;
+
+                    Ok(auth_client
                         .sign_in(username, password)
                         .await?
                         .serialize())

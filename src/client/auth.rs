@@ -87,3 +87,39 @@ pub(super) fn client(
 
     authc::AuthClient::with_client(scheme, authority, client)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn https_client_does_not_require_native_roots() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let _enter = runtime.enter();
+        assert!(client(authc::Scheme::HTTPS, "auth.veloren.net".parse().unwrap()).is_ok());
+        assert!(matches!(
+            client(authc::Scheme::HTTP, "localhost".parse().unwrap()),
+            Err(authc::AuthClientError::InsecureSchema)
+        ));
+    }
+
+    #[test]
+    fn chain_validation_is_skipped_but_handshake_signatures_are_verified() {
+        let verifier = AuthServerVerifier {
+            provider: Arc::new(rustls::crypto::ring::default_provider()),
+        };
+        let cert = CertificateDer::from(vec![0u8]);
+        assert!(verifier.verify_server_cert(
+            &cert,
+            &[],
+            &ServerName::try_from("auth.veloren.net").unwrap(),
+            &[],
+            UnixTime::since_unix_epoch(std::time::Duration::ZERO),
+        ).is_ok());
+        let signature = rustls::DigitallySignedStruct::new(
+            rustls::SignatureScheme::ED25519, vec![0u8; 64],
+        );
+        assert!(verifier.verify_tls12_signature(b"handshake", &cert, &signature).is_err());
+        assert!(verifier.verify_tls13_signature(b"handshake", &cert, &signature).is_err());
+    }
+}
