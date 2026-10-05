@@ -1,7 +1,10 @@
-//! Exact Ubuntu headless shader, baked offline for physical Intel 8086:9A49.
+//! Exact Ubuntu headless shader, validated offline for Intel TGL and ADL-S.
 //! Native VS consumes the 80-byte camera through a 96-byte padded constant range.
 pub const PACKAGE_FNV1A64: u64 = 0x2EAA72CFCA1B1C77;
-pub const DEVICE_ID: u16 = 0x9A49;
+pub const VENDOR_ID: u16 = 0x8086;
+/// Physical device/revision pairs admitted by the kernel. Both compiler device
+/// targets produce identical ISA, state metadata and constant-buffer layout.
+pub const TARGETS: &[(u16, u8)] = &[(0x9A49, 0x01), (0x4680, 0x0C)];
 pub const VERTEX_STRIDE: usize = 32;
 pub const CAMERA_BYTES: usize = 80;
 pub const VS_PUSH_BYTES: usize = 96;
