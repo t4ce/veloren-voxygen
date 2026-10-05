@@ -28,6 +28,8 @@ pub(super) struct Renderer {
     context: trueos_wgpu::Context,
     gpu: Gpu,
     pending_publish: bool,
+    first_published: bool,
+    first_presented: bool,
 }
 impl Renderer {
     pub(super) fn new(width: u32, height: u32) -> Result<Self, Error> {
@@ -49,6 +51,8 @@ impl Renderer {
             context,
             gpu,
             pending_publish: false,
+            first_published: false,
+            first_presented: false,
         })
     }
 
@@ -61,6 +65,24 @@ impl Renderer {
         if self.pending_publish {
             frame.publish(Damage::full(width, height))?;
             self.pending_publish = false;
+            if !self.first_published {
+                self.first_published = true;
+                eprintln!(
+                    "Voxygen headless: first GPU frame published window={} extent={}x{} boundary=producer-retired+ui4-publish",
+                    frame.window_id(),
+                    width,
+                    height,
+                );
+            }
+        }
+        if self.first_published && !self.first_presented && frame.take_first_presentation()? {
+            self.first_presented = true;
+            eprintln!(
+                "Voxygen headless: first frame presented window={} extent={}x{} boundary=physical-SURFLIVE",
+                frame.window_id(),
+                width,
+                height,
+            );
         }
         Ok(())
     }
