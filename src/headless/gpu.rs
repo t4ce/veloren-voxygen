@@ -26,7 +26,7 @@ impl Gpu {
         height: u32,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("minimal geometry and text"),
+            label: Some("minimal geometry"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
                 "render.wgsl"
             ))),
@@ -39,7 +39,7 @@ impl Gpu {
         });
         let attributes = wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4];
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("minimal geometry and text"),
+            label: Some("minimal geometry"),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -79,7 +79,7 @@ impl Gpu {
         });
         let depth = depth_target(&device, width, height);
         let terrain_buffer = vertex_buffer(&device, MAX_VERTICES, "minimal terrain");
-        let overlay_buffer = vertex_buffer(&device, 180_000, "minimal entities and text");
+        let overlay_buffer = vertex_buffer(&device, 180_000, "minimal entity proxies");
         Self {
             device,
             queue,
@@ -104,15 +104,12 @@ impl Gpu {
         client: Option<&Client>,
         yaw: f32,
         pitch: f32,
-        status: &str,
     ) {
         if self.size != (width, height) {
             self.depth = depth_target(&self.device, width, height);
             self.size = (width, height);
         }
-        let prepared = self
-            .scene
-            .prepare(client, yaw, pitch, status, width, height);
+        let prepared = self.scene.prepare(client, yaw, pitch, width, height);
         if prepared.revision != self.mesh_revision {
             self.terrain_len = prepared.terrain.len() as u32;
             self.mesh_revision = prepared.revision;
@@ -139,7 +136,7 @@ impl Gpu {
             });
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("minimal geometry and text"),
+                label: Some("minimal geometry"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     depth_slice: None,
@@ -172,8 +169,10 @@ impl Gpu {
                 pass.set_vertex_buffer(0, self.terrain_buffer.slice(..));
                 pass.draw(0..self.terrain_len, 0..1);
             }
-            pass.set_vertex_buffer(0, self.overlay_buffer.slice(..));
-            pass.draw(0..overlay_len, 0..1);
+            if overlay_len > 0 {
+                pass.set_vertex_buffer(0, self.overlay_buffer.slice(..));
+                pass.draw(0..overlay_len, 0..1);
+            }
         }
         self.queue.submit(Some(encoder.finish()));
     }

@@ -67,22 +67,22 @@ impl Renderer {
             self.pending_publish = false;
             if !self.first_published {
                 self.first_published = true;
-                eprintln!(
+                super::connection_progress(format_args!(
                     "Voxygen headless: first GPU frame published window={} extent={}x{} boundary=producer-retired+ui4-publish",
                     frame.window_id(),
                     width,
                     height,
-                );
+                ));
             }
         }
         if self.first_published && !self.first_presented && frame.take_first_presentation()? {
             self.first_presented = true;
-            eprintln!(
+            super::connection_progress(format_args!(
                 "Voxygen headless: first frame presented window={} extent={}x{} boundary=physical-SURFLIVE",
                 frame.window_id(),
                 width,
                 height,
-            );
+            ));
         }
         Ok(())
     }
@@ -95,7 +95,6 @@ impl Renderer {
         client: Option<&Client>,
         yaw: f32,
         pitch: f32,
-        status: &str,
     ) -> Result<(), Error> {
         self.publish(frame, width, height)?;
         frame.begin_gpu_frame()?;
@@ -104,8 +103,7 @@ impl Renderer {
             .acquire_frame(frame.window_id())
             .map_err(|e| Error::Gpu(e.to_string()))?;
         let view = texture.create_view(&Default::default());
-        self.gpu
-            .draw(&view, width, height, client, yaw, pitch, status);
+        self.gpu.draw(&view, width, height, client, yaw, pitch);
         self.context.wait().map_err(|e| Error::Gpu(e.to_string()))?;
         self.pending_publish = true;
         self.publish(frame, width, height)

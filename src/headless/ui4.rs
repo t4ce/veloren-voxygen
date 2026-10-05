@@ -101,7 +101,6 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
             app.client.as_ref(),
             app.input.yaw,
             app.input.pitch,
-            &app.status,
         );
         match result {
             Ok(()) | Err(render_trueos::Error::Ui(Error::Busy)) => {}

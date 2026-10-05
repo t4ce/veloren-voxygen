@@ -1,4 +1,4 @@
-//! Mesh, camera and text preparation shared by Ubuntu and TRUEOS.
+//! Mesh and camera preparation shared by Ubuntu and TRUEOS.
 use crate::client::Client;
 use common::{comp, terrain::TerrainGrid, vol::ReadVol};
 use specs::{Join, WorldExt};
@@ -27,7 +27,7 @@ const MESH_INTERVAL: Duration = Duration::from_millis(500);
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(super) struct Vertex {
-    // w=1: world position; w=0: screen coordinates for text.
+    // Homogeneous world position (w=1).
     pub(super) position: [f32; 4],
     pub(super) color: [f32; 4],
 }
@@ -42,7 +42,6 @@ pub(super) struct Scene {
     pending_mesh: Option<mpsc::Receiver<Mesh>>,
     next_mesh: Instant,
     revision: u64,
-    had_position: bool,
 }
 
 pub(super) struct PreparedFrame<'a> {
@@ -62,7 +61,6 @@ impl Scene {
             pending_mesh: None,
             next_mesh: Instant::now(),
             revision: 0,
-            had_position: false,
         }
     }
 
@@ -71,7 +69,6 @@ impl Scene {
         client: Option<&Client>,
         yaw: f32,
         pitch: f32,
-        status: &str,
         width: u32,
         height: u32,
     ) -> PreparedFrame<'_> {
@@ -84,15 +81,18 @@ impl Scene {
             // Discard pending work from the previous session after disconnect.
             self.pending_mesh = None;
             self.next_mesh = Instant::now();
-            self.had_position = false;
         }
         if let Some(mesh) = self.pending_mesh.as_ref().and_then(|r| r.try_recv().ok()) {
             self.pending_mesh = None;
+            if mesh.truncated && !self.terrain.truncated {
+                super::connection_progress(format_args!(
+                    "Voxygen geometry: mesh budget reached; some geometry omitted"
+                ));
+            }
             self.terrain = mesh;
             self.revision = self.revision.wrapping_add(1);
         }
         if let (Some(client), Some(position)) = (client, position) {
-            self.had_position = true;
             if self.pending_mesh.is_none() && Instant::now() >= self.next_mesh {
                 // Arc-backed chunk snapshot: meshing never blocks input or the network tick.
                 let terrain = (*client.state().terrain()).clone();
@@ -141,64 +141,6 @@ impl Scene {
                     );
                 }
             }
-        }
-        let header = "VOXYGEN HEADLESS - LIVE GAME GEOMETRY";
-        let geometry = format!(
-            "{} TRIANGLES  RADIUS {}  NO TEXTURES / LIGHTS",
-            self.terrain.vertices.len() / 3,
-            RADIUS
-        );
-        let location = position
-            .map(|p| format!("POSITION {:.1} {:.1} {:.1}", p.x, p.y, p.z))
-            .unwrap_or_else(|| "WAITING FOR WORLD POSITION".into());
-        let location = if let Some(health) = client.and_then(|c| c.current::<comp::Health>()) {
-            format!(
-                "{location}  HEALTH {:.0}/{:.0}",
-                health.current(),
-                health.maximum()
-            )
-        } else {
-            location
-        };
-        for (line, text) in [
-            header,
-            status,
-            &geometry,
-            &location,
-            "WASD MOVE / MOUSE LOOK / SPACE JUMP / ESC RELEASE",
-            "CLICK ATTACK / F WIELD / R RESPAWN / 1-5 ABILITIES",
-        ]
-        .iter()
-        .enumerate()
-        {
-            text_mesh(
-                &mut overlay,
-                text,
-                12.0,
-                12.0 + line as f32 * 20.0,
-                width,
-                height,
-            );
-        }
-        if self.terrain.truncated {
-            text_mesh(
-                &mut overlay,
-                "MESH BUDGET REACHED - SOME GEOMETRY OMITTED",
-                12.0,
-                136.0,
-                width,
-                height,
-            );
-        }
-        if self.had_position {
-            text_mesh(
-                &mut overlay,
-                "+",
-                width as f32 * 0.5 - 5.0,
-                height as f32 * 0.5 - 7.0,
-                width,
-                height,
-            );
         }
         PreparedFrame {
             camera,
@@ -299,90 +241,6 @@ fn voxel_mesh(center: Vec3<i32>, occupied: impl Fn(Vec3<i32>) -> bool) -> Mesh {
     }
 }
 
-fn text_mesh(vertices: &mut Vec<Vertex>, text: &str, x: f32, y: f32, width: u32, height: u32) {
-    let scale = 2.0;
-    let max_chars = ((width as f32 - x).max(0.0) / (6.0 * scale)) as usize;
-    for (i, c) in text.chars().take(max_chars.min(120)).enumerate() {
-        for (row, bits) in glyph(c.to_ascii_uppercase()).iter().enumerate() {
-            for col in 0..5 {
-                if bits & (1 << (4 - col)) == 0 {
-                    continue;
-                }
-                let px = x + (i * 6 + col) as f32 * scale;
-                let py = y + row as f32 * scale;
-                let left = 2.0 * px / width as f32 - 1.0;
-                let right = 2.0 * (px + scale) / width as f32 - 1.0;
-                let top = 1.0 - 2.0 * py / height as f32;
-                let bottom = 1.0 - 2.0 * (py + scale) / height as f32;
-                for p in [
-                    [left, top],
-                    [left, bottom],
-                    [right, bottom],
-                    [left, top],
-                    [right, bottom],
-                    [right, top],
-                ] {
-                    vertices.push(Vertex {
-                        position: [p[0], p[1], 0.0, 0.0],
-                        color: [0.95, 0.95, 0.85, 1.0],
-                    });
-                }
-            }
-        }
-    }
-}
-
-// Text is geometry too: no font asset, glyph atlas, sampler, or UI pipeline.
-fn glyph(c: char) -> [u8; 7] {
-    match c {
-        'A' => [14, 17, 17, 31, 17, 17, 17],
-        'B' => [30, 17, 17, 30, 17, 17, 30],
-        'C' => [14, 17, 16, 16, 16, 17, 14],
-        'D' => [30, 17, 17, 17, 17, 17, 30],
-        'E' => [31, 16, 16, 30, 16, 16, 31],
-        'F' => [31, 16, 16, 30, 16, 16, 16],
-        'G' => [14, 17, 16, 23, 17, 17, 15],
-        'H' => [17, 17, 17, 31, 17, 17, 17],
-        'I' => [14, 4, 4, 4, 4, 4, 14],
-        'J' => [7, 2, 2, 2, 2, 18, 12],
-        'K' => [17, 18, 20, 24, 20, 18, 17],
-        'L' => [16, 16, 16, 16, 16, 16, 31],
-        'M' => [17, 27, 21, 21, 17, 17, 17],
-        'N' => [17, 25, 21, 19, 17, 17, 17],
-        'O' => [14, 17, 17, 17, 17, 17, 14],
-        'P' => [30, 17, 17, 30, 16, 16, 16],
-        'Q' => [14, 17, 17, 17, 21, 18, 13],
-        'R' => [30, 17, 17, 30, 20, 18, 17],
-        'S' => [15, 16, 16, 14, 1, 1, 30],
-        'T' => [31, 4, 4, 4, 4, 4, 4],
-        'U' => [17, 17, 17, 17, 17, 17, 14],
-        'V' => [17, 17, 17, 17, 17, 10, 4],
-        'W' => [17, 17, 17, 21, 21, 21, 10],
-        'X' => [17, 17, 10, 4, 10, 17, 17],
-        'Y' => [17, 17, 10, 4, 4, 4, 4],
-        'Z' => [31, 1, 2, 4, 8, 16, 31],
-        '0' => [14, 17, 19, 21, 25, 17, 14],
-        '1' => [4, 12, 4, 4, 4, 4, 14],
-        '2' => [14, 17, 1, 2, 4, 8, 31],
-        '3' => [30, 1, 1, 14, 1, 1, 30],
-        '4' => [2, 6, 10, 18, 31, 2, 2],
-        '5' => [31, 16, 16, 30, 1, 1, 30],
-        '6' => [14, 16, 16, 30, 17, 17, 14],
-        '7' => [31, 1, 2, 4, 8, 8, 8],
-        '8' => [14, 17, 17, 14, 17, 17, 14],
-        '9' => [14, 17, 17, 15, 1, 1, 14],
-        '-' => [0, 0, 0, 31, 0, 0, 0],
-        '+' => [0, 4, 4, 31, 4, 4, 0],
-        '/' => [1, 2, 2, 4, 8, 8, 16],
-        '.' => [0, 0, 0, 0, 0, 12, 12],
-        ':' => [0, 12, 12, 0, 12, 12, 0],
-        '(' => [2, 4, 8, 8, 8, 4, 2],
-        ')' => [8, 4, 2, 2, 2, 4, 8],
-        ' ' => [0; 7],
-        _ => [14, 17, 1, 2, 4, 0, 4],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -399,15 +257,11 @@ mod tests {
         assert!(!mesh.truncated);
     }
     #[test]
-    fn missing_terrain_is_empty_and_text_uses_screen_coordinates() {
+    fn missing_world_has_no_terrain_or_overlay_geometry() {
         assert!(voxel_mesh(Vec3::zero(), |_| false).vertices.is_empty());
-        let mut vertices = Vec::new();
-        text_mesh(&mut vertices, "A", 12.0, 12.0, 640, 480);
-        assert!(!vertices.is_empty());
-        assert!(
-            vertices
-                .iter()
-                .all(|v| v.position[3] == 0.0 && v.position[2] == 0.0)
-        );
+        let mut scene = Scene::new();
+        let frame = scene.prepare(None, 0.0, 0.0, 640, 480);
+        assert!(frame.terrain.is_empty());
+        assert!(frame.overlay.is_empty());
     }
 }

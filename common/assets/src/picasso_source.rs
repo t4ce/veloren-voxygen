@@ -35,6 +35,13 @@ impl Entry {
 const CATALOG_KEY: &str = "__veloren_asset_catalog/v1";
 const MAX_DATABASE_IMAGE_BYTES: usize = 1024 * 1024 * 1024;
 
+fn asset_progress(message: fmt::Arguments<'_>) {
+    #[cfg(target_os = "trueos")]
+    let _ = trueos::logl::log_record(trueos::logl::level::IMPORTANT, "apps::voxygen", message);
+    #[cfg(not(target_os = "trueos"))]
+    eprintln!("{message}");
+}
+
 #[derive(Serialize, Deserialize)]
 struct Catalog {
     version: u32,
@@ -63,7 +70,7 @@ fn is_bundle(id: &str, ext: &str) -> bool {
 impl PicassoSource {
     pub(super) fn new() -> io::Result<Self> {
         let start = Instant::now();
-        tracing::info!("Initializing Picasso assets");
+        asset_progress(format_args!("Voxygen assets: initializing Picasso assets"));
         // Preserve canary validation and override precedence at ingestion.
         // Neither filesystem source nor a path is retained by PicassoSource.
         #[cfg(not(target_os = "trueos"))]
@@ -74,12 +81,12 @@ impl PicassoSource {
         };
         #[cfg(target_os = "trueos")]
         let source = Self::from_runtime_archive()?;
-        tracing::info!(
-            files = source.files.len(),
-            bytes = source.bytes,
-            seconds = start.elapsed().as_secs_f64(),
-            "Picasso assets ready; serving assets from RAM"
-        );
+        asset_progress(format_args!(
+            "Voxygen assets: serving assets from RAM files={} bytes={} seconds={:.2}",
+            source.files.len(),
+            source.bytes,
+            start.elapsed().as_secs_f64()
+        ));
         Ok(source)
     }
 
@@ -87,7 +94,9 @@ impl PicassoSource {
     fn from_runtime_archive() -> io::Result<Self> {
         let path = std::env::var("VOXYGEN_ASSET_DATABASE")
             .unwrap_or_else(|_| "/apps/voxy/voxygen-assets.redb.lz4".into());
-        eprintln!("Voxygen assets: phase=decode-request path={path}");
+        asset_progress(format_args!(
+            "Voxygen assets: phase=decode-request path={path}"
+        ));
         let started = trueos::clock::Instant::now();
         let mut last_update = started;
         let mut copying = false;
@@ -103,15 +112,15 @@ impl PicassoSource {
                 };
                 if is_copy != copying || finished || last_update.elapsed().as_millis() >= 5000 {
                     match progress {
-                        MemoryProgress::Decoding { percent } => eprintln!(
+                        MemoryProgress::Decoding { percent } => asset_progress(format_args!(
                             "Voxygen assets: phase=decode-progress percent={percent} elapsed_seconds={}",
                             started.elapsed().as_millis() / 1000
-                        ),
-                        MemoryProgress::Copying { copied, total } => eprintln!(
+                        )),
+                        MemoryProgress::Copying { copied, total } => asset_progress(format_args!(
                             "Voxygen assets: phase=ram-copy copied_mib={} total_mib={} elapsed_seconds={}",
                             copied / (1024 * 1024), total.div_ceil(1024 * 1024),
                             started.elapsed().as_millis() / 1000
-                        ),
+                        )),
                     }
                     copying = is_copy;
                     last_update = trueos::clock::Instant::now();
@@ -124,13 +133,15 @@ impl PicassoSource {
             ))
         })?;
         let image_bytes = bytes.len();
-        eprintln!("Voxygen assets: phase=db-open image_bytes={image_bytes} mode=prebuilt");
+        asset_progress(format_args!(
+            "Voxygen assets: phase=db-open image_bytes={image_bytes} mode=prebuilt"
+        ));
         let result = Self::from_database_image(bytes)?;
-        eprintln!(
+        asset_progress(format_args!(
             "Voxygen assets: phase=db-ready files={} bytes={} image_bytes={image_bytes} mode=prebuilt",
             result.files.len(),
             result.bytes
-        );
+        ));
         Ok(result)
     }
 
@@ -218,7 +229,7 @@ impl PicassoSource {
         #[cfg(target_os = "trueos")]
         let mut last_update = trueos::clock::Instant::now();
         #[cfg(target_os = "trueos")]
-        eprintln!("Voxygen assets: phase=db-import");
+        asset_progress(format_args!("Voxygen assets: phase=db-import"));
         let mut pending = vec![String::new()];
         while let Some(directory) = pending.pop() {
             let mut entries = Vec::new();
@@ -247,11 +258,11 @@ impl PicassoSource {
                         if result.files.len() % 1024 == 0
                             || last_update.elapsed().as_millis() >= 5000
                         {
-                            eprintln!(
+                            asset_progress(format_args!(
                                 "Voxygen assets: phase=db-progress files={} bytes={}",
                                 result.files.len(),
                                 result.bytes
-                            );
+                            ));
                             last_update = trueos::clock::Instant::now();
                             trueos::vsys::poll_once();
                         }

@@ -236,6 +236,13 @@ fn main() {
 #[cfg(feature = "headless")]
 fn main() {
     if let Err(error) = veloren_voxygen::headless::run() {
+        #[cfg(target_os = "trueos")]
+        let _ = trueos::logl::log_record(
+            trueos::logl::level::ERROR,
+            "apps::voxygen",
+            format_args!("Headless client: {error}"),
+        );
+        #[cfg(not(target_os = "trueos"))]
         eprintln!("Headless client: {error}");
         std::process::exit(1);
     }

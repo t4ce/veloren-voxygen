@@ -1,4 +1,4 @@
-//! Lean game client with geometry and text rendering on the native wgpu surface.
+//! Lean game client with geometry on the native wgpu surface and console status.
 use crate::client::{Client, ClientType, Event, addr::ConnectionArgs};
 use clap::Parser;
 use common::{
@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::runtime::Runtime;
-use tracing::{info, warn};
+use tracing::warn;
 use vek::{Vec2, Vec3};
 mod gpu;
 #[cfg(not(target_os = "trueos"))]
@@ -42,14 +42,15 @@ const FRAME: Duration = Duration::from_nanos(16_666_667);
 
 fn connection_progress(message: std::fmt::Arguments<'_>) {
     #[cfg(target_os = "trueos")]
-    trueos::logl::log(trueos::logl::level::INFO, message);
+    // IMPORTANT survives the GPU diagnostic profile's area filters.
+    let _ = trueos::logl::log_record(trueos::logl::level::IMPORTANT, "apps::voxygen", message);
     #[cfg(not(target_os = "trueos"))]
-    info!("{message}");
+    eprintln!("{message}");
 }
 
 #[derive(Parser)]
 #[command(
-    about = "Voxygen headless: live geometry and text UI. Type your password in the window and press Enter."
+    about = "Voxygen headless: live geometry and console status. Type your password in the window and press Enter."
 )]
 struct Args {
     #[cfg_attr(
@@ -88,6 +89,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             .build()?,
     );
     let app = App::new(args, runtime);
+    connection_progress(format_args!(
+        "Voxygen headless: geometry only; WASD / mouse / Space; click attack / F wield / R respawn / 1-5 abilities / Esc release"
+    ));
     #[cfg(not(target_os = "trueos"))]
     {
         let event_loop = EventLoop::new()?;
@@ -107,7 +111,6 @@ struct App {
     runtime: Arc<Runtime>,
     #[cfg(not(target_os = "trueos"))]
     renderer: Option<render::Renderer>,
-    status: String,
     #[cfg(not(target_os = "trueos"))]
     render_error: Option<String>,
     #[cfg(not(target_os = "trueos"))]
@@ -180,7 +183,6 @@ impl App {
             runtime,
             #[cfg(not(target_os = "trueos"))]
             renderer: None,
-            status: "Type password and press Enter (input is hidden)".into(),
             #[cfg(not(target_os = "trueos"))]
             render_error: None,
             window: None,
@@ -203,15 +205,10 @@ impl App {
     }
 
     fn prompt(&mut self, message: &str) {
-        self.status = message.to_owned();
-        #[cfg(target_os = "trueos")]
-        trueos::logl::log(
-            trueos::logl::level::INFO,
-            format_args!(
-                "Voxygen {} @ {}: {}",
-                self.args.username, self.args.server, message
-            ),
-        );
+        connection_progress(format_args!(
+            "Voxygen {} @ {}: {}",
+            self.args.username, self.args.server, message
+        ));
         #[cfg(not(target_os = "trueos"))]
         if let Some(window) = &self.window {
             window.set_title(&format!(
@@ -407,7 +404,7 @@ impl App {
         let events = match self.client.as_mut().map(|client| client.tick(inputs, dt)) {
             Some(Ok(events)) => events,
             Some(Err(error)) => {
-                warn!(?error, "Headless client tick failed");
+                connection_progress(format_args!("Headless client tick failed: {error:?}"));
                 self.capture(false);
                 self.client = None;
                 self.character_requested = false;
@@ -556,12 +553,7 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::RedrawRequested => {
                 let renderer = self.renderer.as_mut().expect("minimal renderer");
-                match renderer.draw(
-                    self.client.as_ref(),
-                    self.input.yaw,
-                    self.input.pitch,
-                    &self.status,
-                ) {
+                match renderer.draw(self.client.as_ref(), self.input.yaw, self.input.pitch) {
                     Ok(()) => {}
                     Err(error) => {
                         warn!(%error, "Minimal wgpu frame failed");

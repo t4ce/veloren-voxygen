@@ -3,7 +3,7 @@
 //!
 //! Ubuntu: `cargo run --features headless` uses this renderer directly.
 //! The existing client supplies networking, simulation and gameplay input.
-//! One pipeline/pass draws terrain, entity box proxies and text without sampled
+//! One pipeline/pass draws terrain and entity box proxies without sampled
 //! textures, lights, optional GPU features or postprocessing. Terrain is bounded
 //! to +/-40 blocks XY and +/-32 blocks Z, with at most 600,000 vertices. Meshing
 //! runs off-thread at most twice per second. Character aliases and controls stay
@@ -78,7 +78,6 @@ impl Renderer {
         client: Option<&Client>,
         yaw: f32,
         pitch: f32,
-        status: &str,
     ) -> Result<(), Error> {
         let size = self.window.inner_size();
         if size.width == 0 || size.height == 0 {
@@ -114,7 +113,7 @@ impl Renderer {
         };
         let view = frame.texture.create_view(&Default::default());
         self.gpu
-            .draw(&view, size.width, size.height, client, yaw, pitch, status);
+            .draw(&view, size.width, size.height, client, yaw, pitch);
         self.window.pre_present_notify();
         self.queue.present(frame);
         Ok(())
