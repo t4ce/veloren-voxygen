@@ -20,7 +20,7 @@ pub use assets_manager::{
 mod fs;
 #[cfg(feature = "picasso-assets")]
 mod picasso_source;
-#[cfg(feature = "picasso-assets")]
+#[cfg(all(test, feature = "picasso-assets"))]
 mod tar_source;
 mod walk;
 pub use walk::{Walk, walk_tree};
@@ -36,6 +36,12 @@ fn create_asset_cache() -> AssetCache {
     return AssetCache::with_source(picasso_source::PicassoSource::new().unwrap());
     #[cfg(not(feature = "picasso-assets"))]
     AssetCache::with_source(fs::FileSystem::new().unwrap())
+}
+
+/// Prepare a portable Picasso database from the installed asset tree on the host.
+#[cfg(all(feature = "picasso-assets", not(target_os = "trueos")))]
+pub fn prepare_picasso_asset_database(path: &std::path::Path) -> std::io::Result<()> {
+    picasso_source::prepare_database(path)
 }
 
 /// Imports raw assets before the application starts when using Picasso.

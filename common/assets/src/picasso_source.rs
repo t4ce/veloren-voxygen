@@ -3,6 +3,7 @@
 
 use assets_manager::source::{DirEntry, FileContent, Source};
 use picasso::Picasso;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt, io,
@@ -16,7 +17,7 @@ pub(super) struct PicassoSource {
     bytes: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub(super) enum Entry {
     File(String, String),
     Directory(String),
@@ -31,13 +32,29 @@ impl Entry {
     }
 }
 
+const CATALOG_KEY: &str = "__veloren_asset_catalog/v1";
+const MAX_DATABASE_IMAGE_BYTES: usize = 1024 * 1024 * 1024;
+
+#[derive(Serialize, Deserialize)]
+struct Catalog {
+    version: u32,
+    directories: BTreeMap<String, Vec<Entry>>,
+    files: BTreeSet<String>,
+    bytes: u64,
+}
+
 fn asset_key(id: &str, ext: &str) -> String {
     // Asset IDs and extensions cannot contain a path separator.
     format!("{id}/{ext}")
 }
 
 fn is_bundle(id: &str, ext: &str) -> bool {
-    ext == "tar.lz4"
+    ext == "redb"
+        || ext == "redb.lz4"
+        || ext == "redb.lz4.sha256"
+        || (ext == "lz4" && id.ends_with(".redb"))
+        || (ext == "sha256" && id.ends_with(".redb.lz4"))
+        || ext == "tar.lz4"
         || ext == "tar.lz4.sha256"
         || (ext == "lz4" && id.ends_with(".tar"))
         || (ext == "sha256" && id.ends_with(".tar.lz4"))
@@ -46,34 +63,37 @@ fn is_bundle(id: &str, ext: &str) -> bool {
 impl PicassoSource {
     pub(super) fn new() -> io::Result<Self> {
         let start = Instant::now();
-        tracing::info!("Importing assets into Picasso's RAM database");
+        tracing::info!("Initializing Picasso assets");
         // Preserve canary validation and override precedence at ingestion.
         // Neither filesystem source nor a path is retained by PicassoSource.
         #[cfg(not(target_os = "trueos"))]
-        let source = Self::import(&super::fs::FileSystem::new()?)?;
+        let source = if let Some(path) = std::env::var_os("VOXYGEN_ASSET_DATABASE") {
+            Self::from_database_image(std::fs::read(path)?)?
+        } else {
+            Self::import(&super::fs::FileSystem::new()?)?
+        };
         #[cfg(target_os = "trueos")]
         let source = Self::from_runtime_archive()?;
         tracing::info!(
             files = source.files.len(),
             bytes = source.bytes,
             seconds = start.elapsed().as_secs_f64(),
-            "Picasso asset import complete; serving assets from RAM"
+            "Picasso assets ready; serving assets from RAM"
         );
         Ok(source)
     }
 
     #[cfg(target_os = "trueos")]
     fn from_runtime_archive() -> io::Result<Self> {
-        use super::tar_source::{ArchiveWithCommon, MAX_TAR_BYTES, TarSource};
-        let path = std::env::var("VOXYGEN_ASSET_ARCHIVE")
-            .unwrap_or_else(|_| "/apps/voxy/voxygen-assets.tar.lz4".into());
+        let path = std::env::var("VOXYGEN_ASSET_DATABASE")
+            .unwrap_or_else(|_| "/apps/voxy/voxygen-assets.redb.lz4".into());
         eprintln!("Voxygen assets: phase=decode-request path={path}");
         let started = trueos::clock::Instant::now();
         let mut last_update = started;
         let mut copying = false;
         let bytes = trueos::async_fs::block_on(trueos::archive::decode_lz4_to_memory_with_progress(
             path.as_bytes(),
-            MAX_TAR_BYTES,
+            MAX_DATABASE_IMAGE_BYTES,
             |progress| {
                 use trueos::archive::MemoryProgress;
                 let is_copy = matches!(progress, MemoryProgress::Copying { .. });
@@ -100,53 +120,92 @@ impl PicassoSource {
         ))
         .map_err(|code| {
             io::Error::other(format!(
-                "RAM decode of {path} failed (code {code}); requires kernel archive RAM API v1"
+                "LZ4 decode of prepared asset database {path} failed (code {code})"
             ))
         })?;
-        eprintln!("Voxygen assets: phase=decoded tar_bytes={}", bytes.len());
-        let archive = TarSource::new(&bytes)?;
+        let image_bytes = bytes.len();
+        eprintln!("Voxygen assets: phase=db-open image_bytes={image_bytes} mode=prebuilt");
+        let result = Self::from_database_image(bytes)?;
         eprintln!(
-            "Voxygen assets: phase=catalog archive_files={}",
-            archive.file_count()
-        );
-        let result = if archive.exists(DirEntry::File("common.canary", "canary")) {
-            archive.validate_canary()?;
-            Self::import(&archive)?
-        } else {
-            // The original graphics-only seed omitted common. Probe explicitly
-            // rather than invoking ASSETS_PATH, whose missing-directory panic
-            // obscures the otherwise successful RAM decode.
-            let mut paths = Vec::new();
-            if let Some(path) = std::env::var_os("VELOREN_ASSETS") {
-                paths.push(std::path::PathBuf::from(path));
-            }
-            paths.push(std::path::PathBuf::from("assets"));
-            paths.push(std::path::PathBuf::from("/apps/voxy"));
-            paths.push(std::env::var_os("TRUEOS_APP_COMMON")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| "/common".into())
-                .join("veloren/assets"));
-            let common = paths.iter().find_map(|path| {
-                super::fs::FileSystem::with_path(path).ok().map(|source| {
-                    eprintln!("Voxygen assets: phase=common-import path={}/common", path.display());
-                    source
-                })
-            }).ok_or_else(|| io::Error::new(io::ErrorKind::NotFound,
-                "asset archive omits common/ and no loose common assets are installed; replace /apps/voxy/voxygen-assets.tar.lz4 with the complete archive including common/canary.canary"))?;
-            Self::import(&ArchiveWithCommon {
-                archive: &archive,
-                common: &common,
-            })?
-        };
-        // The importer retains only Picasso and its directory index.
-        drop(archive);
-        drop(bytes);
-        eprintln!(
-            "Voxygen assets: phase=db-ready files={} bytes={} staging_released=true",
+            "Voxygen assets: phase=db-ready files={} bytes={} image_bytes={image_bytes} mode=prebuilt",
             result.files.len(),
             result.bytes
         );
         Ok(result)
+    }
+
+    fn from_database_image(bytes: Vec<u8>) -> io::Result<Self> {
+        if bytes.len() > MAX_DATABASE_IMAGE_BYTES {
+            return Err(io::Error::other(
+                "prepared asset database exceeds size limit",
+            ));
+        }
+        let store = Picasso::from_runtime_database_image(bytes).map_err(storage_error)?;
+        let raw = store
+            .embedded_asset(CATALOG_KEY)
+            .map_err(storage_error)?
+            .ok_or_else(|| io::Error::other("prepared database has no Veloren asset catalog"))?;
+        if raw.len() > 8 * 1024 * 1024 {
+            return Err(io::Error::other(
+                "prepared asset catalog exceeds size limit",
+            ));
+        }
+        let catalog: Catalog =
+            ron::de::from_bytes(&raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        if catalog.version != 1
+            || catalog.files.len() > 16_384
+            || catalog.bytes > 512 * 1024 * 1024
+            || !catalog.directories.contains_key("")
+        {
+            return Err(io::Error::other("invalid prepared asset catalog"));
+        }
+        let canary = store
+            .embedded_asset("common.canary/canary")
+            .map_err(storage_error)?
+            .ok_or_else(|| io::Error::other("prepared database has no common.canary.canary"))?;
+        if !canary.starts_with(b"VELOREN_CANARY_MAGIC") {
+            return Err(io::Error::other(
+                "prepared database has an invalid Veloren canary",
+            ));
+        }
+        Ok(Self {
+            store,
+            directories: catalog.directories,
+            files: catalog.files,
+            bytes: catalog.bytes,
+        })
+    }
+
+    #[cfg(not(target_os = "trueos"))]
+    fn into_database_image(self) -> io::Result<Vec<u8>> {
+        let Self {
+            store,
+            directories,
+            files,
+            bytes,
+        } = self;
+        if files.contains(CATALOG_KEY) {
+            return Err(io::Error::other(
+                "asset conflicts with the prepared database catalog key",
+            ));
+        }
+        let catalog = Catalog {
+            version: 1,
+            directories,
+            files,
+            bytes,
+        };
+        let raw = ron::ser::to_string(&catalog).map_err(io::Error::other)?;
+        store
+            .put_embedded_asset(CATALOG_KEY, raw.as_bytes())
+            .map_err(storage_error)?;
+        let image = store.into_runtime_database_image().map_err(storage_error)?;
+        if image.len() > MAX_DATABASE_IMAGE_BYTES {
+            return Err(io::Error::other(
+                "prepared database exceeds runtime size limit",
+            ));
+        }
+        Ok(image)
     }
 
     pub(super) fn import(source: &impl Source) -> io::Result<Self> {
@@ -185,7 +244,9 @@ impl PicassoSource {
                         result.files.insert(key);
                         result.bytes += content.as_ref().len() as u64;
                         #[cfg(target_os = "trueos")]
-                        if result.files.len() % 1024 == 0 || last_update.elapsed().as_millis() >= 5000 {
+                        if result.files.len() % 1024 == 0
+                            || last_update.elapsed().as_millis() >= 5000
+                        {
                             eprintln!(
                                 "Voxygen assets: phase=db-progress files={} bytes={}",
                                 result.files.len(),
@@ -201,6 +262,23 @@ impl PicassoSource {
         }
         Ok(result)
     }
+}
+
+#[cfg(not(target_os = "trueos"))]
+pub(super) fn prepare_database(path: &std::path::Path) -> io::Result<()> {
+    let start = Instant::now();
+    let source = PicassoSource::import(&super::fs::FileSystem::new()?)?;
+    let files = source.files.len();
+    let bytes = source.bytes;
+    let image = source.into_database_image()?;
+    let image_bytes = image.len();
+    std::fs::write(path, image)?;
+    eprintln!(
+        "Voxygen assets: phase=db-prepared files={files} bytes={bytes} image_bytes={image_bytes} seconds={:.2} path={}",
+        start.elapsed().as_secs_f64(),
+        path.display()
+    );
+    Ok(())
 }
 
 fn storage_error(error: picasso::PicassoError) -> io::Error {
@@ -247,6 +325,98 @@ impl Source for PicassoSource {
 mod tests {
     use super::*;
     use assets_manager::{AssetCache, asset::Ron, source::FileSystem};
+
+    #[test]
+    fn prepared_database_preserves_catalog_and_loads_after_source_is_deleted() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        std::fs::create_dir(root.join("common")).unwrap();
+        std::fs::create_dir(root.join("empty")).unwrap();
+        std::fs::create_dir(root.join("nested")).unwrap();
+        std::fs::write(root.join("common/canary.canary"), b"VELOREN_CANARY_MAGIC").unwrap();
+        std::fs::write(root.join("nested/value.ron"), b"[4, 8, 15]").unwrap();
+        let binary: Vec<_> = (0..150_000).map(|i| (i % 251) as u8).collect();
+        std::fs::write(root.join("nested/blob.bin"), &binary).unwrap();
+        let source = PicassoSource::import(&FileSystem::new(root).unwrap()).unwrap();
+        let original_files = source.files.clone();
+        let original_bytes = source.bytes;
+        let image = source.into_database_image().unwrap();
+        directory.close().unwrap();
+        let source = PicassoSource::from_database_image(image).unwrap();
+        assert_eq!(source.files, original_files);
+        assert_eq!(source.bytes, original_bytes);
+        assert_eq!(source.read("nested.blob", "bin").unwrap().as_ref(), binary);
+        assert!(source.exists(DirEntry::Directory("empty")));
+        source
+            .read_dir("empty", &mut |_| panic!("empty directory"))
+            .unwrap();
+        let cache = AssetCache::with_source(source);
+        assert_eq!(
+            cache
+                .load::<Ron<Vec<u32>>>("nested.value")
+                .unwrap()
+                .read()
+                .0,
+            [4, 8, 15]
+        );
+    }
+
+    #[test]
+    fn prepared_database_rejects_missing_canary_and_wrong_catalog_version() {
+        for version in [1, 2] {
+            let store = Picasso::new().unwrap();
+            let catalog = Catalog {
+                version,
+                directories: BTreeMap::from([(String::new(), Vec::new())]),
+                files: BTreeSet::new(),
+                bytes: 0,
+            };
+            store
+                .put_embedded_asset(
+                    CATALOG_KEY,
+                    ron::ser::to_string(&catalog).unwrap().as_bytes(),
+                )
+                .unwrap();
+            let image = store.into_runtime_database_image().unwrap();
+            assert!(PicassoSource::from_database_image(image).is_err());
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn prepared_full_tree_round_trip() {
+        let image = std::fs::read(
+            std::env::var_os("VOXYGEN_TEST_DATABASE").expect("set VOXYGEN_TEST_DATABASE"),
+        )
+        .unwrap();
+        let start = Instant::now();
+        let source = PicassoSource::from_database_image(image).unwrap();
+        let files = source.files.len();
+        let bytes = source.bytes;
+        let opened = start.elapsed().as_secs_f64();
+        let original = super::super::fs::FileSystem::new().unwrap();
+        for entries in source.directories.values() {
+            for entry in entries {
+                if let Entry::File(id, ext) = entry {
+                    assert_eq!(
+                        source.read(id, ext).unwrap().as_ref(),
+                        original.read(id, ext).unwrap().as_ref(),
+                        "{id}.{ext}"
+                    );
+                }
+            }
+        }
+        let cache = AssetCache::with_source(source);
+        cache
+            .load::<super::super::Image>("voxygen.background.hurt")
+            .unwrap();
+        cache
+            .load::<super::super::DotVox>("voxygen.voxel.lantern.red-0")
+            .unwrap();
+        println!(
+            "Opened prebuilt Picasso database in {opened:.3}s; verified all {files} assets / {bytes} bytes and PNG/VOX decoders"
+        );
+    }
 
     #[test]
     fn serves_bytes_directories_and_decoded_assets_after_tree_is_removed() {
@@ -314,6 +484,9 @@ mod tests {
             b"checksum",
         )
         .unwrap();
+        std::fs::write(root.join("voxygen-assets.redb"), b"database").unwrap();
+        std::fs::write(root.join("voxygen-assets.redb.lz4"), b"database bundle").unwrap();
+        std::fs::write(root.join("voxygen-assets.redb.lz4.sha256"), b"checksum").unwrap();
         std::fs::write(root.join("chunk.lz4"), b"game data").unwrap();
         let source = PicassoSource::import(&FileSystem::new(root).unwrap()).unwrap();
         assert_eq!(source.files.len(), 1);

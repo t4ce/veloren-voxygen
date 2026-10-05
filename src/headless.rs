@@ -17,6 +17,8 @@ use tracing::{info, warn};
 use vek::{Vec2, Vec3};
 #[cfg(not(target_os = "trueos"))]
 mod render;
+#[cfg(any(target_os = "trueos", test))]
+pub mod shader;
 #[cfg(target_os = "trueos")]
 mod ui4;
 #[cfg(target_os = "trueos")]

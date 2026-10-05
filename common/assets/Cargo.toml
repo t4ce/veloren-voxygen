@@ -9,11 +9,11 @@ version = "0.18.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 [features]
-picasso-assets = ["dep:picasso", "dep:tar"]
+picasso-assets = ["dep:picasso", "dep:serde"]
 
 [dependencies]
 lazy_static = "1.4.0"
-tar = { version = "0.4", default-features = false, optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 assets_manager = { version = "0.13", features = [
     "ab_glyph",
     "bincode",
@@ -45,6 +45,12 @@ picasso = { package = "trueos-picasso", path = "../../../TRUEOS-Picasso", defaul
 picasso = { package = "trueos-picasso", path = "../../../TRUEOS-Picasso", default-features = false, features = ["runtime-assets", "test-std"], optional = true }
 
 [dev-dependencies]
+tar = { version = "0.4", default-features = false }
 tempfile = "3"
 serde = { version = "1", features = ["derive"] }
 walkdir = "2"
+
+[[bin]]
+name = "voxy-assets"
+path = "src/bin/voxy_assets.rs"
+required-features = ["picasso-assets"]

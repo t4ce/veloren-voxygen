@@ -3,3 +3,7 @@
 blueprint/target/
 /assets/*.tar.lz4
 /assets/*.tar.lz4.sha256
+
+/assets/*.redb
+/assets/*.redb.lz4
+/assets/*.redb.lz4.sha256
