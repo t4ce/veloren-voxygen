@@ -61,6 +61,127 @@ fn file_password(mut password: String) -> std::io::Result<String> {
     Ok(password)
 }
 
+#[cfg(any(target_os = "trueos", test))]
+#[derive(Default)]
+struct PresentationProof {
+    last_serial: u64,
+    consecutive: u64,
+}
+
+#[cfg(any(target_os = "trueos", test))]
+impl PresentationProof {
+    // The caller must first verify this exact publication reached SURFLIVE.
+    fn observe(&mut self, serial: u64, world_joined: bool, info: scene::FrameInfo) -> bool {
+        if serial == 0 || serial <= self.last_serial {
+            return false;
+        }
+        self.last_serial = serial;
+        let world_terrain = world_joined
+            && info.terrain_vertices >= 3
+            && info.position.is_some_and(|position| {
+                position.x.is_finite() && position.y.is_finite() && position.z.is_finite()
+            });
+        self.consecutive = if world_terrain {
+            self.consecutive.saturating_add(1)
+        } else {
+            0
+        };
+        world_terrain
+    }
+}
+
+#[cfg(any(target_os = "trueos", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum JumpObservation {
+    Press { z: f32 },
+    Release,
+    Rise { z: f32, rise: f32 },
+    Fall { z: f32, fall: f32 },
+    Landed { z: f32, rise: f32 },
+    TimedOut { z: f32 },
+}
+
+#[cfg(any(target_os = "trueos", test))]
+#[derive(Default)]
+struct AutomaticJump {
+    ground_since: Option<Instant>,
+    started: Option<Instant>,
+    base_z: f32,
+    peak_z: f32,
+    released: bool,
+    rose: bool,
+    fell: bool,
+    finished: bool,
+}
+
+#[cfg(any(target_os = "trueos", test))]
+impl AutomaticJump {
+    fn observe(
+        &mut self,
+        now: Instant,
+        ready: bool,
+        z: Option<f32>,
+        grounded: bool,
+    ) -> Vec<JumpObservation> {
+        let mut observations = Vec::new();
+        if self.finished {
+            return observations;
+        }
+        // Releasing the real input must not depend on receiving a fresh Pos.
+        if self.started.is_some_and(|started| {
+            !self.released && now.duration_since(started) >= Duration::from_millis(150)
+        }) {
+            self.released = true;
+            observations.push(JumpObservation::Release);
+        }
+        let Some(z) = z.filter(|z| z.is_finite()) else {
+            self.ground_since = None;
+            return observations;
+        };
+        let Some(started) = self.started else {
+            if !ready || !grounded {
+                self.ground_since = None;
+                return observations;
+            }
+            let ground_since = self.ground_since.get_or_insert(now);
+            if now.duration_since(*ground_since) < Duration::from_millis(250) {
+                return observations;
+            }
+            self.started = Some(now);
+            self.base_z = z;
+            self.peak_z = z;
+            observations.push(JumpObservation::Press { z });
+            return observations;
+        };
+        self.peak_z = self.peak_z.max(z);
+        if !self.rose && !grounded && z - self.base_z > 0.15 {
+            self.rose = true;
+            observations.push(JumpObservation::Rise {
+                z,
+                rise: z - self.base_z,
+            });
+        }
+        if self.rose && !self.fell && self.peak_z - z > 0.10 {
+            self.fell = true;
+            observations.push(JumpObservation::Fall {
+                z,
+                fall: self.peak_z - z,
+            });
+        }
+        if self.rose && self.fell && grounded {
+            self.finished = true;
+            observations.push(JumpObservation::Landed {
+                z,
+                rise: self.peak_z - self.base_z,
+            });
+        } else if now.duration_since(started) >= Duration::from_secs(10) {
+            self.finished = true;
+            observations.push(JumpObservation::TimedOut { z });
+        }
+        observations
+    }
+}
+
 #[derive(Parser)]
 #[command(
     about = "Voxygen headless: live geometry and console status. Type your password in the window and press Enter."
@@ -139,6 +260,10 @@ struct App {
     character_requested: bool,
     character_created: bool,
     world_joined: bool,
+    #[cfg(target_os = "trueos")]
+    terrain_presented: bool,
+    #[cfg(target_os = "trueos")]
+    automatic_jump: AutomaticJump,
     menu_due: Option<Instant>,
     #[cfg(not(target_os = "trueos"))]
     next_tick: Instant,
@@ -208,6 +333,10 @@ impl App {
             character_requested: false,
             character_created: false,
             world_joined: false,
+            #[cfg(target_os = "trueos")]
+            terrain_presented: false,
+            #[cfg(target_os = "trueos")]
+            automatic_jump: AutomaticJump::default(),
             menu_due: None,
             #[cfg(not(target_os = "trueos"))]
             next_tick: Instant::now(),
@@ -332,6 +461,51 @@ impl App {
         }
     }
 
+    #[cfg(target_os = "trueos")]
+    fn tick_automatic_jump(&mut self, now: Instant) {
+        let position = self.client.as_ref().and_then(Client::position);
+        let grounded = self.client.as_ref().is_some_and(|client| {
+            client
+                .state()
+                .read_storage::<common::comp::PhysicsState>()
+                .get(client.entity())
+                .is_some_and(|physics| physics.on_ground.is_some())
+        });
+        let observations = self.automatic_jump.observe(
+            now,
+            self.world_joined && self.terrain_presented,
+            position.map(|position| position.z),
+            grounded,
+        );
+        for observation in observations {
+            match observation {
+                JumpObservation::Press { z } => {
+                    self.action(InputKind::Jump, true);
+                    connection_progress(format_args!(
+                        "Voxygen automatic jump: pressed grounded=true terrain_presented=true z={z:.3}"
+                    ));
+                }
+                JumpObservation::Release => {
+                    self.action(InputKind::Jump, false);
+                    connection_progress(format_args!("Voxygen automatic jump: released"));
+                }
+                JumpObservation::Rise { z, rise } => connection_progress(format_args!(
+                    "Voxygen automatic jump: actual-rise z={z:.3} delta_z={rise:.3}"
+                )),
+                JumpObservation::Fall { z, fall } => connection_progress(format_args!(
+                    "Voxygen automatic jump: actual-fall z={z:.3} below_peak={fall:.3}"
+                )),
+                JumpObservation::Landed { z, rise } => connection_progress(format_args!(
+                    "Voxygen automatic jump: landed grounded=true z={z:.3} peak_rise={rise:.3}"
+                )),
+                JumpObservation::TimedOut { z } => connection_progress(format_args!(
+                    "Voxygen automatic jump: motion-proof-incomplete z={z:.3} rose={} fell={}",
+                    self.automatic_jump.rose, self.automatic_jump.fell,
+                )),
+            }
+        }
+    }
+
     fn key(&mut self, key: KeyCode, pressed: bool, repeat: bool) {
         if key == KeyCode::Escape && pressed {
             self.capture(false);
@@ -398,6 +572,11 @@ impl App {
                     self.character_requested = false;
                     self.character_created = false;
                     self.world_joined = false;
+                    #[cfg(target_os = "trueos")]
+                    {
+                        self.terrain_presented = false;
+                        self.automatic_jump = AutomaticJump::default();
+                    }
                     self.menu_due = Some(Instant::now() + MENU_DELAY);
                     self.last_tick = Instant::now();
                     self.prompt("Loading characters…");
@@ -413,6 +592,8 @@ impl App {
             .duration_since(self.last_tick)
             .min(Duration::from_millis(100));
         self.last_tick = now;
+        #[cfg(target_os = "trueos")]
+        self.tick_automatic_jump(now);
         let inputs = self.input.controller();
         let events = match self.client.as_mut().map(|client| client.tick(inputs, dt)) {
             Some(Ok(events)) => events,
@@ -687,6 +868,133 @@ fn edit_password(password: &mut String, key: KeyCode, text: Option<&str>, compos
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terrain_presentation_proof_excludes_clear_frames_duplicates_and_resets() {
+        let mut proof = PresentationProof::default();
+        let terrain = scene::FrameInfo {
+            terrain_revision: 1,
+            terrain_vertices: 6,
+            overlay_vertices: 0,
+            position: Some(Vec3::new(0.0, 0.0, 100.0)),
+        };
+        assert!(!proof.observe(1, false, terrain));
+        assert_eq!(proof.consecutive, 0);
+        for serial in 2..=31 {
+            assert!(proof.observe(serial, true, terrain));
+            assert!(!proof.observe(serial, true, terrain));
+            assert!(!proof.observe(serial - 1, true, terrain));
+            assert_eq!(proof.consecutive, serial - 1);
+        }
+        assert_eq!(proof.consecutive, 30);
+        assert!(!proof.observe(
+            32,
+            true,
+            scene::FrameInfo {
+                terrain_vertices: 0,
+                ..terrain
+            }
+        ));
+        assert_eq!(proof.consecutive, 0);
+        assert!(proof.observe(33, true, terrain));
+        assert_eq!(proof.consecutive, 1);
+        assert!(!proof.observe(0, true, terrain));
+        assert_eq!(proof.consecutive, 1);
+        assert!(!proof.observe(
+            34,
+            true,
+            scene::FrameInfo {
+                position: None,
+                ..terrain
+            }
+        ));
+        assert_eq!(proof.consecutive, 0);
+        assert!(!proof.observe(
+            35,
+            true,
+            scene::FrameInfo {
+                position: Some(Vec3::new(0.0, 0.0, f32::NAN)),
+                ..terrain
+            }
+        ));
+        assert_eq!(proof.consecutive, 0);
+    }
+
+    #[test]
+    fn automatic_jump_waits_for_visible_terrain_and_stable_ground_then_proves_motion() {
+        let now = Instant::now();
+        let mut jump = AutomaticJump::default();
+        assert!(jump.observe(now, false, Some(100.0), true).is_empty());
+        assert!(jump.observe(now, true, Some(100.0), false).is_empty());
+        assert!(jump.observe(now, true, Some(100.0), true).is_empty());
+        assert!(
+            jump.observe(now + Duration::from_millis(249), true, Some(100.0), true)
+                .is_empty()
+        );
+        assert_eq!(
+            jump.observe(now + Duration::from_millis(250), true, Some(100.0), true),
+            vec![JumpObservation::Press { z: 100.0 }],
+        );
+        assert!(matches!(
+            jump.observe(now + Duration::from_millis(300), true, Some(100.5), false)
+                .as_slice(),
+            [JumpObservation::Rise { .. }],
+        ));
+        assert_eq!(
+            jump.observe(now + Duration::from_millis(400), true, Some(101.0), false),
+            vec![JumpObservation::Release],
+        );
+        assert!(matches!(
+            jump.observe(now + Duration::from_millis(500), true, Some(100.8), false)
+                .as_slice(),
+            [JumpObservation::Fall { .. }],
+        ));
+        assert_eq!(
+            jump.observe(now + Duration::from_millis(700), true, Some(100.0), true),
+            vec![JumpObservation::Landed {
+                z: 100.0,
+                rise: 1.0
+            }],
+        );
+        assert!(
+            jump.observe(now + Duration::from_secs(2), true, Some(100.0), true)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn automatic_jump_does_not_report_success_without_measured_rise_and_fall() {
+        let now = Instant::now();
+        let mut jump = AutomaticJump::default();
+        jump.observe(now, true, Some(10.0), true);
+        jump.observe(now + Duration::from_millis(250), true, Some(10.0), true);
+        let observations = jump.observe(now + Duration::from_secs(11), true, Some(10.0), true);
+        assert_eq!(
+            observations,
+            vec![
+                JumpObservation::Release,
+                JumpObservation::TimedOut { z: 10.0 }
+            ]
+        );
+        assert!(!jump.rose);
+        assert!(!jump.fell);
+    }
+
+    #[test]
+    fn automatic_jump_releases_input_even_if_position_disappears() {
+        let now = Instant::now();
+        let mut jump = AutomaticJump::default();
+        jump.observe(now, true, Some(10.0), true);
+        jump.observe(now + Duration::from_millis(250), true, Some(10.0), true);
+        assert_eq!(
+            jump.observe(now + Duration::from_millis(400), true, None, false),
+            vec![JumpObservation::Release],
+        );
+        assert!(
+            jump.observe(now + Duration::from_secs(1), true, None, false)
+                .is_empty()
+        );
+    }
 
     #[test]
     fn password_file_preserves_spaces_and_strips_only_line_endings() {

@@ -42,6 +42,15 @@ pub(super) struct Scene {
     pending_mesh: Option<mpsc::Receiver<Mesh>>,
     next_mesh: Instant,
     revision: u64,
+    next_missing_log: Instant,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct FrameInfo {
+    pub(super) terrain_revision: u64,
+    pub(super) terrain_vertices: u32,
+    pub(super) overlay_vertices: u32,
+    pub(super) position: Option<Vec3<f32>>,
 }
 
 pub(super) struct PreparedFrame<'a> {
@@ -61,6 +70,7 @@ impl Scene {
             pending_mesh: None,
             next_mesh: Instant::now(),
             revision: 0,
+            next_missing_log: Instant::now() + Duration::from_secs(5),
         }
     }
 
@@ -81,6 +91,7 @@ impl Scene {
             // Discard pending work from the previous session after disconnect.
             self.pending_mesh = None;
             self.next_mesh = Instant::now();
+            self.next_missing_log = Instant::now() + Duration::from_secs(5);
         }
         if let Some(mesh) = self.pending_mesh.as_ref().and_then(|r| r.try_recv().ok()) {
             self.pending_mesh = None;
@@ -89,10 +100,29 @@ impl Scene {
                     "Voxygen geometry: mesh budget reached; some geometry omitted"
                 ));
             }
+            let was_empty = self.terrain.vertices.is_empty();
             self.terrain = mesh;
             self.revision = self.revision.wrapping_add(1);
+            if was_empty != self.terrain.vertices.is_empty() {
+                super::connection_progress(format_args!(
+                    "Voxygen terrain: revision={} vertices={} ready={} truncated={}",
+                    self.revision,
+                    self.terrain.vertices.len(),
+                    !self.terrain.vertices.is_empty(),
+                    self.terrain.truncated,
+                ));
+            }
         }
         if let (Some(client), Some(position)) = (client, position) {
+            if self.terrain.vertices.is_empty() && Instant::now() >= self.next_missing_log {
+                self.next_missing_log = Instant::now() + Duration::from_secs(5);
+                super::connection_progress(format_args!(
+                    "Voxygen terrain waiting: position={position:?} loaded_chunks={} revision={} pending_mesh={}",
+                    client.state().terrain().iter().count(),
+                    self.revision,
+                    self.pending_mesh.is_some(),
+                ));
+            }
             if self.pending_mesh.is_none() && Instant::now() >= self.next_mesh {
                 // Arc-backed chunk snapshot: meshing never blocks input or the network tick.
                 let terrain = (*client.state().terrain()).clone();

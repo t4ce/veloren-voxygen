@@ -86,15 +86,24 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let started = Instant::now();
         // Publication must retire before a resize or a fresh write lease.
-        match renderer.publish(app.window.as_mut().expect("UI4 frame"), width, height) {
+        match renderer.publish(
+            app.window.as_mut().expect("UI4 frame"),
+            width,
+            height,
+            app.world_joined,
+        ) {
             Ok(()) => {}
             Err(render_trueos::Error::Ui(Error::Busy)) => {
+                // Keep network/simulation polling while a publication waits
+                // for its display receipt; leave its frame lease untouched.
+                app.tick();
                 std::thread::sleep(FRAME);
                 continue;
             }
             Err(render_trueos::Error::Ui(Error::NotFound | Error::InvalidState)) => break,
             Err(error) => return Err(error.into()),
         }
+        app.terrain_presented = renderer.terrain_presented();
         let result = pump(&mut app, &mut width, &mut height);
         match result {
             Ok(()) | Err(Error::Busy) => {}
@@ -110,6 +119,7 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
             app.client.as_ref(),
             app.input.yaw,
             app.input.pitch,
+            app.world_joined,
         );
         match result {
             Ok(()) | Err(render_trueos::Error::Ui(Error::Busy)) => {}

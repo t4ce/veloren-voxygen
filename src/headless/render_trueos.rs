@@ -1,5 +1,6 @@
 //! wgpu render transport into a brokered UI4 frame.
 use super::gpu::Gpu;
+use super::scene::FrameInfo;
 use crate::client::Client;
 use std::fmt;
 use trueos::ui4_scene::{Damage, Error as UiError, Frame};
@@ -27,7 +28,9 @@ impl From<UiError> for Error {
 pub(super) struct Renderer {
     context: trueos_wgpu::Context,
     gpu: Gpu,
-    pending_publish: bool,
+    pending_publish: Option<FrameInfo>,
+    awaiting_presentation: Option<(u64, FrameInfo)>,
+    proof: super::PresentationProof,
     first_published: bool,
     first_presented: bool,
 }
@@ -50,7 +53,9 @@ impl Renderer {
         Ok(Self {
             context,
             gpu,
-            pending_publish: false,
+            pending_publish: None,
+            awaiting_presentation: None,
+            proof: super::PresentationProof::default(),
             first_published: false,
             first_presented: false,
         })
@@ -61,10 +66,13 @@ impl Renderer {
         frame: &mut Frame,
         width: u32,
         height: u32,
+        world_joined: bool,
     ) -> Result<(), Error> {
-        if self.pending_publish {
-            frame.publish(Damage::full(width, height))?;
-            self.pending_publish = false;
+        self.observe_presentation(frame, width, height, world_joined)?;
+        if let Some(info) = self.pending_publish {
+            let serial = frame.publish_tracked(Damage::full(width, height))?;
+            self.pending_publish = None;
+            self.awaiting_presentation = Some((serial, info));
             if !self.first_published {
                 self.first_published = true;
                 super::connection_progress(format_args!(
@@ -75,16 +83,55 @@ impl Renderer {
                 ));
             }
         }
-        if self.first_published && !self.first_presented && frame.take_first_presentation()? {
+        self.observe_presentation(frame, width, height, world_joined)
+    }
+
+    fn observe_presentation(
+        &mut self,
+        frame: &mut Frame,
+        width: u32,
+        height: u32,
+        world_joined: bool,
+    ) -> Result<(), Error> {
+        let Some((serial, info)) = self.awaiting_presentation else {
+            return Ok(());
+        };
+        // One outstanding publication keeps every counted frame individually
+        // observable: no faster producer can replace it before SURFLIVE.
+        if !frame.was_presented(serial)? {
+            return Err(UiError::Busy.into());
+        }
+        self.awaiting_presentation = None;
+        if !self.first_presented {
             self.first_presented = true;
             super::connection_progress(format_args!(
-                "Voxygen headless: first frame presented window={} extent={}x{} boundary=physical-SURFLIVE",
+                "Voxygen headless: first frame presented window={} serial={} extent={}x{} boundary=physical-SURFLIVE",
                 frame.window_id(),
+                serial,
                 width,
                 height,
             ));
         }
+        if self.proof.observe(serial, world_joined, info)
+            && (matches!(self.proof.consecutive, 1 | 10 | 20 | 30)
+                || self.proof.consecutive.is_multiple_of(128))
+        {
+            super::connection_progress(format_args!(
+                "Voxygen terrain frame proof: consecutive={} window={} serial={} revision={} terrain_vertices={} overlay_vertices={} position={:?} boundary=GPU-retired+physical-SURFLIVE",
+                self.proof.consecutive,
+                frame.window_id(),
+                serial,
+                info.terrain_revision,
+                info.terrain_vertices,
+                info.overlay_vertices,
+                info.position,
+            ));
+        }
         Ok(())
+    }
+
+    pub(super) fn terrain_presented(&self) -> bool {
+        self.proof.consecutive > 0
     }
 
     pub(super) fn draw(
@@ -95,17 +142,18 @@ impl Renderer {
         client: Option<&Client>,
         yaw: f32,
         pitch: f32,
+        world_joined: bool,
     ) -> Result<(), Error> {
-        self.publish(frame, width, height)?;
+        self.publish(frame, width, height, world_joined)?;
         frame.begin_gpu_frame()?;
         let texture = self
             .context
             .acquire_frame(frame.window_id())
             .map_err(|e| Error::Gpu(e.to_string()))?;
         let view = texture.create_view(&Default::default());
-        self.gpu.draw(&view, width, height, client, yaw, pitch);
+        let info = self.gpu.draw(&view, width, height, client, yaw, pitch);
         self.context.wait().map_err(|e| Error::Gpu(e.to_string()))?;
-        self.pending_publish = true;
-        self.publish(frame, width, height)
+        self.pending_publish = Some(info);
+        self.publish(frame, width, height, world_joined)
     }
 }

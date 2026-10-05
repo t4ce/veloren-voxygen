@@ -1,5 +1,5 @@
 //! The same wgpu pipeline and render pass on every target.
-use super::scene::{MAX_VERTICES, Scene, Vertex};
+use super::scene::{FrameInfo, MAX_VERTICES, Scene, Vertex};
 use crate::client::Client;
 
 pub(super) struct Gpu {
@@ -104,7 +104,7 @@ impl Gpu {
         client: Option<&Client>,
         yaw: f32,
         pitch: f32,
-    ) {
+    ) -> FrameInfo {
         if self.size != (width, height) {
             self.depth = depth_target(&self.device, width, height);
             self.size = (width, height);
@@ -175,6 +175,12 @@ impl Gpu {
             }
         }
         self.queue.submit(Some(encoder.finish()));
+        FrameInfo {
+            terrain_revision: self.mesh_revision,
+            terrain_vertices: self.terrain_len,
+            overlay_vertices: overlay_len,
+            position: client.and_then(Client::position),
+        }
     }
 }
 
