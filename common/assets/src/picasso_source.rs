@@ -293,10 +293,12 @@ impl PicassoSource {
         while let Some(directory) = pending.pop() {
             let mut entries = Vec::new();
             source.read_dir(&directory, &mut |entry| match entry {
-                DirEntry::File(id, ext) if !is_bundle(id, ext) => {
+                DirEntry::File(id, ext)
+                    if !is_bundle(id, ext) && !(id == "build-assets" && ext == "sh") => {
                     entries.push(Entry::File(id.to_owned(), ext.to_owned()));
                 }
-                DirEntry::Directory(id) if id != "node-asset-server" => {
+                DirEntry::Directory(id)
+                    if id != "node-asset-server" && id != "asset-builder" => {
                     entries.push(Entry::Directory(id.to_owned()))
                 }
                 _ => {}
@@ -338,8 +340,21 @@ impl PicassoSource {
 
 #[cfg(not(target_os = "trueos"))]
 pub(super) fn prepare_database(path: &std::path::Path) -> io::Result<()> {
+    prepare_database_source(&super::fs::FileSystem::new()?, path)
+}
+
+#[cfg(not(target_os = "trueos"))]
+pub(super) fn prepare_database_from(
+    assets: &std::path::Path,
+    output: &std::path::Path,
+) -> io::Result<()> {
+    prepare_database_source(&super::fs::FileSystem::with_path(assets)?, output)
+}
+
+#[cfg(not(target_os = "trueos"))]
+fn prepare_database_source(source: &impl Source, path: &std::path::Path) -> io::Result<()> {
     let start = Instant::now();
-    let source = PicassoSource::import(&super::fs::FileSystem::new()?)?;
+    let source = PicassoSource::import(source)?;
     let files = source.files.len();
     let bytes = source.bytes;
     let image = source.into_database_image()?;

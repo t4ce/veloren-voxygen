@@ -51,11 +51,6 @@ tempfile = "3"
 serde = { version = "1", features = ["derive"] }
 walkdir = "2"
 
-[[bin]]
-name = "voxy-assets"
-path = "src/bin/voxy_assets.rs"
-required-features = ["picasso-assets"]
-
 [target.'cfg(not(target_os = "trueos"))'.dependencies.image]
 version = "0.25"
 default-features = false

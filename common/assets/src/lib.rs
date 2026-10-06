@@ -46,6 +46,15 @@ pub fn prepare_picasso_asset_database(path: &std::path::Path) -> std::io::Result
     picasso_source::prepare_database(path)
 }
 
+/// Prepare a portable Picasso database from an explicit host asset directory.
+#[cfg(all(feature = "picasso-assets", not(target_os = "trueos")))]
+pub fn prepare_picasso_asset_database_from(
+    assets: &std::path::Path,
+    output: &std::path::Path,
+) -> std::io::Result<()> {
+    picasso_source::prepare_database_from(assets, output)
+}
+
 /// Imports raw assets before the application starts when using Picasso.
 #[cfg(feature = "picasso-assets")]
 pub fn initialize_picasso_assets() {

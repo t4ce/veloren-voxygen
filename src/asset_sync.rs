@@ -79,10 +79,14 @@ impl Job {
         let worker = Arc::clone(&shared);
         runtime.spawn(async move {
             let result = run(&host, &worker).await.map_err(|error| error.to_string());
+            let result = if worker.phase.swap(FINISHED, Ordering::AcqRel) == CANCELED {
+                Err("Asset sync canceled".into())
+            } else {
+                result
+            };
             let mut status = worker.status.lock().unwrap();
             status.cancellable = false;
             status.result = Some(result);
-            worker.phase.store(FINISHED, Ordering::Release);
         });
         Self { shared }
     }
@@ -266,7 +270,11 @@ mod tests {
     fn shared() -> Arc<Shared> {
         Arc::new(Shared {
             phase: AtomicU8::new(RUNNING),
-            status: Mutex::new(Status { message: String::new(), cancellable: true, result: None }),
+            status: Mutex::new(Status {
+                message: String::new(),
+                cancellable: true,
+                result: None,
+            }),
             wake: tokio::sync::Notify::new(),
         })
     }
@@ -276,23 +284,64 @@ mod tests {
         for _ in 0..64 {
             let state = shared();
             let barrier = Arc::new(Barrier::new(2));
-            let writer = Arc::clone(&state); let start = Arc::clone(&barrier);
-            let worker = std::thread::spawn(move || { start.wait(); writer.begin_write().is_ok() });
+            let writer = Arc::clone(&state);
+            let start = Arc::clone(&barrier);
+            let worker = std::thread::spawn(move || {
+                start.wait();
+                writer.begin_write().is_ok()
+            });
             let job = Job { shared: state };
-            barrier.wait(); let canceled = job.cancel(); let writing = worker.join().unwrap();
+            barrier.wait();
+            let canceled = job.cancel();
+            let writing = worker.join().unwrap();
             assert_ne!(canceled, writing);
-            if writing { assert!(!job.cancel()); assert!(!job.status().cancellable); }
-            else { assert!(job.shared.begin_write().is_err()); }
+            if writing {
+                assert!(!job.cancel());
+                assert!(!job.status().cancellable);
+            } else {
+                assert!(job.shared.begin_write().is_err());
+            }
         }
+    }
+
+    #[test]
+    fn cancellation_interrupts_a_waiting_network_read() {
+        let state = shared();
+        let worker = Arc::clone(&state);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let pending = tokio::spawn(async move {
+                network(&worker, std::future::pending::<io::Result<()>>()).await
+            });
+            tokio::task::yield_now().await;
+            let job = Job { shared: state };
+            assert!(job.cancel());
+            assert_eq!(
+                pending.await.unwrap().unwrap_err().kind(),
+                io::ErrorKind::Interrupted
+            );
+        });
     }
 
     fn fixture(value: &[u8], extra: &str) -> sync::AssetDb {
         let store = picasso::Picasso::new().unwrap();
-        store.put_embedded_asset("common.canary/canary", b"VELOREN_CANARY_MAGIC").unwrap();
+        store
+            .put_embedded_asset("common.canary/canary", b"VELOREN_CANARY_MAGIC")
+            .unwrap();
         store.put_embedded_asset("value/ron", value).unwrap();
-        store.put_embedded_asset(&format!("{extra}/bin"), b"extra").unwrap();
-        let catalog = format!("(version:1,directories:{{\"\":[Directory(\"common\"),File(\"value\",\"ron\"),File({extra:?},\"bin\")],\"common\":[File(\"common.canary\",\"canary\")]}},files:[\"common.canary/canary\",\"value/ron\",\"{extra}/bin\"],bytes:{})", b"VELOREN_CANARY_MAGIC".len() + value.len() + 5);
-        store.put_embedded_asset(sync::CATALOG, catalog.as_bytes()).unwrap();
+        store
+            .put_embedded_asset(&format!("{extra}/bin"), b"extra")
+            .unwrap();
+        let catalog = format!(
+            "(version:1,directories:{{\"\":[Directory(\"common\"),File(\"value\",\"ron\"),File({extra:?},\"bin\")],\"common\":[File(\"common.canary\",\"canary\")]}},files:[\"common.canary/canary\",\"value/ron\",\"{extra}/bin\"],bytes:{})",
+            b"VELOREN_CANARY_MAGIC".len() + value.len() + 5
+        );
+        store
+            .put_embedded_asset(sync::CATALOG, catalog.as_bytes())
+            .unwrap();
         sync::AssetDb::from_store(store, &mut |_| Ok(())).unwrap()
     }
 
@@ -302,9 +351,11 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("assets.redb.lz4");
         let old = fixture(b"[1]", "obsolete").into_image().unwrap();
-        let mut encoder = sync::lz4_encoder(Vec::new()); encoder.write_all(&old).unwrap();
+        let mut encoder = sync::lz4_encoder(Vec::new());
+        encoder.write_all(&old).unwrap();
         std::fs::write(&path, encoder.finish().unwrap()).unwrap();
-        let target = fixture(b"[2]", "added"); let wanted = target.index.root;
+        let target = fixture(b"[2]", "added");
+        let wanted = target.index.root;
         let listener = std::net::TcpListener::bind(("127.0.0.1", sync::PORT)).unwrap();
         let server = std::thread::spawn(move || {
             let index = target.index.encode().unwrap();
@@ -317,29 +368,61 @@ mod tests {
         // initializes; no global environment mutation races other tests.
         let output = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "production::tests::sync_child", "--nocapture"])
-            .env("VOXYGEN_ASSET_DATABASE", &path).env("VOXY_SYNC_PROOF_CHILD", "1")
-            .output().unwrap();
-        assert!(output.status.success(), "{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+            .env("VOXYGEN_ASSET_DATABASE", &path)
+            .env("VOXY_SYNC_PROOF_CHILD", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         server.join().unwrap();
-        let committed = sync::AssetDb::open(sync::decode_image(std::fs::read(&path).unwrap()).unwrap()).unwrap();
+        let committed =
+            sync::AssetDb::open(sync::decode_image(std::fs::read(&path).unwrap()).unwrap())
+                .unwrap();
         assert_eq!(committed.index.root, wanted);
-        assert!(committed.store.embedded_asset("obsolete/bin").unwrap().is_none());
-        assert!(committed.store.embedded_asset("added/bin").unwrap().is_some());
+        assert!(
+            committed
+                .store
+                .embedded_asset("obsolete/bin")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            committed
+                .store
+                .embedded_asset("added/bin")
+                .unwrap()
+                .is_some()
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn sync_child() {
-        if std::env::var_os("VOXY_SYNC_PROOF_CHILD").is_none() { return; }
+        if std::env::var_os("VOXY_SYNC_PROOF_CHILD").is_none() {
+            return;
+        }
         use assets::AssetExt;
         let cached = assets::Ron::<Vec<u32>>::load("value").unwrap();
         assert_eq!(cached.read().0, [1]);
-        let runtime = Arc::new(tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap());
+        let runtime = Arc::new(
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .unwrap(),
+        );
         for expected in ["Assets synchronized", "already up to date"] {
             let job = Job::start("127.0.0.1:9".into(), &runtime);
             let started = std::time::Instant::now();
             loop {
-                if let Some(result) = job.status().result { assert!(result.unwrap().contains(expected)); break; }
+                if let Some(result) = job.status().result {
+                    assert!(result.unwrap().contains(expected));
+                    break;
+                }
                 assert!(started.elapsed() < Duration::from_secs(30));
                 std::thread::sleep(Duration::from_millis(5));
             }
@@ -352,7 +435,7 @@ mod tests {
 async fn persist(path: &str, bytes: Vec<u8>) -> io::Result<()> {
     let path = std::path::PathBuf::from(path);
     tokio::task::spawn_blocking(move || -> io::Result<()> {
-        let temporary = path.with_extension("lz4.sync-tmp");
+        let temporary = path.with_extension(format!("lz4.sync-tmp-{}", std::process::id()));
         let result = (|| {
             let mut file = std::fs::File::create(&temporary)?;
             file.write_all(&bytes)?;
