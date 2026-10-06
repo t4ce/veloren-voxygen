@@ -95,11 +95,12 @@ pub struct GlobalState {
     pub settings: Settings,
     pub profile: Profile,
     pub window: Window,
+    // Join preparation while its parallel jobs can still use the runtime.
+    pub lazy_init: scene::terrain::SpriteRenderContextLazy,
     pub tokio_runtime: Arc<Runtime>,
     /// Process-only credentials; never part of Settings or Profile serialization.
     pub portal_credentials: Option<Arc<server_portal::PortalCredentials>>,
 
-    pub lazy_init: scene::terrain::SpriteRenderContextLazy,
     pub audio: AudioFrontend,
     pub info_message: Option<String>,
     pub clock: Clock,

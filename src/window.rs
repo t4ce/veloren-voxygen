@@ -218,6 +218,8 @@ pub struct Window {
     #[cfg(target_os = "trueos")]
     scene_init: Option<std::sync::mpsc::Receiver<Result<Renderer, crate::render::RenderError>>>,
     #[cfg(target_os = "trueos")]
+    scene_init_threads: Vec<std::thread::JoinHandle<()>>,
+    #[cfg(target_os = "trueos")]
     display: winit::event_loop::OwnedDisplayHandle,
     #[cfg(target_os = "trueos")]
     menu_presenter: crate::ui::ice::renderer::presenter::LayeredPresenter,
@@ -225,6 +227,8 @@ pub struct Window {
     menu_revision: u64,
     #[cfg(target_os = "trueos")]
     menu_handoff: Option<crate::ui::ice::renderer::handoff::Handoff>,
+    #[cfg(target_os = "trueos")]
+    menu_handoff_progress: Option<std::time::Instant>,
     window: Arc<dyn winit::window::Window>,
     cursor_grabbed: bool,
     pub pan_sensitivity: u32,
@@ -260,6 +264,27 @@ pub struct Window {
     // saved to file, so initialized here
     pub gamelayer_mod1: bool,
     pub gamelayer_mod2: bool,
+}
+
+#[cfg(target_os = "trueos")]
+impl Drop for Window {
+    fn drop(&mut self) {
+        let _ = trueos::logl::log_record(
+            trueos::logl::level::IMPORTANT, "apps::voxygen",
+            format_args!("Voxygen cleanup: stopping both menu producers"),
+        );
+        self.menu_presenter.stop();
+        // Closing the result mailbox lets unfinished startup release its
+        // renderer on the worker. Join while native-job admission is alive.
+        self.scene_init = None;
+        for thread in self.scene_init_threads.drain(..) {
+            let _ = thread.join();
+        }
+        let _ = trueos::logl::log_record(
+            trueos::logl::level::IMPORTANT, "apps::voxygen",
+            format_args!("Voxygen cleanup: scene initialization workers joined"),
+        );
+    }
 }
 
 impl Window {
@@ -379,6 +404,8 @@ impl Window {
             #[cfg(target_os = "trueos")]
             scene_init: None,
             #[cfg(target_os = "trueos")]
+            scene_init_threads: Vec::new(),
+            #[cfg(target_os = "trueos")]
             display: event_loop.owned_display_handle(),
             #[cfg(target_os = "trueos")]
             menu_presenter,
@@ -386,6 +413,8 @@ impl Window {
             menu_revision: 0,
             #[cfg(target_os = "trueos")]
             menu_handoff: None,
+            #[cfg(target_os = "trueos")]
+            menu_handoff_progress: None,
             window,
             cursor_grabbed: false,
             pan_sensitivity: settings.gameplay.pan_sensitivity,
@@ -457,15 +486,23 @@ impl Window {
         let display = self.display.clone();
         let runtime = Arc::clone(runtime);
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-        std::thread::Builder::new()
+        let thread = std::thread::Builder::new()
             .name("voxy-scene-init".into())
             .spawn(move || {
                 let result = Renderer::new(window, display, mode, &runtime);
+                let _ = trueos::logl::log_record(
+                    trueos::logl::level::IMPORTANT,
+                    "apps::voxygen",
+                    format_args!("Voxygen scene worker: resources returned success={}", result.is_ok()),
+                );
                 // Publish completion before thread teardown; the UI never joins
                 // a worker or depends on platform is_finished bookkeeping.
                 let _ = sender.send(result);
             })
             .map_err(|error| format!("Could not start graphics initialization: {error}"))?;
+        // Readiness still comes from the result mailbox. Retain the thread
+        // handle solely to finish it while cooperative cleanup keeps Hull alive.
+        self.scene_init_threads.push(thread);
         self.scene_init = Some(receiver);
         Ok(())
     }
@@ -493,6 +530,11 @@ impl Window {
             })?;
             self.renderer = Some(renderer);
             self.resized = true;
+            let _ = trueos::logl::log_record(
+                trueos::logl::level::IMPORTANT,
+                "apps::voxygen",
+                format_args!("Voxygen scene worker: renderer accepted by main loop"),
+            );
         }
         let renderer = self
             .renderer
@@ -519,6 +561,7 @@ impl Window {
     #[cfg(target_os = "trueos")]
     pub fn resume_menu(&mut self) {
         self.menu_handoff = None;
+        self.menu_handoff_progress = None;
     }
 
     /// Drain both menu producers before terrain takes the scene capability.
@@ -537,11 +580,40 @@ impl Window {
             self.menu_handoff = Some(Handoff {
                 scene_revision, foreground_revision: self.menu_revision, extent,
             });
+            self.menu_handoff_progress = Some(std::time::Instant::now());
+            let _ = trueos::logl::log_record(
+                trueos::logl::level::IMPORTANT,
+                "apps::voxygen",
+                format_args!(
+                    "Voxygen scene handoff: begin background_revision={} foreground_revision={} extent={}x{}",
+                    scene_revision, self.menu_revision, extent[0], extent[1],
+                ),
+            );
         }
-        Ok(self.menu_handoff.unwrap().ready(
-            self.menu_presenter.scene_published_revision(),
-            self.menu_presenter.foreground_published_revision(),
-        ))
+        let handoff = self.menu_handoff.unwrap();
+        let scene_published = self.menu_presenter.scene_published_revision();
+        let foreground_published = self.menu_presenter.foreground_published_revision();
+        let ready = handoff.ready(scene_published, foreground_published);
+        let report = if ready {
+            self.menu_handoff_progress.take().is_some()
+        } else if self.menu_handoff_progress.is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(2)) {
+            self.menu_handoff_progress = Some(std::time::Instant::now());
+            true
+        } else {
+            false
+        };
+        if report {
+            let _ = trueos::logl::log_record(
+                trueos::logl::level::IMPORTANT,
+                "apps::voxygen",
+                format_args!(
+                    "Voxygen scene handoff: ready={} background={}/{} foreground={}/{} extent={}x{}",
+                    ready, scene_published, handoff.scene_revision,
+                    foreground_published, handoff.foreground_revision, extent[0], extent[1],
+                ),
+            );
+        }
+        Ok(ready)
     }
 
     pub fn resolve_deduplicated_events(

@@ -39,6 +39,27 @@ use wgpu::{Backends, Instance};
 
 #[cfg(not(feature = "headless"))]
 fn main() {
+    // Register before resources that own guest threads so their destructors
+    // run while the Hull and native-job admission are still alive.
+    #[cfg(target_os = "trueos")]
+    let _shutdown = match trueos::shutdown::ShutdownGuard::register() {
+        Ok(guard) => guard,
+        Err(_) => {
+            eprintln!("voxy: failed to register cooperative Blueprint shutdown");
+            let _ = trueos::logl::log_record(
+                trueos::logl::level::IMPORTANT,
+                "apps::voxygen",
+                format_args!("Voxygen cooperative shutdown registration failed"),
+            );
+            return;
+        }
+    };
+    #[cfg(target_os = "trueos")]
+    let _ = trueos::logl::log_record(
+        trueos::logl::level::IMPORTANT,
+        "apps::voxygen",
+        format_args!("Voxygen cooperative shutdown: registered before process workers"),
+    );
     // Process CLI arguments
     use clap::Parser;
     let args = cli::Args::parse();
@@ -145,6 +166,8 @@ fn main() {
             .build()
             .unwrap(),
     );
+    #[cfg(target_os = "trueos")]
+    tokio_parallel::ThreadPool::set_shared_runtime(&tokio_runtime);
 
     // Initialise watcher for animation hot-reloading
 

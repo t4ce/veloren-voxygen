@@ -827,13 +827,33 @@ impl State {
         }
         drop(guard);
 
+        #[cfg(target_os = "trueos")]
+        if trace_first_tick {
+            eprintln!("velosrv: first-tick stage=ecs-maintain-enter");
+        }
         self.maintain_ecs();
+        #[cfg(target_os = "trueos")]
+        if trace_first_tick {
+            eprintln!("velosrv: first-tick stage=ecs-maintain-complete");
+        }
 
         if update_terrain {
+            #[cfg(target_os = "trueos")]
+            if trace_first_tick {
+                eprintln!("velosrv: first-tick stage=terrain-apply-enter");
+            }
             self.apply_terrain_changes_internal(true, block_update);
+            #[cfg(target_os = "trueos")]
+            if trace_first_tick {
+                eprintln!("velosrv: first-tick stage=terrain-apply-complete");
+            }
         }
 
         // Process local events
+        #[cfg(target_os = "trueos")]
+        if trace_first_tick {
+            eprintln!("velosrv: first-tick stage=local-events-enter");
+        }
         section_span!(guard, "process local events");
 
         let outcomes = self.ecs.read_resource::<EventBus<Outcome>>();
@@ -868,6 +888,10 @@ impl State {
             }
         }
         drop(guard);
+        #[cfg(target_os = "trueos")]
+        if trace_first_tick {
+            eprintln!("velosrv: first-tick stage=local-events-complete");
+        }
     }
 
     pub fn maintain_ecs(&mut self) {

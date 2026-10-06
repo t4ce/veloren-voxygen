@@ -21,6 +21,8 @@ pub(super) struct Selector {
     spectate: button::State,
     logout: button::State,
     joining: bool,
+    first_plan_queued: bool,
+    failure_recorded: bool,
 }
 
 impl Selector {
@@ -31,10 +33,18 @@ impl Selector {
             spectate: button::State::new(),
             logout: button::State::new(),
             joining: false,
+            first_plan_queued: false,
+            failure_recorded: false,
         }
     }
 
     pub fn enter(&mut self, state: &mut GlobalState) {
+        let _ = trueos::logl::log_record(
+            trueos::logl::level::IMPORTANT, "apps::voxygen",
+            format_args!("Voxygen character selection: entering native selector"),
+        );
+        self.first_plan_queued = false;
+        self.failure_recorded = false;
         state.window.resume_menu();
         self.ui.invalidate_native();
         self.joining = false;
@@ -98,12 +108,37 @@ impl Selector {
             Ok(result) => result,
             Err(error) => {
                 tracing::error!(%error, "Native character selector failed");
+                if !self.failure_recorded {
+                    self.failure_recorded = true;
+                    let _ = trueos::logl::log_record(
+                        trueos::logl::level::ERROR, "apps::voxygen",
+                        format_args!("Voxygen character selection: native layout failed: {error}"),
+                    );
+                }
                 return Vec::new();
             }
         };
         if let Some(plan) = plan {
-            if let Err(error) = state.window.present_menu(size, plan) {
-                tracing::error!(%error, "Character selector presentation failed");
+            match state.window.present_menu(size, plan) {
+                Ok(()) => {
+                    if !self.first_plan_queued {
+                        self.first_plan_queued = true;
+                        let _ = trueos::logl::log_record(
+                            trueos::logl::level::IMPORTANT, "apps::voxygen",
+                            format_args!("Voxygen character selection: first native plan queued extent={}x{} characters={} loading={}", size.x, size.y, list.characters.len(), list.loading),
+                        );
+                    }
+                }
+                Err(error) => {
+                    tracing::error!(%error, "Character selector presentation failed");
+                    if !self.failure_recorded {
+                        self.failure_recorded = true;
+                        let _ = trueos::logl::log_record(
+                            trueos::logl::level::ERROR, "apps::voxygen",
+                            format_args!("Voxygen character selection: native presentation failed: {error}"),
+                        );
+                    }
+                }
             }
         }
         messages

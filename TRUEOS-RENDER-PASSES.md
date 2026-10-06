@@ -153,6 +153,8 @@ clear revision. No new menu work is admitted during the handoff. A window
 resize submits a fresh transparent foreground publication without restarting
 the menu background producer; terrain supplies the resized scene publication.
 Producer failures return an error instead of leaving this gate silently waiting.
+The drain starts when the real session records its first scene frame. Native
+character selection continues to own the menu layers and does not drain them.
 
 `LinePresenter` retains the identity of its completed frame (sequence, vertex
 count, and extent) through publication retries. Background tracked publication
@@ -174,3 +176,63 @@ near quads, emitted segments and truncation), `first native frame retired and
 published`, and `Voxygen terrain SURFLIVE proven`. Only the last message records
 an actual receipt for nonempty terrain geometry. None of the host tests or pack
 commands produces that claim.
+
+## Loading-image frontier after the first ECS tick
+
+The fresh rig runs of `a8160f...` and `7d5d89...` reached native line admission,
+host pipeline handles, and `Finishing scene resources`. All listed first-run
+ECS systems returned. These are independent worker and main-thread boundaries:
+the main menu ticks the authenticated client before polling the scene worker.
+Neither record establishes that a world frame has reached the line executor.
+
+TRUEOS character selection now constructs only its native selector and client
+state. It no longer constructs the original simple preview scene, joins sprite
+preparation, or constructs/maintains the legacy Conrod character UI. Desktop
+character selection retains its original behavior. The real session still
+creates the regular scene, terrain meshes and client tick loop.
+
+The original noise texture is a 1x1 descriptor placeholder during the native
+line stage; every shader pass that samples it is gated. Sprite preparation still
+produces the same meshes and atlas, but TRUEOS consumes its bounded result
+mailbox rather than waiting for thread teardown. These changes preserve the
+terrain and native XYZ/12-byte/LINE_LIST contracts.
+
+New first-tick records cover ECS maintenance, terrain application, local events,
+client terrain requests, and client return. Startup records distinguish graphics
+state completion, renderer delivery/acceptance, native selector construction,
+session scene resources, sprite mesh arrival, and menu revision drain. Handoff
+waits report the required and published revisions at most every two seconds.
+The exact cause of the recorded boot's stall remains unproven until these
+boundaries are observed on the rig; the selector prerequisites were unnecessary
+regardless of which boundary that run stopped at.
+
+## Selector transition and cooperative stop
+
+The `a227e832...` capture advances through client first-tick completion, scene
+renderer readiness, main-loop acceptance and native selector construction. It
+does not establish a terrain draw or a native selector publication. New kernel
+records distinguish server-rule construction/skipping, native screen entry,
+the first queued UI plan and the first layout/presentation error. The TRUEOS
+rules screen also omits the unused original preview scene and raw-font preload;
+the native rules UI and desktop path remain intact.
+
+That run ends at `stop requested cooperative=0 native_jobs=8`, followed by
+`draining vm=0 jobs=8 resources=retained`. Voxy had not registered cooperative
+cleanup: forced stop ended Hull execution before its Rust destructors could
+stop the UI producers, runtime and process workers. The pending native jobs
+therefore prevented guest resource reclamation. This is evidence of blocked
+teardown, not proof of a BSP spinlock or of the preceding visual failure.
+
+The existing shutdown guard is now registered before process workers and
+dropped last. Safe event-loop callbacks observe Stop and exit; play states drop
+before their window/runtime, both UI producers receive Stop before either
+joins, and retained scene/sprite preparation workers join while their runtime
+is alive. The shared runtime is installed before early sprite work can create
+a persistent fallback pool. No timeout frees memory belonging to live workers.
+
+On the next rig run, look for `Voxygen cooperative shutdown: registered`,
+`stop requested cooperative=1`, `Voxygen cooperative stop`, producer join
+records and the normal completed native-job drain. This pack cannot retrofit
+cooperative cleanup into the already stopped guest. Host regression coverage
+checks the actual paired-producer destructor ordering; a successful pack does
+not establish either a physical restart or terrain SURFLIVE.

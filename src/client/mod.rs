@@ -2401,6 +2401,19 @@ impl Client {
     /// the given duration.
     pub fn tick(&mut self, inputs: ControllerInputs, dt: Duration) -> Result<Vec<Event>, Error> {
         span!(_guard, "tick", "Client::tick");
+        #[cfg(target_os = "trueos")]
+        let trace_first_tick = self.tick == 0;
+        #[cfg(target_os = "trueos")]
+        let trace_stage = |stage: &str| {
+            if trace_first_tick {
+                eprintln!("voxy: client-first-tick stage={stage}");
+                let _ = trueos::logl::log_record(
+                    trueos::logl::level::IMPORTANT,
+                    "apps::voxygen",
+                    format_args!("Voxygen client first tick: {stage}"),
+                );
+            }
+        };
         // This tick function is the centre of the Veloren universe. Most client-side
         // things are managed from here, and as such it's important that it
         // stays organised. Please consult the core developers before making
@@ -2507,6 +2520,8 @@ impl Client {
         }
 
         // 4) Tick the client's LocalState
+        #[cfg(target_os = "trueos")]
+        trace_stage("state-enter");
         self.state.tick(
             Duration::from_secs_f64(dt.as_secs_f64() * self.dt_adjustment),
             true,
@@ -2514,6 +2529,8 @@ impl Client {
             &self.connected_server_constants,
             |_, _| {},
         );
+        #[cfg(target_os = "trueos")]
+        trace_stage("state-complete");
 
         // TODO: avoid emitting these in the first place OR actually use outcomes
         // generated locally on the client (if they can be deduplicated from
@@ -2524,7 +2541,11 @@ impl Client {
         let _ = self.state.ecs().fetch::<EventBus<Outcome>>().recv_all();
 
         // 5) Terrain
+        #[cfg(target_os = "trueos")]
+        trace_stage("terrain-enter");
         self.tick_terrain()?;
+        #[cfg(target_os = "trueos")]
+        trace_stage("terrain-complete");
 
         // Send a ping to the server once every second
         if self.state.get_program_time() - self.last_server_ping > 1. {
@@ -2561,6 +2582,8 @@ impl Client {
         */
 
         // 7) Finish the tick, pass control back to the frontend.
+        #[cfg(target_os = "trueos")]
+        trace_stage("complete");
         self.tick += 1;
         Ok(frontend_events)
     }

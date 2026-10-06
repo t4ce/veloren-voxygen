@@ -553,6 +553,17 @@ impl Renderer {
         let sampler = create_sampler(FilterMode::Linear);
         let depth_sampler = create_sampler(FilterMode::Nearest);
 
+        // Noise is sampled only by original shader passes, which the native
+        // line stage gates. Keep its descriptor binding without asset decoding.
+        #[cfg(target_os = "trueos")]
+        let noise_tex = Texture::new(
+            &device,
+            &queue,
+            &image::DynamicImage::new_rgba8(1, 1),
+            Some(FilterMode::Linear),
+            Some(AddressMode::Repeat),
+        )?;
+        #[cfg(not(target_os = "trueos"))]
         let noise_tex = Texture::new(
             &device,
             &queue,
@@ -565,6 +576,8 @@ impl Renderer {
             create_quad_index_buffer_u16(&device, QUAD_INDEX_BUFFER_U16_START_VERT_LEN as usize);
         let quad_index_buffer_u32 =
             create_quad_index_buffer_u32(&device, QUAD_INDEX_BUFFER_U32_START_VERT_LEN as usize);
+        #[cfg(target_os = "trueos")]
+        crate::render::trueos_scene::mark_stage(7);
         other_modes.profiler_enabled &= profiler_features_enabled;
 
         let profiler = wgpu_profiler::GpuProfiler::new(
@@ -589,6 +602,8 @@ impl Renderer {
             use winit::platform::trueos::WindowExtTrueOS;
             super::display_color::DisplayColor::new(window.trueos_window_id())
         };
+        #[cfg(target_os = "trueos")]
+        crate::render::trueos_scene::mark_stage(8);
         Ok(Self {
             #[cfg(target_os = "trueos")]
             display_color,

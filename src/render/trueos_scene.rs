@@ -334,6 +334,9 @@ pub(crate) fn startup_label() -> &'static str {
         3 => "Admitting native line GPU",
         4 => "Loading scene descriptors",
         5 => "Preparing terrain pipeline handles",
+        6 => "Finishing scene resources",
+        7 => "Finishing graphics state",
+        8 => "Scene renderer ready",
         _ => "Finishing scene resources",
     }
 }
