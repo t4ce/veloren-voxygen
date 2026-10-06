@@ -535,7 +535,14 @@ impl Window {
         // Handle screenshots and toggling fullscreen
         if self.take_screenshot {
             self.take_screenshot = false;
+            #[cfg(not(target_os = "trueos"))]
             self.take_screenshot(settings);
+            #[cfg(target_os = "trueos")]
+            {
+                tracing::warn!("Screenshot readback is out-gated in the terrain-line bridge");
+                self.events.push(Event::ScreenshotMessage(
+                    "Screenshots are unavailable during terrain-line bring-up".into()));
+            }
         }
         if self.toggle_fullscreen {
             self.toggle_fullscreen = false;
@@ -1638,6 +1645,11 @@ impl Window {
 
     pub fn modifiers(&self) -> winit::keyboard::ModifiersState {
         self.modifiers
+    }
+
+    pub fn physical_size(&self) -> Vec2<u32> {
+        let size = self.window.surface_size();
+        Vec2::new(size.width, size.height)
     }
 
     pub fn scale_factor(&self) -> f64 {

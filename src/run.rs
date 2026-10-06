@@ -227,8 +227,13 @@ fn handle_main_events_cleared(
 
         span!(guard, "Render");
 
+        #[cfg(target_os = "trueos")]
+        let scene_display_ready = last.uses_native_ui() || global_state.window.prepare_scene_display();
+        #[cfg(not(target_os = "trueos"))]
+        let scene_display_ready = true;
+
         // Render the screen using the global renderer
-        if !last.uses_native_ui() && let Some(mut drawer) = global_state
+        if scene_display_ready && !last.uses_native_ui() && let Some(mut drawer) = global_state
             .window
             .renderer_mut()
             .start_recording_frame(last.globals_bind_group())

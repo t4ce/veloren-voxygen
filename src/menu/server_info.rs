@@ -99,7 +99,7 @@ impl ServerInfoState {
         let font = load_font(&i18n.fonts().get("cyri").unwrap().asset_key);
 
         #[cfg(target_os = "trueos")]
-        let mut ui = Ui::new_native(global_state.window.size(), global_state.window.scale_factor());
+        let mut ui = Ui::new_native(global_state.window.physical_size(), global_state.window.scale_factor());
         #[cfg(not(target_os = "trueos"))]
         let mut ui = Ui::new(
             &mut global_state.window,
@@ -153,6 +153,11 @@ impl ServerInfoState {
 
 impl PlayState for ServerInfoState {
     fn enter(&mut self, _global_state: &mut GlobalState, _: Direction) {
+        #[cfg(target_os = "trueos")]
+        {
+            _global_state.window.resume_menu();
+            self.ui.invalidate_native();
+        }
         /*
         // Updated localization in case the selected language was changed
         self.main_menu_ui
@@ -195,7 +200,7 @@ impl PlayState for ServerInfoState {
         let view = self.controls.view();
         #[cfg(target_os = "trueos")]
         let messages = {
-            let size = global_state.window.size();
+            let size = global_state.window.physical_size();
             match self.ui.maintain_native(view, size, &mut global_state.clipboard) {
                 Ok((messages, plan)) => {
                     if let Some(plan) = plan {

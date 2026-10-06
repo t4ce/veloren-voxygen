@@ -1,4 +1,6 @@
 mod ui;
+#[cfg(target_os = "trueos")]
+mod native;
 
 use crate::{
     Direction, GlobalState, PlayState, PlayStateResult, hud,
@@ -26,6 +28,8 @@ pub struct CharSelectionState {
     client: Rc<RefCell<Client>>,
     persisted_state: Rc<RefCell<hud::PersistedHudState>>,
     scene: Scene,
+    #[cfg(target_os = "trueos")]
+    native: native::Selector,
 }
 
 impl CharSelectionState {
@@ -50,6 +54,8 @@ impl CharSelectionState {
             client,
             persisted_state,
             scene,
+            #[cfg(target_os = "trueos")]
+            native: native::Selector::new(global_state),
         }
     }
 
@@ -79,6 +85,8 @@ impl CharSelectionState {
 
 impl PlayState for CharSelectionState {
     fn enter(&mut self, global_state: &mut GlobalState, _: Direction) {
+        #[cfg(target_os = "trueos")]
+        self.native.enter(global_state);
         // Load the player's character list
         if !self.client.borrow().are_plugins_missing() {
             self.client.borrow_mut().load_character_list();
@@ -104,6 +112,8 @@ impl PlayState for CharSelectionState {
         if client_registered {
             // Handle window events
             for event in events {
+                #[cfg(target_os = "trueos")]
+                self.native.handle(&event);
                 if self.char_selection_ui.handle_event(event.clone()) {
                     continue;
                 }
@@ -119,9 +129,12 @@ impl PlayState for CharSelectionState {
             }
 
             // Maintain the UI.
-            let events = self
+            let mut events = self
                 .char_selection_ui
                 .maintain(global_state, &self.client.borrow());
+
+            #[cfg(target_os = "trueos")]
+            events.extend(self.native.maintain(global_state, &self.client.borrow()));
 
             for event in events {
                 match event {
@@ -285,6 +298,8 @@ impl PlayState for CharSelectionState {
                             },
                             crate::client::Event::CharacterError(error) => {
                                 self.char_selection_ui.display_error(error);
+                                #[cfg(target_os = "trueos")]
+                                self.native.failed();
                             },
                             crate::client::Event::CharacterJoined(metadata) => {
                                 join_metadata = Some(metadata);
@@ -328,6 +343,8 @@ impl PlayState for CharSelectionState {
     fn name(&self) -> &'static str { "Character Selection" }
 
     fn capped_fps(&self) -> bool { true }
+
+    fn uses_native_ui(&self) -> bool { cfg!(target_os = "trueos") }
 
     fn globals_bind_group(&self) -> &GlobalsBindGroup { self.scene.global_bind_group() }
 

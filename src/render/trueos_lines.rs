@@ -25,6 +25,7 @@ pub(super) struct LinePresenter {
     vertex_bytes: Vec<u8>,
     width: u32,
     height: u32,
+    deferred_extent: Option<(u32, u32)>,
     pending_publish: bool,
     poisoned: bool,
 }
@@ -99,15 +100,29 @@ impl LinePresenter {
             vertex_bytes: Vec::with_capacity(VERTEX_BYTES),
             width,
             height,
+            deferred_extent: None,
             pending_publish: false,
             poisoned: false,
         })
     }
 
     pub(super) fn resize(&mut self, width: u32, height: u32) -> Result<(), String> {
+        if self.poisoned {
+            return Err("TRUEOS line queue needs recreation after uncertain GPU retirement".into());
+        }
+        if width == 0 || height == 0 {
+            return Err("TRUEOS line extent must be nonzero".into());
+        }
+        if self.pending_publish {
+            // Keep damage tied to the old back buffer. The newest resize wins
+            // once its exact publication has been accepted by UI4.
+            self.deferred_extent = Some((width, height));
+            return Ok(());
+        }
         self.target.set_extent(width, height).map_err(ui_error)?;
         self.width = width;
         self.height = height;
+        self.deferred_extent = None;
         Ok(())
     }
 
@@ -122,6 +137,12 @@ impl LinePresenter {
             if !self.publish()? {
                 return Ok(false);
             }
+        }
+        if let Some((width, height)) = self.deferred_extent {
+            self.target.set_extent(width, height).map_err(ui_error)?;
+            self.width = width;
+            self.height = height;
+            self.deferred_extent = None;
         }
         if lines.len() > MAX_LINE_VERTICES || lines.len() % 2 != 0 {
             return Err(format!(
