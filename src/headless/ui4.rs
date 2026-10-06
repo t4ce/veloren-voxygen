@@ -116,6 +116,8 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
         "Voxygen headless: automatic login from /apps/voxy/voxy.pw"
     ));
     app.login();
+    let mut clipboard =
+        crate::clipboard::Clipboard::for_frame(app.window.as_ref().expect("UI4 frame").window_id());
     let mut timings = LoopTimings::default();
     loop {
         let started = Instant::now();
@@ -150,7 +152,7 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
         }
         app.terrain_presented = renderer.terrain_presented();
         let input_started = Instant::now();
-        let result = pump(&mut app, &mut width, &mut height);
+        let result = pump(&mut app, &mut width, &mut height, &mut clipboard);
         micros[2] = input_started.elapsed().as_micros();
         match result {
             Ok(()) | Err(Error::Busy) => {}
@@ -189,7 +191,26 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn pump(app: &mut App, width: &mut u32, height: &mut u32) -> Result<(), Error> {
+fn pump(
+    app: &mut App,
+    width: &mut u32,
+    height: &mut u32,
+    clipboard: &mut crate::clipboard::Clipboard,
+) -> Result<(), Error> {
+    let login = app.client.is_none() && app.pending.is_none();
+    if login {
+        clipboard.focus(crate::clipboard::Kind::Password);
+        if let Some(text) = clipboard.paste(crate::clipboard::Kind::Password) {
+            app.password
+                .extend(text.chars().filter(|c| !c.is_control()));
+        }
+    } else {
+        clipboard.blur();
+    }
+    if let Some(message) = clipboard.take_message() {
+        app.prompt(&message);
+        let _ = app.window.as_mut().expect("UI4 frame").set_title(&message);
+    }
     if let Some(size) = app
         .window
         .as_mut()
@@ -210,7 +231,20 @@ fn pump(app: &mut App, width: &mut u32, height: &mut u32) -> Result<(), Error> {
         .take_keyboard_event()?
     {
         let login = app.client.is_none() && app.pending.is_none();
-        if event.kind == input::KEYBOARD_OUTPUT_KIND_TEXT && login {
+        if login
+            && event.kind == input::KEYBOARD_OUTPUT_KIND_TEXT
+            && event.modifiers & 0x11 != 0
+            && matches!(event.codepoint, 67 | 99)
+        {
+            clipboard.copy(crate::clipboard::Kind::Password, app.password.clone());
+            if let Some(message) = clipboard.take_message() {
+                app.prompt(&message);
+                let _ = app.window.as_mut().expect("UI4 frame").set_title(&message);
+            }
+        } else if event.kind == input::KEYBOARD_OUTPUT_KIND_TEXT
+            && login
+            && event.modifiers & 0x11 == 0
+        {
             if let Some(c) = char::from_u32(event.codepoint).filter(|c| !c.is_control()) {
                 app.password.push(c);
             }

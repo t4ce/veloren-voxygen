@@ -188,13 +188,18 @@ impl IcedUi {
         let messages = {
             span!(_guard, "update user_interface");
             let mut messages = Vec::new();
-            let _event_status_list = user_interface.update(
-                &self.events,
-                cursor_position,
-                &self.renderer,
-                clipboard,
-                &mut messages,
-            );
+            for event in &self.events {
+                if matches!(event, Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) | Event::Touch(iced::touch::Event::FingerPressed { .. })) {
+                    clipboard.blur();
+                }
+                let _event_status_list = user_interface.update(
+                    core::slice::from_ref(event),
+                    cursor_position,
+                    &self.renderer,
+                    clipboard,
+                    &mut messages,
+                );
+            }
             messages
         };
         // Clear events

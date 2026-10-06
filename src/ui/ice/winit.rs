@@ -4,24 +4,19 @@
 use iced::{Event, Point, keyboard, mouse, touch, window};
 use winit::{event::WindowEvent, keyboard::NamedKey};
 
-/// Access to the game's shared in-process text clipboard.
-pub struct Clipboard;
-
+pub use crate::clipboard::Clipboard;
 impl Clipboard {
-    /// Creates a handle to the internal clipboard.
-    pub fn connect(_window: &winit::window::Window) -> Clipboard { Clipboard }
-
-    /// Reads the current clipboard text.
-    pub fn read(&self) -> Option<String> { Some(conrod_core::clipboard::read()) }
-
-    /// Replaces the clipboard text.
-    pub fn write(&mut self, contents: String) { conrod_core::clipboard::write(contents); }
+    pub fn connect(_window: &winit::window::Window) -> Self { Self::default() }
 }
-
 impl iced::Clipboard for Clipboard {
-    fn read(&self) -> Option<String> { self.read() }
-
-    fn write(&mut self, contents: String) { self.write(contents) }
+    fn read(&self) -> Option<String> { self.paste(crate::clipboard::Kind::Text) }
+    fn write(&mut self, contents: String) { self.copy(crate::clipboard::Kind::Text, contents); }
+    fn focus(&mut self, secure: bool) { Clipboard::focus(self, field_kind(secure)); }
+    fn read_typed(&self, secure: bool) -> Option<String> { self.paste(field_kind(secure)) }
+    fn write_typed(&mut self, contents: String, secure: bool) -> bool { self.copy(field_kind(secure), contents) }
+}
+fn field_kind(secure: bool) -> crate::clipboard::Kind {
+    if secure { crate::clipboard::Kind::Password } else { crate::clipboard::Kind::Text }
 }
 
 /// Converts a winit window event into an iced event.

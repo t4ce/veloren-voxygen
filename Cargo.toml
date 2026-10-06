@@ -90,7 +90,7 @@ wgpu = { version = "=30.0.0", path = "../wgpu/wgpu", features = ["spirv"] }
 wgpu-profiler = "0.28"
 conrod_core = { path = "vendor/conrod/conrod_core" }
 euc = { path = "vendor/euc" }
-iced = { package = "iced_native", git = "https://github.com/Imberflur/iced", tag = "veloren-winit-0.28" }
+iced = { package = "iced_native", path = "vendor/iced/native" }
 glyph_brush = "0.7.0"
 gilrs = { version = "0.11.0", features = ["serde-serialize"] }
 chumsky = { version = "0.13", default-features = false, features = ["std"] }

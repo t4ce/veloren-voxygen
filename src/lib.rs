@@ -21,6 +21,7 @@ pub mod audio;
 #[cfg(not(feature = "headless"))]
 pub mod cli;
 pub mod client;
+pub mod clipboard;
 #[cfg(not(feature = "headless"))]
 pub mod cmd;
 #[cfg(not(feature = "headless"))]

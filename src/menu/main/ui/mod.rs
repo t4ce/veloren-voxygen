@@ -745,6 +745,18 @@ impl MainMenuUi {
                 )
         });
 
+        if let Screen::Login { screen, .. } = &self.controls.screen {
+            if self.controls.show == Showing::Login {
+                if screen.banner.password.is_focused() {
+                    global_state.clipboard.focus(crate::clipboard::Kind::Password);
+                } else if screen.banner.username.is_focused() || screen.banner.server.is_focused() {
+                    global_state.clipboard.focus(crate::clipboard::Kind::Text);
+                } else { global_state.clipboard.blur(); }
+            }
+        } else { global_state.clipboard.blur(); }
+        if let Some(message) = global_state.clipboard.take_message() {
+            if let Screen::Login { error, .. } = &mut self.controls.screen { *error = Some(message); }
+        }
         events
     }
 
