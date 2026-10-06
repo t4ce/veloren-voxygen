@@ -18,8 +18,9 @@ replicatable = false
 CARGO_WORKSPACE_DIR = "."
 
 [features]
-default = ["trueos-blueprint", "audio"]
+default = ["trueos-blueprint"]
 trueos-blueprint = ["picasso-assets"]
+# Playback is opt-in; the default TRUEOS build uses the silent frontend.
 audio = ["dep:kira", "dep:cpal"]
 headless = ["wgpu/wgsl"]
 picasso-assets = ["common/picasso-assets"]
@@ -62,10 +63,10 @@ hickory-resolver = { version = "^0.26.1", features = ["system-config", "tokio"] 
 http-body-util = { version = "^0.1" }
 hyper = { version = "^1", default-features = false, features = ["client", "http1"] }
 hyper-rustls = { version = "^0.27", default-features = false, features = ["http1", "ring"] }
-hyper-util = { version = "^0.1", features = ["client-legacy", "http1", "tokio"] }
+hyper-util = { version = "0.1.20", features = ["client-legacy", "http1", "tokio"] }
 i18n = { package = "veloren-client-i18n", path = "common/client-i18n" }
 i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
-image = { version = "^0.25", default-features = false, features = ["png", "ico"] }
+image = { version = "^0.25", default-features = false, features = [] }
 inline_tweak = { version = "^1.0.8" }
 itertools = { version = "^0.14" }
 kira = { version = "^0.12", optional = true, default-features = false, features = ["cpal", "symphonia", "ogg", "vorbis"] }

@@ -16,7 +16,9 @@ pub enum AudioOutput {
 }
 
 impl AudioOutput {
-    pub fn is_enabled(&self) -> bool { !matches!(self, Self::Off) }
+    pub fn is_enabled(&self) -> bool {
+        cfg!(feature = "audio") && !matches!(self, Self::Off)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -26,7 +28,9 @@ pub struct AudioVolume {
 }
 
 impl AudioVolume {
-    pub fn new(volume: f32, muted: bool) -> Self { Self { volume, muted } }
+    pub fn new(volume: f32, muted: bool) -> Self {
+        Self { volume, muted }
+    }
 
     pub fn get_checked(&self) -> f32 {
         match self.muted {
@@ -73,7 +77,9 @@ impl<'de, T: Deserialize<'de> + Default + Debug, const CURRENT: usize> Deseriali
 impl<T, const CURRENT: usize> Deref for Versioned<T, CURRENT> {
     type Target = T;
 
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -82,7 +88,9 @@ pub struct BufferSize {
 }
 
 impl Default for BufferSize {
-    fn default() -> Self { Self { samples: 2048 } }
+    fn default() -> Self {
+        Self { samples: 2048 }
+    }
 }
 
 /// `AudioSettings` controls the volume of different audio subsystems and which
@@ -134,7 +142,11 @@ impl Default for AudioSettings {
             num_ui_channels: 16,
             music_spacing: 1.0,
             subtitles: false,
-            output: AudioOutput::Automatic,
+            output: if cfg!(feature = "audio") {
+                AudioOutput::Automatic
+            } else {
+                AudioOutput::Off
+            },
             combat_music_enabled: false,
             buffer_size: Versioned(BufferSize::default()),
             sample_rate: None,

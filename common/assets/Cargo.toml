@@ -23,7 +23,7 @@ assets_manager = { version = "0.13", features = [
 ron = { version = "0.12", default-features = false, features = ["std"] }
 dot_vox = "5.1"
 wavefront = "0.2" # TODO: Use vertex-colors branch when we have models that have them
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false }
 tracing = "0.1"
 hashbrown = { version = "0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
 
@@ -54,3 +54,8 @@ walkdir = "2"
 name = "voxy-assets"
 path = "src/bin/voxy_assets.rs"
 required-features = ["picasso-assets"]
+
+[target.'cfg(not(target_os = "trueos"))'.dependencies.image]
+version = "0.25"
+default-features = false
+features = ["png"]

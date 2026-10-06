@@ -16,7 +16,10 @@ pub const CPU_COUNT: usize = 4;
 #[macro_use]
 #[cfg(not(feature = "headless"))]
 pub mod ui;
-#[cfg(not(feature = "headless"))]
+#[cfg(all(not(feature = "headless"), feature = "audio"))]
+pub mod audio;
+#[cfg(all(not(feature = "headless"), not(feature = "audio")))]
+#[path = "audio/silent.rs"]
 pub mod audio;
 #[cfg(not(feature = "headless"))]
 pub mod cli;

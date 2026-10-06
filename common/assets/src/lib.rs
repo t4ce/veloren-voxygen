@@ -230,7 +230,24 @@ impl FileAsset for Image {
     const EXTENSIONS: &'static [&'static str] = &["png", "jpg"];
 
     fn from_bytes(bytes: Cow<[u8]>) -> Result<Self, BoxedError> {
+        #[cfg(not(target_os = "trueos"))]
         let image = image::load_from_memory(&bytes)?;
+        #[cfg(target_os = "trueos")]
+        let image = {
+            use trueos::vmedia::{self, ImageFormat};
+            let format = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+                ImageFormat::Png
+            } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+                ImageFormat::Jpeg
+            } else {
+                return Err(std::io::Error::other("Unsupported raster asset signature").into());
+            };
+            let decoded = trueos::async_fs::block_on(vmedia::decode(format, &bytes))
+                .map_err(|code| std::io::Error::other(format!("Kernel image decode failed ({code})")))?;
+            let rgba = image::RgbaImage::from_raw(decoded.info.width, decoded.info.height, decoded.rgba)
+                .ok_or_else(|| std::io::Error::other("Invalid kernel image extent"))?;
+            DynamicImage::ImageRgba8(rgba)
+        };
         Ok(Image(Arc::new(image)))
     }
 }

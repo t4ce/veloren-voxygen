@@ -14,7 +14,7 @@ common = {package = "veloren-common", path = "../../common"}
 
 bincode = { version = "2", features = ["serde"] }
 flate2 = "1.0.20"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.25", default-features = false }
 num-traits = "0.2"
 sum_type = "0.2.0"
 vek = { version = "0.17.0", features = ["serde", "mint"] }
@@ -33,3 +33,11 @@ serde = { version = "1.0.118", features = ["derive"] }
 test = false
 doctest = false
 bench = false
+
+[target.'cfg(target_os = "trueos")'.dependencies]
+trueos = { path = "../../../TRUEOS-Blueprints/api" }
+
+[target.'cfg(not(target_os = "trueos"))'.dependencies.image]
+version = "0.25"
+default-features = false
+features = ["png", "jpeg"]

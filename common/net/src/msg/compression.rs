@@ -8,7 +8,9 @@ use common::{
     volumes::vol_grid_2d::VolGrid2d,
 };
 use hashbrown::HashMap;
-use image::{ImageBuffer, ImageDecoder, ImageEncoder, Pixel};
+use image::{ImageBuffer, ImageDecoder, Pixel};
+#[cfg(not(target_os = "trueos"))]
+use image::ImageEncoder;
 use num_traits::cast::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use core::fmt::Debug;
@@ -161,6 +163,25 @@ pub fn image_from_bytes<I: ImageDecoder, P: 'static + Pixel<Subpixel = u8>>(
     ImageBuffer::from_raw(w, h, buf)
 }
 
+// PNG terrain planes are data: keep grayscale bytes and RGB channels exact.
+// This synchronous trait is invoked on the client's blocking worker on TRUEOS.
+#[cfg(target_os = "trueos")]
+fn decode_png_plane<P: 'static + Pixel<Subpixel = u8>>(
+    bytes: &[u8],
+) -> Option<ImageBuffer<P, Vec<u8>>> {
+    let decoded = trueos::async_fs::block_on(trueos::vmedia::decode(
+        trueos::vmedia::ImageFormat::Png,
+        bytes,
+    )).ok()?;
+    let channels = usize::from(P::CHANNEL_COUNT);
+    if channels != 1 && channels != 3 { return None; }
+    let mut pixels = Vec::with_capacity(decoded.rgba.len() / 4 * channels);
+    for rgba in decoded.rgba.chunks_exact(4) {
+        pixels.extend_from_slice(&rgba[..channels]);
+    }
+    ImageBuffer::from_raw(decoded.info.width, decoded.info.height, pixels)
+}
+
 impl<VIE: VoxelImageEncoding> VoxelImageEncoding for &VIE {
     type Output = VIE::Output;
     type Workspace = VIE::Workspace;
@@ -249,6 +270,12 @@ impl<const N: u32> VoxelImageEncoding for QuadPngEncoding<N> {
         ws.2.put_pixel(x, y, image::Luma([index[1]]));
     }
 
+    #[cfg(target_os = "trueos")]
+    fn finish(_ws: &Self::Workspace) -> Option<Self::Output> {
+        None // Server-side PNG encoding is outside the TRUEOS client.
+    }
+
+    #[cfg(not(target_os = "trueos"))]
     fn finish(ws: &Self::Workspace) -> Option<Self::Output> {
         let mut buf = Vec::new();
         use image::codecs::png::{CompressionType, FilterType};
@@ -346,6 +373,7 @@ const fn gen_lanczos_lookup<const N: u32, const R: u32>(
 
 impl<const N: u32> VoxelImageDecoding for QuadPngEncoding<N> {
     fn start(data: &Self::Output) -> Option<Self::Workspace> {
+        #[cfg(not(target_os = "trueos"))]
         use image::codecs::png::PngDecoder;
         let (quad, indices, sprite_data) = data.decompress()?;
         let ranges: [_; 4] = [
@@ -354,10 +382,22 @@ impl<const N: u32> VoxelImageDecoding for QuadPngEncoding<N> {
             indices[1]..indices[2],
             indices[2]..quad.len(),
         ];
+        #[cfg(not(target_os = "trueos"))]
         let a = image_from_bytes(PngDecoder::new(Cursor::new(&quad[ranges[0].clone()])).ok()?)?;
+        #[cfg(target_os = "trueos")]
+        let a = decode_png_plane(quad.get(ranges[0].clone())?)?;
+        #[cfg(not(target_os = "trueos"))]
         let b = image_from_bytes(PngDecoder::new(Cursor::new(&quad[ranges[1].clone()])).ok()?)?;
+        #[cfg(target_os = "trueos")]
+        let b = decode_png_plane(quad.get(ranges[1].clone())?)?;
+        #[cfg(not(target_os = "trueos"))]
         let c = image_from_bytes(PngDecoder::new(Cursor::new(&quad[ranges[2].clone()])).ok()?)?;
+        #[cfg(target_os = "trueos")]
+        let c = decode_png_plane(quad.get(ranges[2].clone())?)?;
+        #[cfg(not(target_os = "trueos"))]
         let d = image_from_bytes(PngDecoder::new(Cursor::new(&quad[ranges[3].clone()])).ok()?)?;
+        #[cfg(target_os = "trueos")]
+        let d = decode_png_plane(quad.get(ranges[3].clone())?)?;
         Some((a, b, c, d, sprite_data, HashMap::new()))
     }
 
@@ -538,6 +578,12 @@ impl<const AVERAGE_PALETTE: bool> VoxelImageEncoding for TriPngEncoding<AVERAGE_
         ws.2.put_pixel(x, y, image::Luma([index[1]]));
     }
 
+    #[cfg(target_os = "trueos")]
+    fn finish(_ws: &Self::Workspace) -> Option<Self::Output> {
+        None // Server-side PNG encoding is outside the TRUEOS client.
+    }
+
+    #[cfg(not(target_os = "trueos"))]
     fn finish(ws: &Self::Workspace) -> Option<Self::Output> {
         let mut buf = Vec::new();
         use image::codecs::png::{CompressionType, FilterType};
@@ -594,6 +640,7 @@ impl<const AVERAGE_PALETTE: bool> VoxelImageEncoding for TriPngEncoding<AVERAGE_
 
 impl<const AVERAGE_PALETTE: bool> VoxelImageDecoding for TriPngEncoding<AVERAGE_PALETTE> {
     fn start(data: &Self::Output) -> Option<Self::Workspace> {
+        #[cfg(not(target_os = "trueos"))]
         use image::codecs::png::PngDecoder;
         let (quad, palette, indices, sprite_data) = data.decompress()?;
         let ranges: [_; 3] = [
@@ -601,9 +648,18 @@ impl<const AVERAGE_PALETTE: bool> VoxelImageDecoding for TriPngEncoding<AVERAGE_
             indices[0]..indices[1],
             indices[1]..indices[2],
         ];
+        #[cfg(not(target_os = "trueos"))]
         let a = image_from_bytes(PngDecoder::new(Cursor::new(&quad[ranges[0].clone()])).ok()?)?;
+        #[cfg(target_os = "trueos")]
+        let a = decode_png_plane(quad.get(ranges[0].clone())?)?;
+        #[cfg(not(target_os = "trueos"))]
         let b = image_from_bytes(PngDecoder::new(Cursor::new(&quad[ranges[1].clone()])).ok()?)?;
+        #[cfg(target_os = "trueos")]
+        let b = decode_png_plane(quad.get(ranges[1].clone())?)?;
+        #[cfg(not(target_os = "trueos"))]
         let c = image_from_bytes(PngDecoder::new(Cursor::new(&quad[ranges[2].clone()])).ok()?)?;
+        #[cfg(target_os = "trueos")]
+        let c = decode_png_plane(quad.get(ranges[2].clone())?)?;
         let mut d: HashMap<_, HashMap<_, _>> = HashMap::new();
         if AVERAGE_PALETTE {
             for i in 0..=255 {

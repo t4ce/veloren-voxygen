@@ -349,6 +349,10 @@ pub struct Client {
     loaded_distance: f32,
 
     pending_chunks: HashMap<Vec2<i32>, Instant>,
+    #[cfg(target_os = "trueos")]
+    terrain_decode_queue: VecDeque<ServerGeneral>,
+    #[cfg(target_os = "trueos")]
+    terrain_decode_pending: Option<(Vec2<i32>, std::sync::mpsc::Receiver<Option<TerrainChunk>>)>,
     target_time_of_day: Option<TimeOfDay>,
     dt_adjustment: f64,
 
@@ -1113,6 +1117,10 @@ impl Client {
             loaded_distance: 0.0,
 
             pending_chunks: HashMap::new(),
+            #[cfg(target_os = "trueos")]
+            terrain_decode_queue: VecDeque::new(),
+            #[cfg(target_os = "trueos")]
+            terrain_decode_pending: None,
             target_time_of_day: None,
             dt_adjustment: 1.0,
 
@@ -2231,6 +2239,12 @@ impl Client {
     pub fn clear_terrain(&mut self) {
         self.state.clear_terrain();
         self.pending_chunks.clear();
+        #[cfg(target_os = "trueos")]
+        {
+            self.terrain_decode_queue.clear();
+            // Drop delivery so an old worker cannot repopulate cleared terrain.
+            self.terrain_decode_pending = None;
+        }
     }
 
     pub fn place_block(&mut self, pos: Vec3<i32>, block: Block) {
@@ -3081,6 +3095,51 @@ impl Client {
     }
 
     fn handle_server_terrain_msg(&mut self, msg: ServerGeneral) -> Result<(), Error> {
+        #[cfg(target_os = "trueos")]
+        {
+            self.terrain_decode_queue.push_back(msg);
+            Ok(())
+        }
+        #[cfg(not(target_os = "trueos"))]
+        self.apply_server_terrain_msg(msg)
+    }
+
+    // Preserve terrain-stream order, including block updates following chunks.
+    // Only one decode is in flight; kernel waits never run on the game tick.
+    #[cfg(target_os = "trueos")]
+    fn poll_terrain_decode(&mut self) -> Result<(), Error> {
+        loop {
+            if let Some((key, receiver)) = &self.terrain_decode_pending {
+                let chunk = match receiver.try_recv() {
+                    Ok(chunk) => chunk,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => return Ok(()),
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        warn!("Terrain decode worker stopped for {key:?}");
+                        None
+                    }
+                };
+                let key = *key;
+                self.terrain_decode_pending = None;
+                if let Some(chunk) = chunk {
+                    self.state.insert_chunk(key, Arc::new(chunk));
+                }
+                self.pending_chunks.remove(&key);
+            }
+            let Some(msg) = self.terrain_decode_queue.pop_front() else { return Ok(()); };
+            match msg {
+                ServerGeneral::TerrainChunkUpdate { key, chunk: Ok(chunk) } => {
+                    let (sender, receiver) = std::sync::mpsc::channel();
+                    self.terrain_decode_pending = Some((key, receiver));
+                    self.runtime.spawn_blocking(move || {
+                        let _ = sender.send(chunk.to_chunk());
+                    });
+                }
+                msg => self.apply_server_terrain_msg(msg)?,
+            }
+        }
+    }
+
+    fn apply_server_terrain_msg(&mut self, msg: ServerGeneral) -> Result<(), Error> {
         prof_span!("handle_server_terrain_mgs");
         match msg {
             ServerGeneral::TerrainChunkUpdate { key, chunk } => {
@@ -3201,11 +3260,17 @@ impl Client {
                 cnt += 1;
                 self.handle_server_in_game_msg(frontend_events, msg)?;
             }
-            while let Some(msg) = self.terrain_stream.try_recv()? {
+            loop {
+                // Keep the decode backlog bounded; leave excess messages in the stream.
+                #[cfg(target_os = "trueos")]
+                if self.terrain_decode_queue.len() >= 32 { break; }
+                let Some(msg) = self.terrain_stream.try_recv()? else { break; };
                 cnt += 1;
                 self.handle_server_terrain_msg(msg)?;
             }
 
+            #[cfg(target_os = "trueos")]
+            if self.terrain_decode_queue.len() >= 32 { return Ok(cnt); }
             if cnt_start == cnt {
                 return Ok(cnt);
             }
@@ -3237,6 +3302,8 @@ impl Client {
         }
 
         let msg_count = self.handle_messages(&mut frontend_events)?;
+        #[cfg(target_os = "trueos")]
+        self.poll_terrain_decode()?;
 
         if msg_count == 0
             && self.state.get_program_time() - self.last_server_pong
