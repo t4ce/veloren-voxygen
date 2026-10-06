@@ -412,8 +412,16 @@ impl PlayState for MainMenuState {
             // If complete go to char select screen
             } else {
                 #[cfg(target_os = "trueos")]
-                if !global_state.window.prepare_scene_display() {
-                    return PlayStateResult::Continue;
+                match global_state.window.prepare_scene_display() {
+                    Ok(true) => {},
+                    Ok(false) => return PlayStateResult::Continue,
+                    Err(error) => {
+                        self.init = InitState::None;
+                        self.main_menu_ui.cancel_connection();
+                        global_state.window.resume_menu();
+                        global_state.info_message = Some(error);
+                        return PlayStateResult::Continue;
+                    }
                 }
                 // Always succeeds since we check above
                 if let InitState::Pipeline(mut client, persisted_state) =

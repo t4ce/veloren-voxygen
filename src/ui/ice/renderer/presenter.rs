@@ -104,6 +104,9 @@ impl LayeredPresenter {
             plan: LayerPlan::default(),
         });
     }
+    pub fn scene_published_revision(&self) -> u64 {
+        self.scene.mailbox.published_revision.load(Ordering::Acquire)
+    }
     pub fn foreground_published_revision(&self) -> u64 {
         self.foreground
             .mailbox

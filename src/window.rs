@@ -224,7 +224,7 @@ pub struct Window {
     #[cfg(target_os = "trueos")]
     menu_revision: u64,
     #[cfg(target_os = "trueos")]
-    menu_handoff: Option<u64>,
+    menu_handoff: Option<crate::ui::ice::renderer::handoff::Handoff>,
     window: Arc<dyn winit::window::Window>,
     cursor_grabbed: bool,
     pub pan_sensitivity: u32,
@@ -521,18 +521,27 @@ impl Window {
         self.menu_handoff = None;
     }
 
-    /// Retire the menu foreground before the first scene frame, without waiting
-    /// for GPU fences on the event thread. The scene producer remains idle.
+    /// Drain both menu producers before terrain takes the scene capability.
+    /// Foreground resize publications remain independent of scene retirement.
     #[cfg(target_os = "trueos")]
-    pub fn prepare_scene_display(&mut self) -> bool {
-        let revision = *self.menu_handoff.get_or_insert_with(|| {
+    pub fn prepare_scene_display(&mut self) -> Result<bool, String> {
+        use crate::ui::ice::renderer::handoff::Handoff;
+        self.menu_presenter.check()?;
+        let size = self.physical_size();
+        if size.x == 0 || size.y == 0 { return Ok(false); }
+        let extent = [size.x, size.y];
+        if self.menu_handoff.is_none_or(|handoff| handoff.extent != extent) {
+            let scene_revision = self.menu_handoff.map_or(self.menu_revision, |handoff| handoff.scene_revision);
             self.menu_revision += 1;
-            let size = self.window.surface_size();
-            self.menu_presenter
-                .clear_foreground(self.menu_revision, Vec2::new(size.width, size.height));
-            self.menu_revision
-        });
-        self.menu_presenter.foreground_published_revision() >= revision
+            self.menu_presenter.clear_foreground(self.menu_revision, size);
+            self.menu_handoff = Some(Handoff {
+                scene_revision, foreground_revision: self.menu_revision, extent,
+            });
+        }
+        Ok(self.menu_handoff.unwrap().ready(
+            self.menu_presenter.scene_published_revision(),
+            self.menu_presenter.foreground_published_revision(),
+        ))
     }
 
     pub fn resolve_deduplicated_events(

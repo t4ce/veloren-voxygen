@@ -228,7 +228,8 @@ fn handle_main_events_cleared(
         span!(guard, "Render");
 
         #[cfg(target_os = "trueos")]
-        let scene_display_ready = last.uses_native_ui() || global_state.window.prepare_scene_display();
+        let scene_display_ready = last.uses_native_ui() || global_state.window.prepare_scene_display()
+            .expect("UI4 producer handoff failed");
         #[cfg(not(target_os = "trueos"))]
         let scene_display_ready = true;
 

@@ -16,16 +16,50 @@ use wgpu::WriteOnly;
 use wgpu::custom::*;
 
 pub const MAX_LINE_VERTICES: usize = 65_536;
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FrameStats {
+    pub terrain_draws: u64,
+    pub candidate_quads: u64,
+    pub near_quads: u64,
+    pub emitted_segments: u64,
+    pub truncated_quads: u64,
+}
+impl FrameStats {
+    fn accumulate(&mut self, other: Self) {
+        self.terrain_draws = self.terrain_draws.saturating_add(other.terrain_draws);
+        self.candidate_quads = self.candidate_quads.saturating_add(other.candidate_quads);
+        self.near_quads = self.near_quads.saturating_add(other.near_quads);
+        self.emitted_segments = self.emitted_segments.saturating_add(other.emitted_segments);
+        self.truncated_quads = self.truncated_quads.saturating_add(other.truncated_quads);
+    }
+}
+#[derive(Debug, Default)]
+struct FrameData {
+    lines: Vec<[f32; 3]>,
+    stats: FrameStats,
+}
+#[derive(Debug, Default)]
+pub struct Frame {
+    pub lines: Vec<[f32; 3]>,
+    pub stats: FrameStats,
+}
 #[derive(Debug, Default)]
 pub struct Host {
-    lines: Mutex<Vec<[f32; 3]>>,
+    frame: Mutex<FrameData>,
     spare_lines: Mutex<Vec<[f32; 3]>>,
     serial: AtomicU64,
     buffer_bytes: Arc<AtomicU64>,
 }
 impl Host {
+    pub fn take_frame(&self) -> Frame {
+        let mut pending = self.frame.lock().unwrap();
+        Frame {
+            lines: std::mem::take(&mut pending.lines),
+            stats: std::mem::take(&mut pending.stats),
+        }
+    }
     pub fn take_lines(&self) -> Vec<[f32; 3]> {
-        std::mem::take(&mut *self.lines.lock().unwrap())
+        self.take_frame().lines
     }
     pub fn recycle_lines(&self, mut lines: Vec<[f32; 3]>) {
         lines.clear();
@@ -163,13 +197,13 @@ struct Pipeline {
 }
 #[derive(Debug)]
 struct Encoder {
-    lines: Arc<Mutex<Vec<[f32; 3]>>>,
+    frame: Arc<Mutex<FrameData>>,
 }
 #[derive(Debug)]
-struct Commands(Mutex<Vec<[f32; 3]>>);
+struct Commands(Mutex<FrameData>);
 #[derive(Debug)]
 struct Pass {
-    lines: Arc<Mutex<Vec<[f32; 3]>>>,
+    frame: Arc<Mutex<FrameData>>,
     terrain: bool,
     groups: BTreeMap<u32, Bind>,
     vertex: Option<Binding>,
@@ -410,9 +444,10 @@ impl DeviceInterface for Device {
         desc: &wgpu::CommandEncoderDescriptor<'_>,
     ) -> DispatchCommandEncoder {
         DispatchCommandEncoder::custom(Encoder {
-            lines: Arc::new(Mutex::new(std::mem::take(
-                &mut *self.0.spare_lines.lock().unwrap(),
-            ))),
+            frame: Arc::new(Mutex::new(FrameData {
+                lines: std::mem::take(&mut *self.0.spare_lines.lock().unwrap()),
+                stats: FrameStats::default(),
+            })),
         })
     }
     fn create_render_bundle_encoder(
@@ -483,17 +518,18 @@ impl QueueInterface for Queue {
     ) { /* Texture contents belong to excluded textured passes. Descriptor retained only. */
     }
     fn submit(&self, command_buffers: &mut dyn Iterator<Item = DispatchCommandBuffer>) -> u64 {
-        let mut dst = self.0.lines.lock().unwrap();
+        let mut dst = self.0.frame.lock().unwrap();
         for commands in command_buffers {
             let commands = commands
                 .as_custom::<Commands>()
                 .expect("foreign command buffer");
             let mut src = commands.0.lock().unwrap();
-            let available = MAX_LINE_VERTICES.saturating_sub(dst.len());
-            if dst.is_empty() && src.len() <= available {
-                std::mem::swap(&mut *dst, &mut *src);
+            dst.stats.accumulate(src.stats);
+            let available = MAX_LINE_VERTICES.saturating_sub(dst.lines.len());
+            if dst.lines.is_empty() && src.lines.len() <= available {
+                std::mem::swap(&mut dst.lines, &mut src.lines);
             } else {
-                dst.extend(src.drain(..).take(available));
+                dst.lines.extend(src.lines.drain(..).take(available));
             }
         }
         self.0.serial.fetch_add(1, Ordering::Relaxed) + 1
@@ -621,7 +657,7 @@ impl CommandEncoderInterface for Encoder {
     }
     fn begin_render_pass(&self, desc: &wgpu::RenderPassDescriptor<'_>) -> DispatchRenderPass {
         DispatchRenderPass::custom(Pass {
-            lines: self.lines.clone(),
+            frame: self.frame.clone(),
             terrain: false,
             groups: BTreeMap::new(),
             vertex: None,
@@ -630,7 +666,7 @@ impl CommandEncoderInterface for Encoder {
     }
     fn finish(&mut self) -> DispatchCommandBuffer {
         DispatchCommandBuffer::custom(Commands(Mutex::new(std::mem::take(
-            &mut *self.lines.lock().unwrap(),
+            &mut *self.frame.lock().unwrap(),
         ))))
     }
     fn clear_texture(
@@ -915,6 +951,7 @@ fn clip_line(mut a: [f32; 4], mut b: [f32; 4]) -> Option<[[f32; 3]; 2]> {
 }
 impl Pass {
     fn extract(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
+        self.frame.lock().unwrap().stats.terrain_draws += 1;
         if indices.is_empty() || instances.is_empty() {
             return;
         }
@@ -975,12 +1012,13 @@ impl Pass {
             assert!(value >= 0);
             value as usize
         };
-        let mut output = self.lines.lock().unwrap();
+        let mut frame = self.frame.lock().unwrap();
         for start in (indices.start as usize..indices.end as usize)
             .step_by(6)
-            .take(65_536)
         {
-            if output.len() + 8 > MAX_LINE_VERTICES {
+            frame.stats.candidate_quads += 1;
+            if frame.lines.len() + 8 > MAX_LINE_VERTICES {
+                frame.stats.truncated_quads += (indices.end as usize - start) as u64 / 6;
                 break;
             }
             let ids = std::array::from_fn::<_, 6, _>(|j| index_at(start + j));
@@ -1011,11 +1049,13 @@ impl Pass {
             {
                 continue;
             }
+            frame.stats.near_quads += 1;
             let clip = world.map(|v| mul(&all, v));
             // Mesh::push_quad stores b,c,a,d: these are the four perimeter edges.
             for (a, b) in [(0, 1), (1, 3), (3, 2), (2, 0)] {
                 if let Some(line) = clip_line(clip[a], clip[b]) {
-                    output.extend(line);
+                    frame.lines.extend(line);
+                    frame.stats.emitted_segments += 1;
                 }
             }
         }
@@ -1108,9 +1148,9 @@ mod tests {
             offset,
             size,
         };
-        let lines = Arc::new(Mutex::new(Vec::new()));
+        let frame = Arc::new(Mutex::new(FrameData::default()));
         let mut pass = Pass {
-            lines: lines.clone(),
+            frame: frame.clone(),
             terrain: true,
             groups: BTreeMap::from([
                 (0, Bind(BTreeMap::from([(0, bind(globals, 16, 224))]))),
@@ -1120,11 +1160,15 @@ mod tests {
             index: Some((bind(indices, 4, 24), wgpu::IndexFormat::Uint32)),
         };
         pass.extract(0..6, 1, 0..1);
-        let lines = lines.lock().unwrap();
-        assert_eq!(lines.len(), 8);
-        assert_eq!(lines[0], [0., 0., 0.5]);
-        assert_eq!(lines[1], [1., 0., 0.5]);
-        for edge in lines.chunks_exact(2) {
+        let frame = frame.lock().unwrap();
+        assert_eq!(frame.stats.terrain_draws, 1);
+        assert_eq!(frame.stats.candidate_quads, 1);
+        assert_eq!(frame.stats.near_quads, 1);
+        assert_eq!(frame.stats.emitted_segments, 4);
+        assert_eq!(frame.lines.len(), 8);
+        assert_eq!(frame.lines[0], [0., 0., 0.5]);
+        assert_eq!(frame.lines[1], [1., 0., 0.5]);
+        for edge in frame.lines.chunks_exact(2) {
             assert!(
                 edge[0][0] == edge[1][0] || edge[0][1] == edge[1][1],
                 "no quad diagonal"

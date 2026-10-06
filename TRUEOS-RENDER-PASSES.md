@@ -88,9 +88,9 @@ the camera; reversed depth stays in 0..1 without flipping Y or Z.
   resource flow, but the native GPU does not yet perform the camera transform.
 - The existing-character selector has Play, Spectate, and Back controls.
   Character creation/editing/deletion remain out-gated in this selector.
-- Queue retirement plus publication is logged for the first nonempty terrain
-  frame. Background publication has no physical scanout receipt; a successful
-  build or host test alone does not prove pixels reached the display.
+- Queue retirement and publication are logged separately from exact background
+  SURFLIVE proof. That proof requires the updated kernel receipt implementation;
+  a successful build or host test alone does not prove pixels reached the display.
 
 Validation: isolated host tests exercise packed decoding, clipping, real draw
 slice/index/base-vertex/binding offsets, quad perimeter order, mapped uploads,
@@ -143,3 +143,34 @@ This is a bringup scheduling workaround, not a proven diagnosis of the rig hang.
 Each system logs its first entry and completion, including its origin, so the
 next run can attribute a remaining stall. Restore concurrent client system groups
 after the TRUEOS carrier/scheduler behavior is established.
+
+## Paired handoff and physical scene receipt
+
+The menu's background worker and the terrain producer share the same scene
+capability. Before terrain draws begin, `Window::prepare_scene_display` drains
+the last submitted **background** menu revision as well as the foreground
+clear revision. No new menu work is admitted during the handoff. A window
+resize submits a fresh transparent foreground publication without restarting
+the menu background producer; terrain supplies the resized scene publication.
+Producer failures return an error instead of leaving this gate silently waiting.
+
+`LinePresenter` retains the identity of its completed frame (sequence, vertex
+count, and extent) through publication retries. Background tracked publication
+and `was_presented` now use the existing CABI signatures, with a separate
+background serial history in the broker. The compositor records that exact
+serial after the same SURFLIVE commit that retires its display lease. Foreground
+history and paired resize staging are unchanged.
+
+On a kernel with the new receipt implementation, a tracked scene frame is held
+until its receipt is observed. An unobserved receipt times out after two seconds
+without claiming success and allows a newer frame. A paired resize uses the
+ordinary atomic publication path, then resumes tracked frames. An older kernel
+reports that background receipts are unavailable and keeps ordinary rendering
+and publication enabled. **Boot the rebuilt kernel to use exact background
+SURFLIVE proof; rebuilding only the Blueprint cannot supply that kernel code.**
+
+Runtime evidence is separated into `Voxygen terrain source` (draws, candidates,
+near quads, emitted segments and truncation), `first native frame retired and
+published`, and `Voxygen terrain SURFLIVE proven`. Only the last message records
+an actual receipt for nonempty terrain geometry. None of the host tests or pack
+commands produces that claim.

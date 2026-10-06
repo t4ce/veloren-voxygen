@@ -4,6 +4,9 @@
 //! small executor separate from extraction lets terrain uploads and camera
 //! math evolve without changing the GPU lease and retirement contract.
 
+use super::trueos_presentation::{FrameInfo, Publication, Receipt, Report};
+use std::time::{Duration, Instant};
+
 use trueos::{
     ui4_scene::{Damage, Error as Ui4Error},
     ui4_solara_text::SceneTarget,
@@ -27,6 +30,11 @@ pub(super) struct LinePresenter {
     height: u32,
     deferred_extent: Option<(u32, u32)>,
     pending_publish: bool,
+    pending_frame: Option<FrameInfo>,
+    receipt: Receipt,
+    receipt_started: Option<Instant>,
+    receipts_supported: bool,
+    sequence: u64,
     poisoned: bool,
 }
 
@@ -36,6 +44,20 @@ impl LinePresenter {
             .map_err(ui_error)?
             .background()
             .map_err(ui_error)?;
+        let receipts_supported = match target.was_presented(1) {
+            Ok(_) => true,
+            Err(Ui4Error::InvalidState) => false,
+            Err(error) => return Err(ui_error(error)),
+        };
+        if !receipts_supported {
+            let _ = trueos::logl::log_record(
+                trueos::logl::level::IMPORTANT,
+                "apps::voxygen",
+                format_args!(
+                    "Voxygen terrain receipt: running kernel lacks background SURFLIVE receipts; ordinary publication remains enabled"
+                ),
+            );
+        }
         let device = Device::open(
             vgpu::Capabilities::BUFFER
                 .union(vgpu::Capabilities::QUEUE)
@@ -102,6 +124,11 @@ impl LinePresenter {
             height,
             deferred_extent: None,
             pending_publish: false,
+            pending_frame: None,
+            receipt: Receipt::default(),
+            receipt_started: None,
+            receipts_supported,
+            sequence: 0,
             poisoned: false,
         })
     }
@@ -113,7 +140,7 @@ impl LinePresenter {
         if width == 0 || height == 0 {
             return Err("TRUEOS line extent must be nonzero".into());
         }
-        if self.pending_publish {
+        if self.pending_publish || self.receipt.pending().is_some() {
             // Keep damage tied to the old back buffer. The newest resize wins
             // once its exact publication has been accepted by UI4.
             self.deferred_extent = Some((width, height));
@@ -126,17 +153,42 @@ impl LinePresenter {
         Ok(())
     }
 
-    /// Returns false when UI4 has back pressure. Retry on the next tick.
-    pub(super) fn draw(&mut self, lines: &[[f32; 3]]) -> Result<bool, String> {
+    /// Reports the exact frame published or proven live; Busy is retried next tick.
+    pub(super) fn draw(&mut self, lines: &[[f32; 3]]) -> Result<Report, String> {
         if self.poisoned {
             return Err("TRUEOS line queue needs recreation after uncertain GPU retirement".into());
+        }
+        let mut report = Report::default();
+        if let Some(publication) = self.receipt.pending() {
+            let serial = publication.serial.unwrap();
+            if self.target.was_presented(serial).map_err(ui_error)? {
+                report.surflive = self.receipt.observe(serial, true);
+                self.receipt_started = None;
+            } else if self
+                .receipt_started
+                .is_some_and(|start| start.elapsed() >= Duration::from_secs(2))
+            {
+                let _ = trueos::logl::log_record(
+                    trueos::logl::level::WARN,
+                    "apps::voxygen",
+                    format_args!(
+                        "Voxygen terrain receipt not observed: sequence={} serial={} vertices={}; allowing a newer frame; no SURFLIVE claim",
+                        publication.frame.sequence, serial, publication.frame.vertices
+                    ),
+                );
+                self.receipt.abandon();
+                self.receipt_started = None;
+            } else {
+                report.busy = true;
+                return Ok(report);
+            }
         }
         // A successful GPU submit leaves UI4 with one frame to publish. Busy
         // must be retried on that same frame before obtaining another lease.
         if self.pending_publish {
-            if !self.publish()? {
-                return Ok(false);
-            }
+            report.published = self.publish()?;
+            report.busy = report.published.is_none();
+            return Ok(report);
         }
         if let Some((width, height)) = self.deferred_extent {
             self.target.set_extent(width, height).map_err(ui_error)?;
@@ -173,7 +225,10 @@ impl LinePresenter {
         }
         match self.target.begin_gpu_frame() {
             Ok(()) => {}
-            Err(Ui4Error::Busy) => return Ok(false),
+            Err(Ui4Error::Busy) => {
+                report.busy = true;
+                return Ok(report);
+            }
             Err(error) => return Err(ui_error(error)),
         }
         // Once UI4 grants this lease, a failed import or submission has an
@@ -214,19 +269,53 @@ impl LinePresenter {
             .wait(self.queue, point.value)
             .map_err(|e| gpu_error("line retirement", e))?;
         self.poisoned = false;
+        self.sequence += 1;
+        self.pending_frame = Some(FrameInfo {
+            sequence: self.sequence,
+            vertices: lines.len(),
+            extent: [self.width, self.height],
+        });
         self.pending_publish = true;
-        self.publish()
+        report.published = self.publish()?;
+        report.busy = report.published.is_none();
+        Ok(report)
     }
 
-    fn publish(&mut self) -> Result<bool, String> {
-        match self.target.publish(Damage::full(self.width, self.height)) {
-            Ok(()) => {
-                self.pending_publish = false;
-                Ok(true)
+    fn publish(&mut self) -> Result<Option<Publication>, String> {
+        let damage = Damage::full(self.width, self.height);
+        let serial = if self.receipts_supported {
+            match self.target.publish_tracked(damage) {
+                Ok(serial) => Some(serial),
+                Err(Ui4Error::Busy) => return Ok(None),
+                // A paired resize must publish both halves before any exact
+                // receipt can be queried. Resume tracked frames after that commit.
+                Err(Ui4Error::InvalidState) => match self.target.publish(damage) {
+                    Ok(()) => None,
+                    Err(Ui4Error::Busy) => return Ok(None),
+                    Err(error) => return Err(ui_error(error)),
+                },
+                Err(error) => return Err(ui_error(error)),
             }
-            Err(Ui4Error::Busy) => Ok(false),
-            Err(error) => Err(ui_error(error)),
+        } else {
+            match self.target.publish(damage) {
+                Ok(()) => None,
+                Err(Ui4Error::Busy) => return Ok(None),
+                Err(error) => return Err(ui_error(error)),
+            }
+        };
+        self.pending_publish = false;
+        let publication = Publication {
+            frame: self
+                .pending_frame
+                .take()
+                .expect("retired terrain frame pending"),
+            serial,
+        };
+        if serial.is_some() {
+            self.receipt.arm(publication);
+            self.receipt_started = Some(Instant::now());
         }
+        Ok(Some(publication))
     }
 }
 

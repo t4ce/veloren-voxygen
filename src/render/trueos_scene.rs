@@ -34,6 +34,9 @@ impl InstanceInterface for SceneInstance {
                     height: 0,
                     acquired: false,
                     first_terrain: false,
+                    first_surflive: false,
+                    attempted_frames: 0,
+                    last_source_log: None,
                     #[cfg(target_os = "trueos")]
                     presenter: None,
                 })),
@@ -147,6 +150,9 @@ struct SurfaceState {
     height: u32,
     acquired: bool,
     first_terrain: bool,
+    first_surflive: bool,
+    attempted_frames: u64,
+    last_source_log: Option<std::time::Instant>,
     #[cfg(target_os = "trueos")]
     presenter: Option<super::trueos_lines::LinePresenter>,
 }
@@ -247,34 +253,73 @@ pub(super) fn present(detail: &DispatchSurfaceOutputDetail, host: &Arc<Host>) {
         .expect("Terrain bridge owns surface output");
     let mut state = output.state.lock().unwrap();
     assert!(state.acquired, "Terrain frame was not acquired");
-    let lines = host.take_lines();
+    let frame = host.take_frame();
+    let lines = frame.lines;
+    state.attempted_frames += 1;
     #[cfg(target_os = "trueos")]
-    match state
-        .presenter
-        .as_mut()
-        .expect("Terrain line surface configured")
-        .draw(&lines)
     {
-        Ok(true) => {
-            if !state.first_terrain && !lines.is_empty() {
+        if state
+            .last_source_log
+            .is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(2))
+        {
+            state.last_source_log = Some(std::time::Instant::now());
+            let _ = trueos::logl::log_record(
+                trueos::logl::level::IMPORTANT,
+                "apps::voxygen",
+                format_args!(
+                    "Voxygen terrain source: frame={} draws={} candidates={} near={} segments={} vertices={} truncated_quads={}",
+                    state.attempted_frames,
+                    frame.stats.terrain_draws,
+                    frame.stats.candidate_quads,
+                    frame.stats.near_quads,
+                    frame.stats.emitted_segments,
+                    lines.len(),
+                    frame.stats.truncated_quads
+                ),
+            );
+        }
+        let report = state
+            .presenter
+            .as_mut()
+            .expect("Terrain line surface configured")
+            .draw(&lines)
+            .unwrap_or_else(|error| panic!("Native terrain line execution failed: {error}"));
+        if let Some(publication) = report.published {
+            if !state.first_terrain && publication.frame.vertices > 0 {
                 state.first_terrain = true;
                 let _ = trueos::logl::log_record(
                     trueos::logl::level::IMPORTANT,
                     "apps::voxygen",
                     format_args!(
-                        "Voxygen terrain lines: first native frame retired and published; window={} vertices={} extent={}x{}; scanout receipt unavailable for background producer",
+                        "Voxygen terrain lines: first native frame retired and published; window={} sequence={} serial={:?} vertices={} extent={}x{} boundary=GPU-retired+UI4-published",
                         state.window,
-                        lines.len(),
-                        state.width,
-                        state.height
+                        publication.frame.sequence,
+                        publication.serial,
+                        publication.frame.vertices,
+                        publication.frame.extent[0],
+                        publication.frame.extent[1]
                     ),
                 );
             }
         }
-        Ok(false) => {
-            tracing::debug!(target: "voxy_scene_contract", "Terrain publish busy; retained frame will be retried")
+        if let Some(publication) = report.surflive {
+            if !state.first_surflive && publication.frame.vertices > 0 {
+                state.first_surflive = true;
+                let _ = trueos::logl::log_record(
+                    trueos::logl::level::IMPORTANT,
+                    "apps::voxygen",
+                    format_args!(
+                        "Voxygen terrain SURFLIVE proven: window={} sequence={} serial={} vertices={} extent={}x{} boundary=exact-background-publication+physical-SURFLIVE",
+                        state.window,
+                        publication.frame.sequence,
+                        publication.serial.unwrap(),
+                        publication.frame.vertices,
+                        publication.frame.extent[0],
+                        publication.frame.extent[1]
+                    ),
+                );
+            }
         }
-        Err(error) => panic!("Native terrain line execution failed: {error}"),
     }
     host.recycle_lines(lines);
     state.acquired = false;

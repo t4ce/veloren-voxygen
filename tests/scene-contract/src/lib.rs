@@ -1,3 +1,7 @@
+#[path = "../../../src/render/trueos_presentation.rs"]
+mod trueos_presentation;
+#[path = "../../../src/ui/ice/renderer/handoff.rs"]
+mod handoff;
 #[path = "../../../src/render/trueos_host.rs"]
 mod trueos_host;
 #[path = "../../../src/render/trueos_scene.rs"]

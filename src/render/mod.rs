@@ -6,6 +6,8 @@ mod trueos_scene;
 mod trueos_host;
 #[cfg(target_os = "trueos")]
 mod trueos_lines;
+#[cfg(target_os = "trueos")]
+mod trueos_presentation;
 pub mod bound;
 mod buffer;
 pub mod consts;
