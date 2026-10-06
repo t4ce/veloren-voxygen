@@ -2,6 +2,9 @@ pub mod interactable;
 pub mod settings_change;
 mod target;
 
+use crate::server_portal::{DisplayFade, PortalCamera, PortalTransfer};
+use crate::portal_timeline::{CameraStage, Cinematic};
+
 use core::{cell::RefCell, result::Result, time::Duration};
 
 use std::collections::HashSet;
@@ -126,6 +129,10 @@ pub struct SessionState {
     lines: PlayerDebugLines,
     tracks: HashMap<Vec2<i32>, Vec<DebugShapeId>>,
     gizmos: Vec<(DebugShapeId, common::resources::Time, bool)>,
+    portal: Option<PortalTransfer>,
+    arrival: Option<Cinematic>,
+    display_fade: Option<DisplayFade>,
+    prepared_terrain: bool,
 }
 
 /// Represents an active game session (i.e., the one being played).
@@ -202,7 +209,82 @@ impl SessionState {
             tracks: HashMap::new(),
             lines: Default::default(),
             gizmos: Vec::new(),
+            portal: None,
+            arrival: None,
+            display_fade: None,
+            prepared_terrain: false,
         }
+    }
+
+    fn maintain_server_portal(&mut self, global: &mut GlobalState) -> Option<PlayStateResult> {
+        let dt = global.clock.real_dt();
+        if let Some(arrival) = &mut self.arrival {
+            arrival.advance(dt.as_secs_f32());
+            if let Some(fade) = &self.display_fade { let _ = fade.set(arrival.display_fade()); }
+            self.hud.set_portal_overlay(arrival.arrival_overlay());
+            if arrival.stage == CameraStage::Complete { self.arrival = None; self.display_fade = None; }
+        }
+        let portal = self.portal.as_mut()?;
+        let progress = portal.poll(global, dt);
+        let mut failure = progress.as_ref().err().cloned();
+        if let Some(cinematic) = &portal.cinematic {
+            self.scene.portal_camera = portal.camera();
+            if self.display_fade.is_none() { self.display_fade = Some(DisplayFade::new(&global.window)); }
+            if let Err(message) = self.display_fade.as_ref().unwrap().set(cinematic.display_fade()) { failure = Some(message); }
+            if (cinematic.stage == CameraStage::LookUp && cinematic.progress() >= 0.6
+                || cinematic.stage == CameraStage::WhiteHold) && portal.snapshot.is_none() {
+                let (tx, rx) = crossbeam_channel::bounded(1);
+                global.window.renderer_mut().create_screenshot(move |image| { let _ = tx.send(image); });
+                portal.snapshot = Some(rx);
+            }
+        }
+        if let Some(message) = failure {
+            let portal = self.portal.take().unwrap();
+            self.client.borrow_mut().cancel_server_portal(portal.id);
+            self.scene.portal_camera = None;
+            let camera = self.scene.camera_mut();
+            camera.set_orientation_instant(portal.saved_camera.orientation);
+            camera.set_distance_instant(portal.saved_camera.distance);
+            camera.set_mode(if portal.saved_camera.first_person { CameraMode::FirstPerson } else { CameraMode::ThirdPerson });
+            self.display_fade = None;
+            self.hud.new_message(ChatType::CommandError.into_plain_msg(message));
+            return None;
+        }
+        if progress == Ok(true) {
+            let image = match portal.snapshot.as_ref()?.try_recv() {
+                Ok(Ok(image)) => image,
+                Ok(Err(message)) => { self.client.borrow_mut().cancel_server_portal(portal.id);
+                    self.hud.new_message(ChatType::CommandError.into_plain_msg(message));
+                    self.portal = None; self.scene.portal_camera = None; self.display_fade = None;
+                    return None; },
+                Err(crossbeam_channel::TryRecvError::Empty) => return None,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    self.client.borrow_mut().cancel_server_portal(portal.id);
+                    self.portal = None; self.scene.portal_camera = None; self.display_fade = None; return None;
+                },
+            };
+            let (client, metadata) = portal.take_destination();
+            global.settings.networking.default_server = crate::server_portal::OFFICIAL_SERVER.into();
+            if let Some(PresenceKind::Character(id)) = client.presence() {
+                global.profile.set_selected_character(crate::server_portal::OFFICIAL_SERVER, Some(id));
+            }
+            let mut arrival = portal.cinematic.take().unwrap(); arrival.arrived();
+            let mut next = SessionState::new(global, metadata, Rc::new(RefCell::new(client)),
+                Rc::clone(&self.hud.persisted_state));
+            next.prepared_terrain = true;
+            next.scene.camera_mut().set_mode(CameraMode::FirstPerson);
+            next.scene.camera_mut().set_orientation_instant(Vec3::zero());
+            next.hud.install_portal_snapshot(image);
+            next.arrival = Some(arrival); next.display_fade = self.display_fade.take();
+            // Disconnect through the normal persistence path off the render/input thread.
+            let source = core::mem::replace(&mut self.client, Rc::clone(&next.client));
+            if let Ok(source) = Rc::try_unwrap(source) {
+                let source = source.into_inner();
+                global.tokio_runtime.spawn_blocking(move || drop(source));
+            }
+            return Some(PlayStateResult::Switch(Box::new(next)));
+        }
+        None
     }
 
     fn stop_auto_walk(&mut self) {
@@ -285,8 +367,39 @@ impl SessionState {
             self.mumble_link.update(player_pos, player_pos);
         }
 
-        for event in client.tick(self.inputs.clone(), dt)? {
+        let inputs = if self.portal.is_some() { comp::ControllerInputs::default() } else { self.inputs.clone() };
+        for event in client.tick(inputs, dt)? {
             match event {
+                crate::client::Event::ServerPortalOffer { transfer_id, destination, hover_position } => {
+                    if self.portal.is_none() {
+                        let camera = self.scene.camera();
+                        let saved = PortalCamera { orientation: camera.get_orientation(),
+                            distance: camera.get_distance(), first_person: camera.get_mode() == CameraMode::FirstPerson };
+                        let dir = client.current::<comp::Ori>().map(|ori| ori.look_dir().to_vec()).unwrap_or(Vec3::unit_y());
+                        match PortalTransfer::begin(transfer_id, &destination, hover_position, global_state, saved, dir.x.atan2(dir.y)) {
+                            Ok(transfer) => {
+                                self.portal = Some(transfer); self.inputs = Default::default();
+                                self.key_state = Default::default(); self.inputs_state.clear();
+                                self.auto_walk = false; self.hud.auto_walk(false);
+                                self.hud.new_message(ChatType::CommandInfo.into_plain_msg("Preparing the destination server…".to_string()));
+                            },
+                            Err(message) => { client.cancel_server_portal(transfer_id);
+                                self.hud.new_message(ChatType::CommandError.into_plain_msg(message)); },
+                        }
+                    }
+                },
+                crate::client::Event::ServerPortalReleased { transfer_id } => {
+                    if self.portal.as_ref().is_some_and(|p| p.id == transfer_id) {
+                        if let Some(portal) = self.portal.take() {
+                            let camera = self.scene.camera_mut();
+                            camera.set_orientation_instant(portal.saved_camera.orientation);
+                            camera.set_distance_instant(portal.saved_camera.distance);
+                            camera.set_mode(if portal.saved_camera.first_person { CameraMode::FirstPerson } else { CameraMode::ThirdPerson });
+                        }
+                        self.scene.portal_camera = None; self.display_fade = None;
+                        self.hud.new_message(ChatType::CommandInfo.into_plain_msg("Portal released. You can retry in ten seconds.".to_string()));
+                    }
+                },
                 crate::client::Event::Chat(m) => {
                     self.hud.new_message(m);
                 },
@@ -504,6 +617,24 @@ impl SessionState {
             }
         }
 
+        if let Some(portal) = &self.portal {
+            let entity = client.entity();
+            let ori = comp::Ori::from_unnormalized_vec(portal.facing_direction()).unwrap_or_default();
+            if let Some(orientation) = client.state().ecs().write_storage::<comp::Ori>().get_mut(entity) { *orientation = ori; }
+            if let Some(pos) = client.state().ecs().write_storage::<comp::Pos>().get_mut(entity) { pos.0 = portal.hover_position; }
+            if let Some(vel) = client.state().ecs().write_storage::<comp::Vel>().get_mut(entity) { *vel = comp::Vel::zero(); }
+            if let Some(interpolated) = client.state().ecs().write_storage::<crate::ecs::comp::Interpolated>().get_mut(entity) {
+                interpolated.pos = portal.hover_position;
+                interpolated.ori = ori;
+            }
+            if let Some(controller) = client.state().ecs().write_storage::<comp::Controller>().get_mut(entity) {
+                *controller = comp::Controller::default();
+                controller.inputs.look_dir = ori.look_dir();
+            }
+            if let Some(mut state) = client.state().ecs().write_storage::<comp::CharacterState>().get_mut(entity) {
+                *state = comp::CharacterState::Idle(Default::default());
+            }
+        }
         Ok(TickAction::Continue)
     }
 
@@ -552,10 +683,11 @@ impl SessionState {
 
 impl PlayState for SessionState {
     fn enter(&mut self, global_state: &mut GlobalState, _: Direction) {
+        self.client.borrow_mut().enable_server_portals();
         // Trap the cursor.
         global_state.window.grab_cursor(true);
 
-        self.client.borrow_mut().clear_terrain();
+        if !self.prepared_terrain { self.client.borrow_mut().clear_terrain(); }
 
         // Send startup commands to the server
         if global_state.settings.send_logon_commands {
@@ -743,6 +875,19 @@ impl PlayState for SessionState {
 
             // Handle window events.
             for event in events {
+                if self.portal.is_some() {
+                    match event {
+                        Event::Close => return PlayStateResult::Shutdown,
+                        Event::CursorPan(_) | Event::Zoom(_)
+                        | Event::AnalogGameInput(AnalogGameInput::CameraX(_) | AnalogGameInput::CameraY(_)) => {
+                            if self.portal.as_ref().is_some_and(|p| p.cinematic.is_none()) {
+                                self.scene.handle_input_event(event, &self.client.borrow());
+                            }
+                        },
+                        _ => {},
+                    }
+                    continue;
+                }
                 // Pass all events to the ui first.
                 {
                     let client = self.client.borrow();
@@ -1730,6 +1875,7 @@ impl PlayState for SessionState {
             let sfx_triggers = self.scene.sfx_mgr.triggers.read();
             // Maintain the UI.
             for event in hud_events {
+                if self.portal.is_some() { continue; }
                 match event {
                     HudEvent::SendMessage(msg) => {
                         // TODO: Handle result
@@ -2220,6 +2366,8 @@ impl PlayState for SessionState {
                     }
                 }
             }
+
+            if let Some(result) = self.maintain_server_portal(global_state) { return result; }
 
             // Clean things up after the tick.
             self.cleanup();

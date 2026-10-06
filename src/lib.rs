@@ -24,6 +24,9 @@ pub mod audio;
 #[cfg(not(feature = "headless"))]
 pub mod cli;
 pub mod client;
+pub mod portal_timeline;
+#[cfg(not(feature = "headless"))]
+pub mod server_portal;
 pub mod clipboard;
 #[cfg(not(feature = "headless"))]
 pub mod cmd;
@@ -91,6 +94,8 @@ pub struct GlobalState {
     pub profile: Profile,
     pub window: Window,
     pub tokio_runtime: Arc<Runtime>,
+    /// Process-only credentials; never part of Settings or Profile serialization.
+    pub portal_credentials: Option<Arc<server_portal::PortalCredentials>>,
 
     pub lazy_init: scene::terrain::SpriteRenderContextLazy,
     pub audio: AudioFrontend,

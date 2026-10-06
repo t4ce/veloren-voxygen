@@ -151,6 +151,10 @@ pub enum ClientGeneral {
         lossy_terrain_compression: bool,
     },
     RequestPlugins(Vec<PluginHash>),
+    /// Cancel only the matching source-server admission hold.
+    CancelServerPortal(u64),
+    /// Opt in only once the frontend is running an in-game portal controller.
+    EnableServerPortals,
 }
 
 impl ClientMsg {
@@ -193,7 +197,9 @@ impl ClientMsg {
                         | ClientGeneral::RequestPlayerPhysics { .. }
                         | ClientGeneral::RequestLossyTerrainCompression { .. }
                         | ClientGeneral::UpdateMapMarker(_)
-                        | ClientGeneral::SetBattleMode(_) => {
+                        | ClientGeneral::SetBattleMode(_)
+                        | ClientGeneral::CancelServerPortal(_)
+                        | ClientGeneral::EnableServerPortals => {
                             c_type == ClientType::Game && presence.is_some()
                         },
                         ClientGeneral::SpectatePosition(_) | ClientGeneral::SpectateEntity(_) => {

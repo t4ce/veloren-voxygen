@@ -38,7 +38,6 @@ pub struct ClientInit {
     stage_rx: Receiver<ClientInitStage>,
     trust_tx: Sender<AuthTrust>,
     cancel: Arc<AtomicBool>,
-    #[cfg(target_os = "trueos")]
     abort_handle: tokio::task::AbortHandle,
 }
 impl ClientInit {
@@ -51,6 +50,33 @@ impl ClientInit {
         config_dir: &Path,
         client_type: ClientType,
     ) -> Self {
+        Self::start(connection_args, username, password, runtime, locale, config_dir, client_type, false)
+    }
+
+
+    pub fn new_portal(
+        connection_args: ConnectionArgs,
+        username: String,
+        password: String,
+        runtime: Arc<runtime::Runtime>,
+        locale: Option<String>,
+        config_dir: &Path,
+        client_type: ClientType,
+    ) -> Self {
+        Self::start(connection_args, username, password, runtime, locale, config_dir, client_type, true)
+    }
+
+
+    fn start(
+        connection_args: ConnectionArgs,
+        username: String,
+        password: String,
+        runtime: Arc<runtime::Runtime>,
+        locale: Option<String>,
+        config_dir: &Path,
+        client_type: ClientType,
+        portal: bool,
+    ) -> Self {
         let (tx, rx) = unbounded();
         let (trust_tx, trust_rx) = unbounded();
         let (init_stage_tx, init_stage_rx) = unbounded();
@@ -60,16 +86,18 @@ impl ClientInit {
         let runtime2 = Arc::clone(&runtime);
         let config_dir = config_dir.to_path_buf();
 
+        let password = zeroize::Zeroizing::new(password);
         let _task = runtime.spawn(async move {
             // This TRUEOS build approves the game server's authentication
             // provider directly, without a UI prompt or saved trust-list gate.
             #[cfg(target_os = "trueos")]
             let trust_fn = {
                 drop(trust_rx);
-                |_auth_server: &str| true
+                move |auth_server: &str| !portal || auth_server == crate::server_portal::OFFICIAL_AUTH_SERVER
             };
             #[cfg(not(target_os = "trueos"))]
             let trust_fn = |auth_server: &str| {
+                if portal { return auth_server == crate::server_portal::OFFICIAL_AUTH_SERVER; }
                 let _ = tx.send(Msg::IsAuthTrusted(auth_server.to_string()));
                 trust_rx
                     .recv()
@@ -80,12 +108,12 @@ impl ClientInit {
             let mut last_err = None;
 
             const FOUR_MINUTES_RETRIES: u64 = 48;
-            'tries: for _ in 0..FOUR_MINUTES_RETRIES {
+            'tries: for _ in 0..if portal { 1 } else { FOUR_MINUTES_RETRIES } {
                 if cancel2.load(Ordering::Relaxed) {
                     break;
                 }
                 let mut mismatched_server_info = None;
-                match Client::new(
+                match Client::new_with_protocol(
                     connection_args.clone(),
                     Arc::clone(&runtime2),
                     &mut mismatched_server_info,
@@ -99,6 +127,7 @@ impl ClientInit {
                     crate::ecs::sys::add_local_systems,
                     config_dir.clone(),
                     client_type,
+                    if portal { crate::client::AdmissionProtocol::Upstream } else { crate::client::AdmissionProtocol::Native },
                 )
                 .await
                 {
@@ -153,7 +182,6 @@ impl ClientInit {
             stage_rx: init_stage_rx,
             trust_tx,
             cancel,
-            #[cfg(target_os = "trueos")]
             abort_handle: _task.abort_handle(),
         }
     }
@@ -180,7 +208,6 @@ impl ClientInit {
     pub fn cancel(&mut self) {
         self.cancel.store(true, Ordering::Relaxed);
         // Stop the current handshake/login future as well as future retries.
-        #[cfg(target_os = "trueos")]
         self.abort_handle.abort();
     }
 }

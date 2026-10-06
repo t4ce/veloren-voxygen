@@ -59,6 +59,7 @@ glyph_brush = { version = "^0.7.0" }
 guillotiere = { version = "^0.7.0" }
 hashbrown = { version = "^0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
 hex = { version = "^0.4.3" }
+zeroize = "1.8"
 hickory-resolver = { version = "^0.26.1", features = ["system-config", "tokio"] }
 http-body-util = { version = "^0.1" }
 hyper = { version = "^1", default-features = false, features = ["client", "http1"] }

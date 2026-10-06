@@ -127,6 +127,8 @@ pub enum Event {
     PluginDataReceived(Vec<u8>),
     Dialogue(Uid, rtsim::Dialogue<true>),
     Gizmos(Vec<Gizmos>),
+    ServerPortalOffer { transfer_id: u64, destination: String, hover_position: Vec3<f32> },
+    ServerPortalReleased { transfer_id: u64 },
 }
 
 /// A message for the user to be displayed through the UI.
@@ -455,6 +457,11 @@ async fn connect_quic(
     .await
 }
 
+/// The local numeric-version protocol and unmodified upstream admission are explicit.
+/// No speculative fallback sends retained credentials to an unintended peer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdmissionProtocol { Native, Upstream }
+
 impl Client {
     pub async fn new(
         addr: ConnectionArgs,
@@ -469,6 +476,26 @@ impl Client {
         add_foreign_systems: impl Fn(&mut DispatcherBuilder) + Send + 'static,
         #[expect(unused_variables)] config_dir: PathBuf,
         client_type: ClientType,
+    ) -> Result<Self, Error> {
+        Self::new_with_protocol(addr, runtime, mismatched_server_info, username, password,
+            locale, auth_trusted, init_stage_update, add_foreign_systems, config_dir,
+            client_type, AdmissionProtocol::Native).await
+    }
+
+    pub async fn new_with_protocol(
+        addr: ConnectionArgs,
+        runtime: Arc<Runtime>,
+        // TODO: refactor to avoid needing to use this out parameter
+        mismatched_server_info: &mut Option<ServerInfo>,
+        username: &str,
+        password: &str,
+        locale: Option<String>,
+        auth_trusted: impl FnMut(&str) -> bool,
+        init_stage_update: &(dyn Fn(ClientInitStage) + Send + Sync),
+        add_foreign_systems: impl Fn(&mut DispatcherBuilder) + Send + 'static,
+        #[expect(unused_variables)] config_dir: PathBuf,
+        client_type: ClientType,
+        protocol: AdmissionProtocol,
     ) -> Result<Self, Error> {
         let _ = rustls::crypto::ring::default_provider().install_default(); // needs to be initialized before usage
         // Use `usize::MAX` as the output limit: we implicitly trust servers to not send
@@ -636,27 +663,43 @@ impl Client {
         let terrain_stream = participant.opened().await?;
 
         init_stage_update(ClientInitStage::WatingForServerVersion);
-        register_stream.send(common_net::msg::ClientHello {
-            client_type,
-            game_version: common::util::GAME_VERSION,
-        })?;
-        let server_info: ServerInfo = register_stream.recv().await?;
-        // Pass the server info back to the caller to ensure they can access it even
-        // if this function errors.
-        *mismatched_server_info = Some(server_info.clone());
-        register_stream
-            .recv::<common_net::msg::GameVersionAnswer>()
-            .await?
-            .map_err(|mismatch| Error::VersionMismatch {
-                client: mismatch.client,
-                server: mismatch.server,
+        let server_info = if protocol == AdmissionProtocol::Upstream {
+            register_stream.send(client_type)?;
+            #[derive(serde::Deserialize)]
+            struct UpstreamServerInfo {
+                name: String, git_hash: u32, git_timestamp: i64, auth_provider: Option<String>,
+            }
+            let info: UpstreamServerInfo = register_stream.recv().await?;
+            let info = ServerInfo { name: info.name, git_hash: info.git_hash,
+                git_timestamp: info.git_timestamp, auth_provider: info.auth_provider,
+                // Upstream has no numeric game-version field or version-answer packet.
+                game_version: 0 };
+            *mismatched_server_info = Some(info.clone());
+            info
+        } else {
+            register_stream.send(common_net::msg::ClientHello {
+                client_type,
+                game_version: common::util::GAME_VERSION,
             })?;
-        if server_info.game_version != common::util::GAME_VERSION {
-            return Err(Error::VersionMismatch {
-                client: common::util::GAME_VERSION,
-                server: server_info.game_version,
-            });
-        }
+            let server_info: ServerInfo = register_stream.recv().await?;
+            // Pass the server info back to the caller to ensure they can access it even
+            // if this function errors.
+            *mismatched_server_info = Some(server_info.clone());
+            register_stream
+                .recv::<common_net::msg::GameVersionAnswer>()
+                .await?
+                .map_err(|mismatch| Error::VersionMismatch {
+                        client: mismatch.client,
+                        server: mismatch.server,
+                })?;
+            if server_info.game_version != common::util::GAME_VERSION {
+                return Err(Error::VersionMismatch {
+                        client: common::util::GAME_VERSION,
+                        server: server_info.game_version,
+                });
+            }
+            server_info
+        };
         debug!("Auth Server: {:?}", server_info.auth_provider);
 
         ping_stream.send(PingMsg::Ping)?;
@@ -1246,7 +1289,9 @@ impl Client {
                     | ClientGeneral::UpdateMapMarker(_)
                     | ClientGeneral::SpectatePosition(_)
                     | ClientGeneral::SpectateEntity(_)
-                    | ClientGeneral::SetBattleMode(_) => {
+                    | ClientGeneral::SetBattleMode(_)
+                    | ClientGeneral::CancelServerPortal(_)
+                    | ClientGeneral::EnableServerPortals => {
                         &mut self.in_game_stream
                     },
                     // Terrain
@@ -2095,6 +2140,14 @@ impl Client {
         } else {
             self.control_action(ControlAction::CancelInput { input });
         }
+    }
+
+    pub fn enable_server_portals(&mut self) {
+        if self.server_info.game_version != 0 { self.send_msg(ClientGeneral::EnableServerPortals); }
+    }
+
+    pub fn cancel_server_portal(&mut self, transfer_id: u64) {
+        self.send_msg(ClientGeneral::CancelServerPortal(transfer_id));
     }
 
     pub fn activate_portal(&mut self, portal: EcsEntity) {
@@ -3089,6 +3142,10 @@ impl Client {
                 self.update_available_recipes();
             },
             ServerGeneral::Gizmos(gizmos) => frontend_events.push(Event::Gizmos(gizmos)),
+            ServerGeneral::ServerPortalOffer { transfer_id, destination, hover_position } =>
+                frontend_events.push(Event::ServerPortalOffer { transfer_id, destination, hover_position }),
+            ServerGeneral::ServerPortalReleased { transfer_id } =>
+                frontend_events.push(Event::ServerPortalReleased { transfer_id }),
             _ => unreachable!("Not a in_game message"),
         }
         Ok(())

@@ -268,6 +268,9 @@ impl PlayState for MainMenuState {
                     password,
                     server_address,
                 } => {
+                    global_state.portal_credentials = Some(Arc::new(crate::server_portal::PortalCredentials::new(
+                        username.clone(), password.clone(),
+                    )));
                     let net_settings = &mut global_state.settings.networking;
                     let use_srv = net_settings.use_srv;
                     let use_quic = net_settings.use_quic;

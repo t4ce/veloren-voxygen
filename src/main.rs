@@ -230,6 +230,7 @@ fn main() {
             profile,
             window,
             tokio_runtime,
+            portal_credentials: None,
 
             lazy_init,
             clock: Clock::new(core::time::Duration::from_secs_f64(

@@ -46,6 +46,7 @@ pub fn run(
         args,
         state: None,
         init: None,
+        portal_credentials: None,
         client: None,
         connection_screen: ConnectionScreen::default(),
         last_tick: Instant::now(),
@@ -71,6 +72,7 @@ struct App {
     args: cli::Args,
     state: Option<State>,
     init: Option<ClientInit>,
+    portal_credentials: Option<Arc<crate::server_portal::PortalCredentials>>,
     client: Option<ConnectedClient>,
     connection_screen: ConnectionScreen,
     last_tick: Instant,
@@ -329,6 +331,9 @@ impl App {
                             }
                         };
                         self.settings.save_to_file_warn(&self.config_dir);
+                        self.portal_credentials = Some(Arc::new(crate::server_portal::PortalCredentials::new(
+                            username.clone(), password.clone(),
+                        )));
                         self.init = Some(ClientInit::new(
                             connection,
                             username,

@@ -577,6 +577,8 @@ impl Camera {
     /// Set the distance of the camera from the focus (i.e., zoom).
     pub fn set_distance(&mut self, dist: f32) { self.tgt_dist = dist; }
 
+    pub fn set_distance_instant(&mut self, dist: f32) { self.dist = dist; self.tgt_dist = dist; }
+
     pub fn update(&mut self, time: f64, dt: f32, smoothing_enabled: bool) {
         // This is horribly frame time dependent, but so is most of the game
         let delta = self.last_time.replace(time).map_or(0.0, |t| time - t);

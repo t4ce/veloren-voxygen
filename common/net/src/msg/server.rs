@@ -242,6 +242,9 @@ pub enum ServerGeneral {
     UpdateRecipes,
     SetPlayerRole(Option<AdminRole>),
     Gizmos(Vec<Gizmos>),
+    /// Admission offer. Never contains credentials or transferable character data.
+    ServerPortalOffer { transfer_id: u64, destination: String, hover_position: Vec3<f32> },
+    ServerPortalReleased { transfer_id: u64 },
 }
 
 impl ServerGeneral {
@@ -390,7 +393,9 @@ impl ServerMsg {
                         | ServerGeneral::LocalWindUpdate(_)
                         | ServerGeneral::SpectatePosition(_)
                         | ServerGeneral::UpdateRecipes
-                        | ServerGeneral::Gizmos(_) => {
+                        | ServerGeneral::Gizmos(_)
+                        | ServerGeneral::ServerPortalOffer { .. }
+                        | ServerGeneral::ServerPortalReleased { .. } => {
                             c_type == ClientType::Game && presence.is_some()
                         },
                         // Always possible

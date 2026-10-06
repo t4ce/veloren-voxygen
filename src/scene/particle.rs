@@ -953,10 +953,11 @@ impl ParticleMgr {
     fn maintain_body_particles(&mut self, scene_data: &SceneData) {
         prof_span!("ParticleMgr::maintain_body_particles");
         let ecs = scene_data.state.ecs();
-        for (body, interpolated, vel) in (
+        for (body, interpolated, vel, object) in (
             &ecs.read_storage::<Body>(),
             &ecs.read_storage::<Interpolated>(),
             ecs.read_storage::<Vel>().maybe(),
+            ecs.read_storage::<common::comp::Object>().maybe(),
         )
             .join()
         {
@@ -1002,10 +1003,12 @@ impl ParticleMgr {
                     | object::Body::IronPikeBomb,
                 ) => self.maintain_bomb_particles(scene_data, interpolated.pos, vel),
                 Body::Object(object::Body::PortalActive) => {
-                    self.maintain_active_portal_particles(scene_data, interpolated.pos)
+                    self.maintain_active_portal_particles(scene_data, interpolated.pos,
+                        if matches!(object, Some(common::comp::Object::ServerPortal)) { ParticleMode::FireworkBlue } else { ParticleMode::CultistFlame })
                 },
                 Body::Object(object::Body::Portal) => {
-                    self.maintain_portal_particles(scene_data, interpolated.pos)
+                    self.maintain_portal_particles(scene_data, interpolated.pos,
+                        if matches!(object, Some(common::comp::Object::ServerPortal)) { ParticleMode::FireworkBlue } else { ParticleMode::CultistFlame })
                 },
                 Body::Object(object::Body::NapalmPool) => {
                     self.maintain_napalmpool_particles(scene_data, interpolated.pos)
@@ -1558,7 +1561,7 @@ impl ParticleMgr {
         }
     }
 
-    fn maintain_active_portal_particles(&mut self, scene_data: &SceneData, pos: Vec3<f32>) {
+    fn maintain_active_portal_particles(&mut self, scene_data: &SceneData, pos: Vec3<f32>, mode: ParticleMode) {
         prof_span!("ParticleMgr::maintain_active_portal_particles");
 
         let time = scene_data.state.get_time();
@@ -1573,7 +1576,7 @@ impl ParticleMgr {
                 Particle::new_directed(
                     Duration::from_secs_f32(rng.random_range(0.4..0.8)),
                     time,
-                    ParticleMode::CultistFlame,
+                    mode,
                     outer_pos,
                     outer_pos + Vec3::unit_z() * rng.random_range(5.0..7.0),
                     scene_data,
@@ -1582,7 +1585,7 @@ impl ParticleMgr {
         }
     }
 
-    fn maintain_portal_particles(&mut self, scene_data: &SceneData, pos: Vec3<f32>) {
+    fn maintain_portal_particles(&mut self, scene_data: &SceneData, pos: Vec3<f32>, mode: ParticleMode) {
         prof_span!("ParticleMgr::maintain_portal_particles");
 
         let time = scene_data.state.get_time();
@@ -1599,7 +1602,7 @@ impl ParticleMgr {
                 Particle::new_directed(
                     Duration::from_secs_f32(rng.random_range(0.5..3.0)),
                     time,
-                    ParticleMode::CultistFlame,
+                    mode,
                     outer_pos,
                     outer_pos + Vec3::unit_z() * rng.random_range(3.0..4.0),
                     scene_data,

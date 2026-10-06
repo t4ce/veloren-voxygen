@@ -253,6 +253,7 @@ widget_ids! {
         player_rank_up_txt_1_bg,
         player_rank_up_icon,
         hurt_bg,
+        portal_snapshot,
         death_bg,
         sct_bgs[],
         scts[],
@@ -1317,6 +1318,8 @@ pub struct PersistedHudState {
 
 pub struct Hud {
     ui: Ui,
+    portal_snapshot: Option<conrod_core::image::Id>,
+    portal_overlay: Option<(f32, f32)>,
     ids: Ids,
     world_map: (/* Id */ Vec<Rotations>, Vec2<u32>),
     imgs: Imgs,
@@ -1355,6 +1358,21 @@ pub struct Hud {
 }
 
 impl Hud {
+    pub fn install_portal_snapshot(&mut self, image: image::RgbImage) {
+        self.portal_snapshot = Some(self.ui.add_graphic(Graphic::Image(
+            std::sync::Arc::new(image::DynamicImage::ImageRgb8(image)), None)));
+        self.portal_overlay = Some((1.0, 1.0));
+    }
+    pub fn set_portal_overlay(&mut self, overlay: Option<(f32, f32)>) {
+        self.portal_overlay = overlay;
+        if overlay.is_none() {
+            if let Some(id) = self.portal_snapshot.take() {
+                self.ui.replace_graphic(id, Graphic::Image(std::sync::Arc::new(
+                    image::DynamicImage::new_rgba8(1, 1)), None));
+            }
+        }
+    }
+
     pub fn new(
         global_state: &mut GlobalState,
         persisted_state: Rc<RefCell<PersistedHudState>>,
@@ -1419,6 +1437,8 @@ impl Hud {
         );
 
         Self {
+            portal_snapshot: None,
+            portal_overlay: None,
             voxel_minimap: VoxelMinimap::new(&mut ui),
             ui,
             imgs,
@@ -5296,6 +5316,14 @@ impl Hud {
         // in flickering artifacts, figure out a better way to make use of the
         // thread pool
         let _pool = client.state().ecs().read_resource::<SlowJobPool>();
+        if let (Some(image), Some((alpha, scale))) = (self.portal_snapshot, self.portal_overlay) {
+            let (ref mut widgets, _, _) = self.ui.set_widgets();
+            let [w, h] = widgets.wh_of(widgets.window).unwrap_or([1.0, 1.0]);
+            Image::new(image).w_h(w * f64::from(scale), h * f64::from(scale))
+                .middle_of(widgets.window).floating(true).graphics_for(widgets.window)
+                .color(Some(Color::Rgba(1.0, 1.0, 1.0, alpha)))
+                .set(self.ids.portal_snapshot, widgets);
+        }
         self.ui.maintain(
             global_state.window.renderer_mut(),
             None,

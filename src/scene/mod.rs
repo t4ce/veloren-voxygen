@@ -105,6 +105,7 @@ pub struct Scene {
     globals_bind_group: GlobalsBindGroup,
     camera: Camera,
     camera_input_state: Vec2<f32>,
+    pub(crate) portal_camera: Option<crate::server_portal::PortalCamera>,
     event_lights: Vec<EventLight>,
 
     skybox: Skybox,
@@ -349,6 +350,7 @@ impl Scene {
             globals_bind_group,
             camera: Camera::new(resolution.x / resolution.y, camera_mode),
             camera_input_state: Vec2::zero(),
+            portal_camera: None,
             event_lights: Vec::new(),
 
             skybox: Skybox {
@@ -757,6 +759,12 @@ impl Scene {
         // Tick camera for interpolation.
         self.camera
             .update(scene_data.state.get_time(), dt, scene_data.mouse_smoothing);
+
+        if let Some(camera) = self.portal_camera {
+            self.camera.set_mode(if camera.first_person { CameraMode::FirstPerson } else { CameraMode::ThirdPerson });
+            self.camera.set_orientation_instant(camera.orientation);
+            self.camera.set_distance_instant(camera.distance);
+        }
 
         // Compute camera matrices.
         self.camera.compute_dependents(&scene_data.state.terrain());
