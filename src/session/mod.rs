@@ -2490,6 +2490,7 @@ impl PlayState for SessionState {
             let mut third_pass = drawer.third_pass();
             third_pass.draw_postprocess();
             // Draw the UI to the screen
+            #[cfg(any(not(target_os = "trueos"), feature = "conrod-ui"))]
             if let Some(mut ui_drawer) = third_pass.draw_ui() {
                 self.hud.render(&mut ui_drawer);
             }; // Note: this semicolon is needed for the third_pass borrow to be

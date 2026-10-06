@@ -1,0 +1,10 @@
+[package]
+name = "voxy-scene-contract-tests"
+version = "0.1.0"
+edition = "2024"
+[workspace]
+[dependencies]
+wgpu = { path = "../../../wgpu/wgpu", default-features = false, features = ["std", "custom", "wgsl", "spirv"] }
+tracing = "0.1"
+[patch.crates-io]
+raw-window-handle = { path = "../../../TRUEOS-Blueprints/vendor/raw-window-handle" }

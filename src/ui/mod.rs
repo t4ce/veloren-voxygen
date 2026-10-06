@@ -1056,6 +1056,7 @@ impl Ui {
         renderer.update_model(&self.model, &self.mesh, 0);
     }
 
+    #[cfg(any(not(target_os = "trueos"), feature = "conrod-ui"))]
     pub fn render<'pass, 'data: 'pass>(&'data self, drawer: &mut UiDrawer<'_, 'pass>) {
         span!(_guard, "render", "Ui::render");
         let mut drawer = drawer.prepare(&self.interface_locals, &self.model, self.window_scissor);
@@ -1079,6 +1080,8 @@ impl Ui {
             }
         }
     }
+    #[cfg(all(target_os = "trueos", not(feature = "conrod-ui")))]
+    pub fn render<'pass, 'data: 'pass>(&'data self, _drawer: &mut UiDrawer<'_, 'pass>) {}
 }
 
 fn default_scissor(physical_resolution: Vec2<u32>) -> Aabr<u16> {

@@ -229,6 +229,9 @@ impl Renderer {
             })
             .unwrap_or(wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY);
 
+        #[cfg(target_os = "trueos")]
+        let instance = crate::render::trueos_scene::instance();
+        #[cfg(not(target_os = "trueos"))]
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends,
             display: Some(Box::new(display)),
@@ -242,7 +245,7 @@ impl Renderer {
 
         let surface = instance
             .create_surface(Arc::clone(&window))
-            .expect("Failed to create a surface");
+            .map_err(|error| RenderError::CustomError(format!("Scene surface creation: {error}")))?;
 
         let adapters = runtime.block_on(instance.enumerate_adapters(backends));
 

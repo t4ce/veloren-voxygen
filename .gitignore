@@ -1,10 +1,9 @@
-/target/
+# Cargo build output at any depth, including standalone test crates.
+target/
 /userdata/
-blueprint/target/
 /assets/*.tar.lz4
 /assets/*.tar.lz4.sha256
 
 /assets/*.redb
 /assets/*.redb.lz4
 /assets/*.redb.lz4.sha256
-tests/native-asset-sync/target/

@@ -185,17 +185,8 @@ fn main() {
         });
     i18n.set_english_fallback(settings.language.use_english_fallback);
 
-    #[cfg(target_os = "trueos")]
-    {
-        if let Err(error) =
-            veloren_voxygen::menu::native::run(settings, i18n, tokio_runtime, config_dir, args)
-        {
-            panic!("Native menu failed: {error}");
-        }
-        return;
-    }
-
-    #[cfg(not(target_os = "trueos"))]
+    // Run the original play-state stack on TRUEOS as well. Renderer/platform
+    // failures must surface here rather than stopping at the menu-only gate.
     {
         // Create window
         use veloren_voxygen::{error::Error, render::RenderError};

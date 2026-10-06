@@ -11,7 +11,7 @@ autobenches = false
 autotests = false
 
 [package.metadata.trueos-blueprint]
-profile = "release"
+profile = "bringup"
 replicatable = false
 
 [package.metadata.trueos-blueprint.build-env-paths]
@@ -20,11 +20,12 @@ CARGO_WORKSPACE_DIR = "."
 [features]
 default = ["trueos-blueprint"]
 trueos-blueprint = ["picasso-assets"]
-# Playback is opt-in; the default TRUEOS build uses the silent frontend.
 audio = ["dep:kira", "dep:cpal"]
 headless = ["wgpu/wgsl"]
 picasso-assets = ["common/picasso-assets"]
 noaudio = []
+# Opt-in Conrod HUD/ESC drawing during TRUEOS scene bring-up. Iced is independent.
+conrod-ui = []
 
 # Full client dependencies are available to TRUEOS, rather than desktop-gated.
 [dependencies]
@@ -125,6 +126,15 @@ strip = "symbols"
 
 [profile.release]
 opt-level = 2
+debug = 0
+strip = "symbols"
+
+# Fast iteration with the lightest speed optimization; no size optimization.
+[profile.bringup]
+inherits = "release"
+opt-level = 1
+lto = false
+codegen-units = 256
 debug = 0
 strip = "symbols"
 
