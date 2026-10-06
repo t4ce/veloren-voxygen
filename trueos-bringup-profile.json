@@ -31,7 +31,6 @@
       "flashing_lights_enabled": false,
       "experimental_shaders": [
         "BareMinimum",
-        "DiscardTransparency",
         "NoCaustics",
         "NoClouds",
         "NoDither",
