@@ -98,6 +98,26 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// Apply the embedded deployment baseline once at startup. Runtime edits remain free.
+    /// Use the existing settings schema, preserving fields absent from the JSON.
+    pub fn apply_trueos_bringup_profile(&mut self) -> Result<(), serde_json::Error> {
+        fn overlay(current: &mut serde_json::Value, patch: serde_json::Value) {
+            match (current, patch) {
+                (serde_json::Value::Object(current), serde_json::Value::Object(patch)) => {
+                    for (key, value) in patch {
+                        overlay(current.entry(key).or_insert(serde_json::Value::Null), value);
+                    }
+                }
+                (current, patch) => *current = patch,
+            }
+        }
+        let patch = serde_json::from_str(include_str!("../../trueos-bringup-profile.json"))?;
+        let mut current = serde_json::to_value(&*self)?;
+        overlay(&mut current, patch);
+        *self = serde_json::from_value(current)?;
+        Ok(())
+    }
+
     pub fn load(config_dir: &Path) -> Self {
         let path = Self::get_path(config_dir);
 

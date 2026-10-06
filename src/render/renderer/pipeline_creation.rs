@@ -239,7 +239,10 @@ impl ShaderModules {
             constants += "#define RAIN_ENABLED\n";
         }
 
-        for shader in pipeline_modes.experimental_shaders.iter() {
+        // Stable define order keeps source hashes reproducible for baked variants.
+        let mut experimental = pipeline_modes.experimental_shaders.iter().collect::<Vec<_>>();
+        experimental.sort_by_key(|shader| format!("{shader:?}"));
+        for shader in experimental {
             constants += &format!(
                 "#define EXPERIMENTAL_{}\n",
                 format!("{:?}", shader).to_uppercase()

@@ -112,6 +112,12 @@ fn main() {
 
     // Load the settings
     let mut settings = Settings::load(&config_dir);
+    #[cfg(target_os = "trueos")]
+    {
+        settings.apply_trueos_bringup_profile()
+            .expect("Invalid embedded trueos-bringup-profile.json");
+        info!("Applied TRUEOS bring-up graphics profile; settings remain adjustable this session");
+    }
     // Start windowed even when the previous session saved fullscreen or maximized.
     settings.graphics.window.size = [1920, 1080];
     settings.graphics.window.maximised = false;

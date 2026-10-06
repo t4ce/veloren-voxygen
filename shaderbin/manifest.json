@@ -82,7 +82,8 @@
   "profiles": [
     "minimal",
     "default-map",
-    "default-cheap"
+    "default-cheap",
+    "trueos-bringup"
   ],
   "schema": 1,
   "shaders": [
@@ -1218,6 +1219,384 @@
       "profile": "minimal",
       "sha256": "fe079df1391e0c9715c2f71f528b78ba8a32cd3e064d9a922cef3e67dbcb060f",
       "source_sha256": "edaede1cb60b566fb1b0d223ce25d9a641441871c5a3888fb74ce9a664e98903",
+      "stage": "frag"
+    },
+    {
+      "bytes": 1824,
+      "file": "skybox-vert.trueos-bringup.spv",
+      "name": "skybox-vert",
+      "profile": "trueos-bringup",
+      "sha256": "003fb08b6e660d03515f2b0c07002615c0932d73529c8ef671c5c166308395c6",
+      "source_sha256": "6901938a068cfd8d3c94612c1c86a3666c0eaee20c3fd419d23693dd1dae4f8b",
+      "stage": "vert"
+    },
+    {
+      "bytes": 1808,
+      "file": "skybox-frag.trueos-bringup.spv",
+      "name": "skybox-frag",
+      "profile": "trueos-bringup",
+      "sha256": "483972a1e905c2e8c671d843e43c5ff4b66fed791c424cb6f54fa15f9698a08e",
+      "source_sha256": "550488940970d2dc8948e1d36a8785f71ba330becb69de023d909acaafa39f11",
+      "stage": "frag"
+    },
+    {
+      "bytes": 3308,
+      "file": "debug-vert.trueos-bringup.spv",
+      "name": "debug-vert",
+      "profile": "trueos-bringup",
+      "sha256": "f48e1cafdfa8f4780e00391c70e3070d9f2c9b3eee2eaed96914609424e9bcea",
+      "source_sha256": "107bd7f80261cfd2c4344faa81faf69804afb85d93c86a22fb749f84288b2ba6",
+      "stage": "vert"
+    },
+    {
+      "bytes": 7824,
+      "file": "debug-frag.trueos-bringup.spv",
+      "name": "debug-frag",
+      "profile": "trueos-bringup",
+      "sha256": "e816bcabb1992befbca5a3fb0a9e3686b20cb6358662bc7ba2a0574a081db777",
+      "source_sha256": "82d866fa6060c6a657df599328edffaf9401a6efe92dbcab183dcdfa0b7722e5",
+      "stage": "frag"
+    },
+    {
+      "bytes": 3796,
+      "file": "figure-vert.trueos-bringup.spv",
+      "name": "figure-vert",
+      "profile": "trueos-bringup",
+      "sha256": "e647765520ce6532756d902d6e9d5e061e52491127ea130ee7d67ece2a715818",
+      "source_sha256": "16165795cec7f20c8d35406950baa71981a6367cbf8d114d6eae8de4a68cd83d",
+      "stage": "vert"
+    },
+    {
+      "bytes": 4452,
+      "file": "figure-frag.trueos-bringup.spv",
+      "name": "figure-frag",
+      "profile": "trueos-bringup",
+      "sha256": "067efd787276cb0077d70714048eb48c43f9a951ee33d5fb012ebcf6ead51fce",
+      "source_sha256": "ca3b2bacce42ae315c1c0844325b2c885609aaddbd0a16639f0aebb7c6c58af2",
+      "stage": "frag"
+    },
+    {
+      "bytes": 2668,
+      "file": "terrain-vert.trueos-bringup.spv",
+      "name": "terrain-vert",
+      "profile": "trueos-bringup",
+      "sha256": "e569221116964a41e5d57758895c009866f0bab28e67d04dc152fa82e3fbf396",
+      "source_sha256": "fc5599f6a4f0d4aed35d3694eaf5ed8a1f0ea8c93c94ae1242f82e4dc765fe0f",
+      "stage": "vert"
+    },
+    {
+      "bytes": 4760,
+      "file": "terrain-frag.trueos-bringup.spv",
+      "name": "terrain-frag",
+      "profile": "trueos-bringup",
+      "sha256": "5fa15fde95eb53cd5ab1fa1a557dc31fc550f4b9f13b18dddf549f54e2d6c91e",
+      "source_sha256": "616b777abf242422db650e20a269d9f9bb79b3d24c1470927dd69a79d72a774d",
+      "stage": "frag"
+    },
+    {
+      "bytes": 2760,
+      "file": "fluid-vert.trueos-bringup.spv",
+      "name": "fluid-vert",
+      "profile": "trueos-bringup",
+      "sha256": "ac64650f54ec31406f607f44982bf7788a9b168489bb5f434fba6cfecc161ad4",
+      "source_sha256": "e6c1014a37155adb60e6b2d6b704d3f8045bb7c4ba54f9fd8b008199482812e0",
+      "stage": "vert"
+    },
+    {
+      "bytes": 5608,
+      "file": "sprite-vert.trueos-bringup.spv",
+      "name": "sprite-vert",
+      "profile": "trueos-bringup",
+      "sha256": "64c4b431ec844ee29db4d8c40d3d999908d8a32fde1a595685fa52ce20d2d60a",
+      "source_sha256": "ddf4677e6d8a64fc3118e35b3528cce5d0de00dfe2a35afcacd159301bf1561a",
+      "stage": "vert"
+    },
+    {
+      "bytes": 4452,
+      "file": "sprite-frag.trueos-bringup.spv",
+      "name": "sprite-frag",
+      "profile": "trueos-bringup",
+      "sha256": "0be4986d8db5b060af4afcbdf817a496b512237a29555c21ee59f801e99d5361",
+      "source_sha256": "03e7cf9146b3447e4d94457542863e47034f62f09d0cb5eb5865423bf63900f1",
+      "stage": "frag"
+    },
+    {
+      "bytes": 3716,
+      "file": "lod-object-vert.trueos-bringup.spv",
+      "name": "lod-object-vert",
+      "profile": "trueos-bringup",
+      "sha256": "b57a5c31d4f6576ce61e66ea3e839f1bbec88be8b193157975061bf949c20a6d",
+      "source_sha256": "4d70b7e49a0faea08ce9c420e3b546bb73c698c3cc6cdee5ad52e2fa768a98db",
+      "stage": "vert"
+    },
+    {
+      "bytes": 1904,
+      "file": "lod-object-frag.trueos-bringup.spv",
+      "name": "lod-object-frag",
+      "profile": "trueos-bringup",
+      "sha256": "ee8e032342c43fa0b611d93a955afa5892353af27ddc08863820dada4ba3a222",
+      "source_sha256": "1703fc3360acd35ec68fb03f8b1813fb8d2af2789cfabf60e8b8659b5b6fc63d",
+      "stage": "frag"
+    },
+    {
+      "bytes": 240704,
+      "file": "particle-vert.trueos-bringup.spv",
+      "name": "particle-vert",
+      "profile": "trueos-bringup",
+      "sha256": "53e24eaec610b5e608d9e38dcbd23362483a56b1d48fd9ebae9fb50322b1c106",
+      "source_sha256": "4d463624cc0ddc07956b40850b3245d573dab405f696e0540f3845470f2ea8bc",
+      "stage": "vert"
+    },
+    {
+      "bytes": 1904,
+      "file": "particle-frag.trueos-bringup.spv",
+      "name": "particle-frag",
+      "profile": "trueos-bringup",
+      "sha256": "5b854036a656e58fffec4b3592a4d5b54792733a64d585f707a45a1992fb2cef",
+      "source_sha256": "aa3f61a7bc6a10bdc2a3cf7ea8680cb0fa4b921a38c88445c38ab8cb82fc7d01",
+      "stage": "frag"
+    },
+    {
+      "bytes": 5264,
+      "file": "rope-vert.trueos-bringup.spv",
+      "name": "rope-vert",
+      "profile": "trueos-bringup",
+      "sha256": "9de0b588d912675a247fe51463ea4fa9c3a29353d63a0d1d53008e4a652d0fe3",
+      "source_sha256": "0078b4b6c254947bc1376570772bd729e0dc0c640a87117ebc906e7209b9a4da",
+      "stage": "vert"
+    },
+    {
+      "bytes": 2448,
+      "file": "rope-frag.trueos-bringup.spv",
+      "name": "rope-frag",
+      "profile": "trueos-bringup",
+      "sha256": "f6f19666cc2393f70525b553529c209c2621b9495f65c66781e9c55116babe1d",
+      "source_sha256": "7e09a7437964b39258e0ff938a0e9808cf937736590da28d3608f26f9d94d069",
+      "stage": "frag"
+    },
+    {
+      "bytes": 1676,
+      "file": "trail-vert.trueos-bringup.spv",
+      "name": "trail-vert",
+      "profile": "trueos-bringup",
+      "sha256": "a1cdd6dba52484ba0dd679d66ca9561c47ef211b5e07eca4dcb4a8190a1d8710",
+      "source_sha256": "386171fd9e20fd74cc18535069b7c833d597a7c3aece2a7b93a67ba3e02d5706",
+      "stage": "vert"
+    },
+    {
+      "bytes": 1448,
+      "file": "trail-frag.trueos-bringup.spv",
+      "name": "trail-frag",
+      "profile": "trueos-bringup",
+      "sha256": "1d00a09f3eaca660748abf2cdd01eacd65364703997fa2e220558849580249dc",
+      "source_sha256": "859d69e89350e52a5c15b05fe101118ff054de513e9f52702c1439c629cb1231",
+      "stage": "frag"
+    },
+    {
+      "bytes": 5304,
+      "file": "ui-vert.trueos-bringup.spv",
+      "name": "ui-vert",
+      "profile": "trueos-bringup",
+      "sha256": "fe9f4dd17f2c991c3bb42c04a5f7664083952965711ae10d2163ec4f15d28680",
+      "source_sha256": "b63db12c7141b6e64d75741801b99d2b15a8553ce3e00731f57d75346bebbaeb",
+      "stage": "vert"
+    },
+    {
+      "bytes": 7832,
+      "file": "ui-frag.trueos-bringup.spv",
+      "name": "ui-frag",
+      "profile": "trueos-bringup",
+      "sha256": "6ce3e7762a0ccabf9725dff73e24afa86e69728592305d8b423b69a40bcbb546",
+      "source_sha256": "af6d7520085db800c707ba1a4730e1f16ee4847c95f673906efa28c9c6ebb5f7",
+      "stage": "frag"
+    },
+    {
+      "bytes": 1828,
+      "file": "premultiply-alpha-vert.trueos-bringup.spv",
+      "name": "premultiply-alpha-vert",
+      "profile": "trueos-bringup",
+      "sha256": "ed43e1f05bc26f03374a33ff1406e746bd2e3653baa7961bf907f5f3b1ce3863",
+      "source_sha256": "6f5bf2ba1b7bd618e7c854bec2ff11eac3b3fd2e85e3e3039ea5245a0997f7e3",
+      "stage": "vert"
+    },
+    {
+      "bytes": 712,
+      "file": "premultiply-alpha-frag.trueos-bringup.spv",
+      "name": "premultiply-alpha-frag",
+      "profile": "trueos-bringup",
+      "sha256": "b45c0cbe559808d790b7d534ed56df3f864b4811fbb71516219fd77616315357",
+      "source_sha256": "65a7a327e804807568eeadd4126b996da1aed35a90594c978e3af0b5c4577615",
+      "stage": "frag"
+    },
+    {
+      "bytes": 9448,
+      "file": "lod-terrain-vert.trueos-bringup.spv",
+      "name": "lod-terrain-vert",
+      "profile": "trueos-bringup",
+      "sha256": "b9d589720b9219b55c53de84d88b46003497946f8817c107770d5b8393cb5e13",
+      "source_sha256": "7b65d2f3659662a6913ee7e32aeda63f71220ee15dbb6c102dbf19019956e409",
+      "stage": "vert"
+    },
+    {
+      "bytes": 4920,
+      "file": "lod-terrain-frag.trueos-bringup.spv",
+      "name": "lod-terrain-frag",
+      "profile": "trueos-bringup",
+      "sha256": "afc1326de327699498dd76acd4f0c817aca3d2413e6c08e0c98469fd065786c5",
+      "source_sha256": "5aa8d8ade7c1e94a5403b505cab60c3f848d4160405e3c01cf784e57ef1d10ee",
+      "stage": "frag"
+    },
+    {
+      "bytes": 968,
+      "file": "clouds-vert.trueos-bringup.spv",
+      "name": "clouds-vert",
+      "profile": "trueos-bringup",
+      "sha256": "1ff15ef80d7d51c1f05f400c62dfd7e95f9d6410dce2cce8ff78d883f672380a",
+      "source_sha256": "084effeb89d08c9b5ea19a393f7b9802143f5a3327e87a673a1fe0b3a2dc508f",
+      "stage": "vert"
+    },
+    {
+      "bytes": 688,
+      "file": "clouds-frag.trueos-bringup.spv",
+      "name": "clouds-frag",
+      "profile": "trueos-bringup",
+      "sha256": "f0e31de60390137e206e95de266f7d889bba6d931c6d5e0105ee1815016ae7f3",
+      "source_sha256": "b1bf019a64bf2aca58381e58462aa304efd46406cb0128ad4ad753e6af564017",
+      "stage": "frag"
+    },
+    {
+      "bytes": 1952,
+      "file": "dual-downsample-filtered-frag.trueos-bringup.spv",
+      "name": "dual-downsample-filtered-frag",
+      "profile": "trueos-bringup",
+      "sha256": "b0e5543148659d355580a4828b6dd18e641e7c2c6c6793b7a486eb1431242a32",
+      "source_sha256": "9d57b5e27f725ab91dbe013f7186136501c7da09e4a95ce92e240863670550b8",
+      "stage": "frag"
+    },
+    {
+      "bytes": 1456,
+      "file": "dual-downsample-frag.trueos-bringup.spv",
+      "name": "dual-downsample-frag",
+      "profile": "trueos-bringup",
+      "sha256": "3f5e60bd864edfe098cb5bccead6b97fc61e10bde34d848090d4d09bd96fc0e8",
+      "source_sha256": "9b9eef1e0b61aa803dd1b9f68a9714488f464a90c318e7c52a463d36445ac722",
+      "stage": "frag"
+    },
+    {
+      "bytes": 2128,
+      "file": "dual-upsample-frag.trueos-bringup.spv",
+      "name": "dual-upsample-frag",
+      "profile": "trueos-bringup",
+      "sha256": "0ab8ffe0739273729d7d6764d971c086836d1487018f9d93bf6cbaa08fdda612",
+      "source_sha256": "253d3f95090fe36fad1f53c74fcc3e1ba42092f66f77a8d9b7cca29a0f27fde1",
+      "stage": "frag"
+    },
+    {
+      "bytes": 968,
+      "file": "postprocess-vert.trueos-bringup.spv",
+      "name": "postprocess-vert",
+      "profile": "trueos-bringup",
+      "sha256": "1ff15ef80d7d51c1f05f400c62dfd7e95f9d6410dce2cce8ff78d883f672380a",
+      "source_sha256": "bb02df8d36ba53b357f04a5ab0925f539b956a7b657461e8738297f0f34c704f",
+      "stage": "vert"
+    },
+    {
+      "bytes": 908,
+      "file": "postprocess-frag.trueos-bringup.spv",
+      "name": "postprocess-frag",
+      "profile": "trueos-bringup",
+      "sha256": "075b36be5032d030b4d8eb1ef72e04e7591ab0c49547bc08c97b8186ea94a0a3",
+      "source_sha256": "14157f67d1d43a7e4d12a28f80e7214f1860873161ea89eeff4d1db43a75bb21",
+      "stage": "frag"
+    },
+    {
+      "bytes": 908,
+      "file": "postprocess-frag.trueos-bringup.display.spv",
+      "name": "postprocess-frag",
+      "profile": "trueos-bringup",
+      "sha256": "075b36be5032d030b4d8eb1ef72e04e7591ab0c49547bc08c97b8186ea94a0a3",
+      "source_sha256": "9f836aa56b71ac37ca8107da030a3d7453fd319484f048ca7c348db3d6241550",
+      "stage": "frag"
+    },
+    {
+      "bytes": 968,
+      "file": "blit-vert.trueos-bringup.spv",
+      "name": "blit-vert",
+      "profile": "trueos-bringup",
+      "sha256": "b8c01604fbe277865a1b3d108602d261058c6597dbdf508fe7bb61833601b660",
+      "source_sha256": "9f7a6ff1fbc58445c1b2485bee887849dd156d01ff927ff1ed349d81d12a1fb5",
+      "stage": "vert"
+    },
+    {
+      "bytes": 688,
+      "file": "blit-frag.trueos-bringup.spv",
+      "name": "blit-frag",
+      "profile": "trueos-bringup",
+      "sha256": "7ad68508a2ae2006e5f4d88002fd305d8414eb3cd58c92379cfae56ced72abd0",
+      "source_sha256": "51f6e7c3e7ecba897e1ef32cf917875a79536d5fbf26b43ed614e260e61f485d",
+      "stage": "frag"
+    },
+    {
+      "bytes": 2344,
+      "file": "point-light-shadows-vert.trueos-bringup.spv",
+      "name": "point-light-shadows-vert",
+      "profile": "trueos-bringup",
+      "sha256": "c080da97b60792ca82c96be1c45f0aae63008f8ea1b24db9cc259482085d1781",
+      "source_sha256": "1d367df505826809f3ab50e6ab2cc05dbc0e2a5eeae4ff2dfa34ca3b3f0f02df",
+      "stage": "vert"
+    },
+    {
+      "bytes": 2420,
+      "file": "light-shadows-directed-vert.trueos-bringup.spv",
+      "name": "light-shadows-directed-vert",
+      "profile": "trueos-bringup",
+      "sha256": "73351bdcd80448df8e60e37efc83781584f0192ea4a7b4e80e2ff2437a256c17",
+      "source_sha256": "e4dcd1cf3c510d9ebb595ef92ddcdebf6dba0cc1b306507dabe9906b6551b7a5",
+      "stage": "vert"
+    },
+    {
+      "bytes": 3108,
+      "file": "light-shadows-figure-vert.trueos-bringup.spv",
+      "name": "light-shadows-figure-vert",
+      "profile": "trueos-bringup",
+      "sha256": "7475c83f0436549c0bb55a47c233c43542da1dad08f07dd2f5315b6247e648ad",
+      "source_sha256": "56c4d052b98d4cadef46bddeb30fdefa3db27198b4c9b50ed185e25d95b693bd",
+      "stage": "vert"
+    },
+    {
+      "bytes": 3512,
+      "file": "light-shadows-debug-vert.trueos-bringup.spv",
+      "name": "light-shadows-debug-vert",
+      "profile": "trueos-bringup",
+      "sha256": "1c0486b0623d183bf1be124fb6021209e07bbbfcc3a90e1fa6c75d18197b0f17",
+      "source_sha256": "caecb9600f7001bc8c9d6555a195d129ca9d23f0c0ddac05c6b3d083075a6069",
+      "stage": "vert"
+    },
+    {
+      "bytes": 2552,
+      "file": "rain-occlusion-directed-vert.trueos-bringup.spv",
+      "name": "rain-occlusion-directed-vert",
+      "profile": "trueos-bringup",
+      "sha256": "55eeba17da5bd319b3c10b51fd9abcc5ca91f04ab0daeee0dcd5f0372e8af8e5",
+      "source_sha256": "a3293554426177a2a1f64c51e1131d7cd5c4ef5c45d460114912b10d4d81b7eb",
+      "stage": "vert"
+    },
+    {
+      "bytes": 3240,
+      "file": "rain-occlusion-figure-vert.trueos-bringup.spv",
+      "name": "rain-occlusion-figure-vert",
+      "profile": "trueos-bringup",
+      "sha256": "550df2d9493cc29c4235c597026a2c325b8320d388e14a5d304641bb33ea8928",
+      "source_sha256": "a31398a2182c77ca8e7af96bb76e687cb6693c09b7568c42595933f5a66af978",
+      "stage": "vert"
+    },
+    {
+      "bytes": 1876,
+      "file": "fluid-frag.cheap.trueos-bringup.spv",
+      "name": "fluid-frag.cheap",
+      "profile": "trueos-bringup",
+      "sha256": "90c3a2e1121178b3d99a98eab6f8864beab020df0efff0324335226c3d7f8cf4",
+      "source_sha256": "9cf1c713417f15ba87012d52826227d035e994db7dca19c964f52f7e5a7fe6a8",
       "stage": "frag"
     }
   ]
