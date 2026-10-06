@@ -1,5 +1,5 @@
 pub(crate) mod client_init;
-mod ui;
+pub(crate) mod ui;
 
 use super::{char_selection::CharSelectionState, dummy_scene::Scene, server_info::ServerInfoState};
 use crate::{

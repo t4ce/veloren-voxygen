@@ -13,6 +13,10 @@ impl text_input::Renderer for IcedRenderer {
     type Style = ();
 
     fn measure_value(&self, value: &str, size: u16, font: Self::Font) -> f32 {
+        #[cfg(target_os = "trueos")]
+        if self.is_native() {
+            return self.native_measure_value(value, size);
+        }
         // Using the physical scale might make this cached info usable below?
         // Although we also have a position of the screen there so this could be useless
         let p_scale = self.p_scale;
@@ -29,7 +33,11 @@ impl text_input::Renderer for IcedRenderer {
             }],
         };
 
-        let mut glyph_calculator = self.cache.glyph_calculator();
+        let mut glyph_calculator = self
+            .cache
+            .as_ref()
+            .expect("GPU renderer cache")
+            .glyph_calculator();
         // Note: keeping comments below for now in case this needs to be debugged again
         /* let width = */
         glyph_calculator
@@ -175,7 +183,7 @@ impl text_input::Renderer for IcedRenderer {
                         },
                         offset,
                     )
-                },
+                }
                 cursor::State::Selection { start, end } => {
                     let left = start.min(end);
                     let right = end.max(start);
@@ -203,7 +211,7 @@ impl text_input::Renderer for IcedRenderer {
                         },
                         offset,
                     )
-                },
+                }
             };
 
             (Some(cursor_primitive), offset)

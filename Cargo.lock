@@ -2484,6 +2484,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "microfont"
+version = "3.7.8"
+
+[[package]]
 name = "miniz_oxide"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4964,6 +4968,7 @@ dependencies = [
  "specs",
  "sum_type",
  "tracing",
+ "trueos",
  "vek",
  "veloren-common",
 ]
@@ -5117,6 +5122,7 @@ dependencies = [
  "itertools",
  "kira",
  "lazy_static",
+ "microfont",
  "mumble-link",
  "num-integer",
  "num-traits",
@@ -5885,6 +5891,7 @@ dependencies = [
  "dpi",
  "raw-window-handle",
  "tracing",
+ "v",
  "winit-core",
 ]
 

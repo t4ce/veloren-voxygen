@@ -1,5 +1,7 @@
+#[cfg(any(target_os = "trueos", test))]
+mod blit;
 mod defaults;
-mod primitive;
+pub(super) mod primitive;
 pub mod style;
 mod widget;
 
@@ -20,6 +22,7 @@ use crate::{
         create_ui_quad, create_ui_quad_vert_gradient,
     },
 };
+use alloc::sync::Arc;
 use common::{slowjob::SlowJobPool, util::srgba_to_linear};
 use common_base::span;
 use core::{convert::TryInto, ops::Range};
@@ -81,13 +84,15 @@ enum State {
 
 pub struct IcedRenderer {
     //image_map: Map<(Image, Rotation)>,
-    cache: Cache,
+    cache: Option<Cache>,
     // Model for drawing the ui
-    model: DynamicModel<UiVertex>,
+    model: Option<DynamicModel<UiVertex>>,
     // Consts to specify positions of ingame elements (e.g. Nametags)
     ingame_locals: Vec<UiBoundLocals>,
     // Consts for default ui drawing position (ie the interface)
-    interface_locals: UiBoundLocals,
+    interface_locals: Option<UiBoundLocals>,
+    #[cfg(target_os = "trueos")]
+    native: Option<blit::Renderer>,
 
     // Used to delay cache resizing until after current frame is drawn
     //need_cache_resize: bool,
@@ -127,10 +132,12 @@ impl IcedRenderer {
         let interface_locals = renderer.create_ui_bound_locals(&[UiLocals::default()]);
 
         Ok(Self {
-            cache: Cache::new(renderer, default_font)?,
+            cache: Some(Cache::new(renderer, default_font)?),
             draw_commands: Vec::new(),
-            model: renderer.create_dynamic_model(100),
-            interface_locals,
+            model: Some(renderer.create_dynamic_model(100)),
+            interface_locals: Some(interface_locals),
+            #[cfg(target_os = "trueos")]
+            native: None,
             ingame_locals: Vec::new(),
             mesh: Mesh::new(),
             glyphs: Vec::new(),
@@ -145,26 +152,109 @@ impl IcedRenderer {
         })
     }
 
-    pub fn add_font(&mut self, font: RawFont) -> FontId { self.cache.add_font(font) }
+    /// Construct a renderer backed by the CPU raster adapter for UI4's opaque
+    /// RGBA frame API. The desktop GPU renderer remains available via `new`.
+    #[cfg(target_os = "trueos")]
+    pub fn new_native(physical_resolution: Vec2<u32>) -> Self {
+        let win_dims = physical_resolution.map(|value| value as f32);
+        let (half_res, align, p_scale) =
+            Self::calculate_resolution_dependents(physical_resolution, win_dims);
+        Self {
+            cache: None,
+            draw_commands: Vec::new(),
+            model: None,
+            interface_locals: None,
+            native: Some(blit::Renderer::new(
+                physical_resolution.x,
+                physical_resolution.y,
+            )),
+            ingame_locals: Vec::new(),
+            mesh: Mesh::new(),
+            glyphs: Vec::new(),
+            last_glyph_verts: Vec::new(),
+            current_state: State::Plain,
+            half_res,
+            align,
+            p_scale,
+            win_dims,
+            window_scissor: default_scissor(physical_resolution),
+            start: 0,
+        }
+    }
+
+    pub fn add_font(&mut self, font: RawFont) -> FontId {
+        self.cache
+            .as_mut()
+            .map_or_else(FontId::default, |cache| cache.add_font(font))
+    }
 
     /// Allows clearing out the fonts when switching languages
-    pub fn clear_fonts(&mut self, default_font: Font) { self.cache.clear_fonts(default_font); }
+    pub fn clear_fonts(&mut self, default_font: Font) {
+        if let Some(cache) = self.cache.as_mut() {
+            cache.clear_fonts(default_font);
+        }
+    }
 
     pub fn add_graphic(&mut self, graphic: Graphic) -> graphic::Id {
-        self.cache.add_graphic(graphic)
+        if let Some(cache) = self.cache.as_mut() {
+            return cache.add_graphic(graphic);
+        }
+        #[cfg(target_os = "trueos")]
+        {
+            let unsupported = matches!(&graphic, Graphic::Voxel(..));
+            let image = match graphic {
+                Graphic::Image(image, _) => Arc::new(image.to_rgba8()),
+                Graphic::Blank | Graphic::Voxel(..) => Arc::new(::image::RgbaImage::new(1, 1)),
+            };
+            let native = self.native.as_mut().expect("native renderer state");
+            let id = native.add_image(image);
+            if unsupported {
+                native.mark_unsupported_image(id);
+            }
+            return id;
+        }
+        #[cfg(not(target_os = "trueos"))]
+        unreachable!("GPU renderer always has a graphic cache")
     }
 
     pub fn replace_graphic(&mut self, id: graphic::Id, graphic: Graphic) {
-        self.cache.replace_graphic(id, graphic);
+        if let Some(cache) = self.cache.as_mut() {
+            cache.replace_graphic(id, graphic);
+            return;
+        }
+        #[cfg(target_os = "trueos")]
+        {
+            let unsupported = matches!(&graphic, Graphic::Voxel(..));
+            let image = match graphic {
+                Graphic::Image(image, _) => Arc::new(image.to_rgba8()),
+                Graphic::Blank | Graphic::Voxel(..) => Arc::new(::image::RgbaImage::new(1, 1)),
+            };
+            let native = self.native.as_mut().expect("native renderer state");
+            native.replace_image(id, image);
+            if unsupported {
+                native.mark_unsupported_image(id);
+            }
+        }
     }
 
     fn image_dims(&self, handle: image::Handle) -> (u32, u32) {
-        self
-            .cache
-            .graphic_cache()
-            .get_graphic_dims((handle, Rotation::None))
-            // TODO: don't unwrap
-            .unwrap()
+        if let Some(cache) = self.cache.as_ref() {
+            cache
+                .graphic_cache()
+                .get_graphic_dims((handle, Rotation::None))
+                .unwrap()
+        } else {
+            #[cfg(target_os = "trueos")]
+            {
+                self.native
+                    .as_ref()
+                    .map_or((0, 0), |native| native.dimensions(handle))
+            }
+            #[cfg(not(target_os = "trueos"))]
+            {
+                (0, 0)
+            }
+        }
     }
 
     pub fn resize(
@@ -179,9 +269,43 @@ impl IcedRenderer {
         self.update_resolution_dependents(physical_resolution);
 
         // Resize graphic cache
-        self.cache.resize_graphic_cache(renderer);
+        if let Some(cache) = self.cache.as_mut() {
+            cache.resize_graphic_cache(renderer);
+        }
         // Resize glyph cache
-        self.cache.resize_glyph_cache(renderer).unwrap();
+        if let Some(cache) = self.cache.as_mut() {
+            cache.resize_glyph_cache(renderer).unwrap();
+        }
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub fn resize_native(&mut self, physical_resolution: Vec2<u32>) {
+        self.win_dims = physical_resolution.map(|value| value as f32);
+        self.window_scissor = default_scissor(physical_resolution);
+        self.update_resolution_dependents(physical_resolution);
+        self.native
+            .as_mut()
+            .expect("native renderer state")
+            .resize(physical_resolution.x, physical_resolution.y);
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub fn draw_native(&mut self, primitive: Primitive) -> Result<&[u8], String> {
+        self.native
+            .as_mut()
+            .expect("native renderer state")
+            .rasterize(&primitive)
+    }
+
+    pub(super) fn is_native(&self) -> bool {
+        #[cfg(target_os = "trueos")]
+        {
+            self.native.is_some()
+        }
+        #[cfg(not(target_os = "trueos"))]
+        {
+            false
+        }
     }
 
     pub fn draw(
@@ -227,7 +351,10 @@ impl IcedRenderer {
             .push(DrawCommand::plain(self.start..self.mesh.vertices().len()));*/
 
         // Fill in placeholder glyph quads
-        let (glyph_cache, (cache_tex, _)) = self.cache.glyph_cache_mut_and_tex();
+        let Some(cache) = self.cache.as_mut() else {
+            return;
+        };
+        let (glyph_cache, (cache_tex, _)) = cache.glyph_cache_mut_and_tex();
         let half_res = self.half_res;
 
         let brush_result = glyph_cache.process_queued(
@@ -268,7 +395,7 @@ impl IcedRenderer {
             Ok(brush_action) => {
                 match brush_action {
                     glyph_brush::BrushAction::Draw(verts) => self.last_glyph_verts = verts,
-                    glyph_brush::BrushAction::ReDraw => {},
+                    glyph_brush::BrushAction::ReDraw => {}
                 }
 
                 let glyphs = &self.glyphs;
@@ -299,23 +426,24 @@ impl IcedRenderer {
                             create_ui_quad(rect, *uv, linear_color, UiMode::Text),
                         )
                     });
-            },
+            }
             Err(glyph_brush::BrushError::TextureTooSmall { suggested: (x, y) }) => {
                 tracing::error!(
                     "Texture to small for all glyphs, would need one of the size: ({}, {})",
                     x,
                     y
                 );
-            },
+            }
         }
 
         // Create a larger dynamic model if the mesh is larger than the current model
         // size.
-        if self.model.len() < self.mesh.vertices().len() {
-            self.model = renderer.create_dynamic_model(self.mesh.vertices().len() * 4 / 3);
+        let model = self.model.as_mut().expect("GPU renderer model");
+        if model.len() < self.mesh.vertices().len() {
+            *model = renderer.create_dynamic_model(self.mesh.vertices().len() * 4 / 3);
         }
         // Update model with new mesh.
-        renderer.update_model(&self.model, &self.mesh, 0);
+        renderer.update_model(model, &self.mesh, 0);
     }
 
     // Returns (half_res, align)
@@ -368,6 +496,16 @@ impl IcedRenderer {
         size: u16,
         font: FontId,
     ) -> Vec<glyph_brush::SectionGlyph> {
+        #[cfg(target_os = "trueos")]
+        if self.is_native() {
+            return self.native_position_glyphs(
+                bounds,
+                horizontal_alignment,
+                vertical_alignment,
+                text,
+                size,
+            );
+        }
         use glyph_brush::{GlyphCruncher, HorizontalAlign, VerticalAlign};
         // TODO: add option to align based on the geometry of the rendered glyphs
         // instead of all possible glyphs
@@ -401,8 +539,9 @@ impl IcedRenderer {
             }],
         };
 
-        self
-            .cache
+        self.cache
+            .as_mut()
+            .expect("GPU renderer cache")
             .glyph_cache_mut()
             .glyphs(section)
             // We would still have to generate vertices for these even if they have no pixels
@@ -410,15 +549,89 @@ impl IcedRenderer {
             // that is not visible (to solve this we could use the extra values in
             // queue_pre_positioned to keep track of which glyphs are actually returned by
             // proccess_queued)
-            .filter(|g| {
-                !text[g.byte_index..]
-                    .chars()
-                    .next()
-                    .unwrap()
-                    .is_whitespace()
-            })
+            .filter(|g| !text[g.byte_index..].chars().next().unwrap().is_whitespace())
             .cloned()
             .collect()
+    }
+
+    #[cfg(target_os = "trueos")]
+    fn native_position_glyphs(
+        &self,
+        bounds: iced::Rectangle,
+        horizontal_alignment: iced::HorizontalAlignment,
+        vertical_alignment: iced::VerticalAlignment,
+        text: &str,
+        size: u16,
+    ) -> Vec<glyph_brush::SectionGlyph> {
+        use glyph_brush::ab_glyph::{Glyph, GlyphId, PxScale, point};
+
+        let scale = blit::font_scale(size);
+        let cell_w = (microfont::FWIDTH as u32 * scale) as f32;
+        let cell_h = (microfont::FHEIGHT as u32 * scale) as f32;
+        let max_cols = if bounds.width.is_finite() && bounds.width > 0.0 {
+            (bounds.width / cell_w).floor().max(1.0) as usize
+        } else {
+            usize::MAX
+        };
+        let lines = blit::native_text_lines(text, max_cols);
+        let total_height = lines.len() as f32 * cell_h;
+        let top = match vertical_alignment {
+            iced::VerticalAlignment::Top => bounds.y,
+            iced::VerticalAlignment::Center => bounds.y + (bounds.height - total_height) * 0.5,
+            iced::VerticalAlignment::Bottom => bounds.y + bounds.height - total_height,
+        };
+        let max_lines = if bounds.height.is_finite() && bounds.height >= 0.0 {
+            (bounds.height / cell_h).ceil() as usize
+        } else {
+            usize::MAX
+        };
+        let mut positioned = Vec::new();
+        for (line_index, line) in lines.iter().take(max_lines).enumerate() {
+            let line_width = line.len() as f32 * cell_w;
+            let left = match horizontal_alignment {
+                iced::HorizontalAlignment::Left => bounds.x,
+                iced::HorizontalAlignment::Center => bounds.x + (bounds.width - line_width) * 0.5,
+                iced::HorizontalAlignment::Right => bounds.x + bounds.width - line_width,
+            };
+            for (column, &(ch, byte_index)) in line.iter().enumerate() {
+                positioned.push(glyph_brush::SectionGlyph {
+                    section_index: 0,
+                    byte_index,
+                    glyph: Glyph {
+                        id: GlyphId(microfont::glyph_byte(ch) as u16),
+                        scale: PxScale {
+                            x: cell_h,
+                            y: cell_h,
+                        },
+                        position: point(
+                            left + column as f32 * cell_w,
+                            top + (line_index as f32 + 1.0) * cell_h,
+                        ),
+                    },
+                    font_id: glyph_brush::FontId::default(),
+                });
+            }
+        }
+        positioned
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub(super) fn native_measure_value(&self, text: &str, size: u16) -> f32 {
+        text.chars().count() as f32 * microfont::FWIDTH as f32 * blit::font_scale(size) as f32
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub(super) fn native_measure(&self, text: &str, size: u16, bounds: iced::Size) -> (f32, f32) {
+        let scale = blit::font_scale(size) as f32;
+        let cell_w = microfont::FWIDTH as f32 * scale;
+        let cell_h = microfont::FHEIGHT as f32 * scale;
+        let max_cols = if bounds.width.is_finite() && bounds.width > 0.0 {
+            (bounds.width / cell_w).floor().max(1.0) as usize
+        } else {
+            usize::MAX
+        };
+        let (width, lines) = blit::native_line_metrics(text, max_cols);
+        (width as f32 * cell_w, lines as f32 * cell_h)
     }
 
     fn draw_primitive(
@@ -434,7 +647,7 @@ impl IcedRenderer {
                 primitives
                     .into_iter()
                     .for_each(|p| self.draw_primitive(p, offset, alpha, renderer, pool));
-            },
+            }
             Primitive::Image {
                 handle,
                 bounds,
@@ -455,7 +668,11 @@ impl IcedRenderer {
                     ..bounds
                 });
 
-                let graphic_cache = self.cache.graphic_cache_mut();
+                let graphic_cache = self
+                    .cache
+                    .as_mut()
+                    .expect("GPU renderer cache")
+                    .graphic_cache_mut();
                 let half_res = self.half_res; // Make borrow checker happy by avoiding self in closure
                 let (source_aabr, gl_size) = {
                     // Transform the source rectangle into uv coordinate.
@@ -507,7 +724,7 @@ impl IcedRenderer {
                                     (t / image_h as f32)) */
                                 }
                             })
-                        },
+                        }
                         // No easy way to interpret source_rect for voxels...
                         Some(Graphic::Voxel(..)) => None,
                     }
@@ -553,7 +770,7 @@ impl IcedRenderer {
                         let min = Vec2::new(aabr.min.x as f32, aabr.max.y as f32) / cache_dims;
                         let max = Vec2::new(aabr.max.x as f32, aabr.min.y as f32) / cache_dims;
                         (Aabr { min, max }, scale, tex_id)
-                    },
+                    }
                     None => return,
                 };
 
@@ -561,11 +778,13 @@ impl IcedRenderer {
                 // texture id was being used.
                 self.switch_state(State::Image(tex_id));
 
-                self.mesh
-                    .push_quad(create_ui_quad(gl_aabr, uv_aabr, color, UiMode::Image {
-                        scale,
-                    }));
-            },
+                self.mesh.push_quad(create_ui_quad(
+                    gl_aabr,
+                    uv_aabr,
+                    color,
+                    UiMode::Image { scale },
+                ));
+            }
             Primitive::Gradient {
                 bounds,
                 top_linear_color,
@@ -596,7 +815,7 @@ impl IcedRenderer {
                     bottom_linear_color,
                     UiMode::Geometry,
                 ));
-            },
+            }
 
             Primitive::Rectangle {
                 bounds,
@@ -625,7 +844,7 @@ impl IcedRenderer {
                     linear_color,
                     UiMode::Geometry,
                 ));
-            },
+            }
             Primitive::Text {
                 glyphs,
                 bounds: _, // iced::Rectangle
@@ -636,7 +855,11 @@ impl IcedRenderer {
 
                 // TODO: makes sure we are not doing all this work for hidden text
                 // e.g. in chat
-                let glyph_cache = self.cache.glyph_cache_mut();
+                let glyph_cache = self
+                    .cache
+                    .as_mut()
+                    .expect("GPU renderer cache")
+                    .glyph_cache_mut();
 
                 // Count glyphs
                 let glyph_count = glyphs.len();
@@ -687,7 +910,7 @@ impl IcedRenderer {
                         UiMode::Text,
                     ));
                 }
-            },
+            }
             Primitive::Clip {
                 bounds,
                 offset: clip_offset,
@@ -724,7 +947,7 @@ impl IcedRenderer {
                     State::Plain => DrawCommand::plain(self.start..self.mesh.vertices().len()),
                     State::Image(id) => {
                         DrawCommand::image(self.start..self.mesh.vertices().len(), id)
-                    },
+                    }
                 });
                 self.start = self.mesh.vertices().len();
 
@@ -743,17 +966,17 @@ impl IcedRenderer {
                     State::Plain => DrawCommand::plain(self.start..self.mesh.vertices().len()),
                     State::Image(id) => {
                         DrawCommand::image(self.start..self.mesh.vertices().len(), id)
-                    },
+                    }
                 });
                 self.start = self.mesh.vertices().len();
 
                 self.draw_commands
                     .push(DrawCommand::Scissor(self.window_scissor));
-            },
+            }
             Primitive::Opacity { alpha: a, content } => {
                 self.draw_primitive(*content, offset, alpha * a, renderer, pool);
-            },
-            Primitive::Nothing => {},
+            }
+            Primitive::Nothing => {}
         }
     }
 
@@ -774,25 +997,37 @@ impl IcedRenderer {
 
     pub fn render<'a>(&'a self, drawer: &mut UiDrawer<'_, 'a>) {
         span!(_guard, "render", "IcedRenderer::render");
-        let mut drawer = drawer.prepare(&self.interface_locals, &self.model, self.window_scissor);
+        let interface_locals = self
+            .interface_locals
+            .as_ref()
+            .expect("GPU renderer interface locals");
+        let model = self.model.as_ref().expect("GPU renderer model");
+        let mut drawer = drawer.prepare(interface_locals, model, self.window_scissor);
         for draw_command in self.draw_commands.iter() {
             match draw_command {
                 DrawCommand::Scissor(new_scissor) => {
                     drawer.set_scissor(*new_scissor);
-                },
+                }
                 DrawCommand::WorldPos(index) => {
-                    drawer.set_locals(
-                        index.map_or(&self.interface_locals, |i| &self.ingame_locals[i]),
-                    );
-                },
+                    drawer.set_locals(index.map_or(interface_locals, |i| &self.ingame_locals[i]));
+                }
                 DrawCommand::Draw { kind, verts } => {
                     // TODO: don't make these: assert!(!verts.is_empty());
                     let tex = match kind {
-                        DrawKind::Image(tex_id) => self.cache.graphic_cache().get_tex(*tex_id),
-                        DrawKind::Plain => self.cache.glyph_cache_tex(),
+                        DrawKind::Image(tex_id) => self
+                            .cache
+                            .as_ref()
+                            .expect("GPU renderer cache")
+                            .graphic_cache()
+                            .get_tex(*tex_id),
+                        DrawKind::Plain => self
+                            .cache
+                            .as_ref()
+                            .expect("GPU renderer cache")
+                            .glyph_cache_tex(),
                     };
                     drawer.draw(tex.1, verts.clone()); // Note: trivial clone
-                },
+                }
             }
         }
     }
@@ -847,16 +1082,19 @@ impl iced::Renderer for IcedRenderer {
         span!(_guard, "overlay", "IcedRenderer::overlay");
         (
             Primitive::Group {
-                primitives: vec![base_primitive, Primitive::Clip {
-                    bounds: iced::Rectangle {
-                        // TODO: do we need this + 0.5?
-                        width: overlay_bounds.width + 0.5,
-                        height: overlay_bounds.height + 0.5,
-                        ..overlay_bounds
+                primitives: vec![
+                    base_primitive,
+                    Primitive::Clip {
+                        bounds: iced::Rectangle {
+                            // TODO: do we need this + 0.5?
+                            width: overlay_bounds.width + 0.5,
+                            height: overlay_bounds.height + 0.5,
+                            ..overlay_bounds
+                        },
+                        offset: Vec2::new(0, 0),
+                        content: Box::new(overlay_primitive),
                     },
-                    offset: Vec2::new(0, 0),
-                    content: Box::new(overlay_primitive),
-                }],
+                ],
             },
             base_interaction.max(overlay_interaction),
         )

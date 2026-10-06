@@ -2,10 +2,10 @@ mod connecting;
 // Note: Keeping in case we re-add the disclaimer
 //mod disclaimer;
 mod credits;
-mod login;
-mod logo_glow;
 #[path = "IGAccCreate.rs"]
 mod ig_acc_create;
+mod login;
+mod logo_glow;
 mod servers;
 
 use crate::{
@@ -25,8 +25,8 @@ use iced::{Column, Container, Length, text_input};
 //ImageFrame, Tooltip,
 use crate::settings::Settings;
 use common::assets::{AssetExt, Image, Ron};
-use rand::{rng, seq::IndexedRandom};
 use core::time::Duration;
+use rand::{rng, seq::IndexedRandom};
 use tracing::warn;
 
 use super::DetailedInitializationStage;
@@ -291,11 +291,7 @@ impl Controls {
         }
     }
 
-    fn view(
-        &mut self,
-        settings: &Settings,
-        dt: f32,
-    ) -> Element<'_, Message> {
+    fn view(&mut self, settings: &Settings, dt: f32) -> Element<'_, Message> {
         self.time += dt as f64;
 
         // TODO: consider setting this as the default in the renderer
@@ -320,7 +316,7 @@ impl Controls {
             //Screen::Disclaimer { screen } => screen.view(&self.fonts, &self.i18n, button_style),
             Screen::Credits { screen } => {
                 screen.view(&self.fonts, &self.i18n.read(), &self.credits, button_style)
-            },
+            }
             Screen::Login { screen, error } => screen.view(
                 &self.fonts,
                 &self.imgs,
@@ -387,7 +383,7 @@ impl Controls {
                     screen: Box::default(),
                     error: None,
                 };
-            },
+            }
             Message::ShowAccount => {
                 self.show = Showing::Account;
                 if let Screen::Login { screen, error } = &mut self.screen {
@@ -395,7 +391,7 @@ impl Controls {
                     screen.account_created = false;
                     screen.account.focus(0);
                 }
-            },
+            }
             Message::AccountBack => self.show = Showing::Login,
             Message::AccountField(idx, value) => {
                 if self.show == Showing::Account {
@@ -403,26 +399,29 @@ impl Controls {
                         screen.account.field(idx, value);
                     }
                 }
-            },
+            }
             Message::AccountFocus(idx) => {
                 if let Screen::Login { screen, .. } = &mut self.screen {
                     screen.account.focus(idx);
                 }
-            },
+            }
             Message::CreateAccount => {
                 if self.show == Showing::Account {
                     if let Screen::Login { screen, error } = &mut self.screen {
                         *error = screen.account.submit(runtime, &self.i18n.read());
                     }
                 }
-            },
+            }
             Message::AccountLink(path) => {
                 if let Err(err) = open::that(format!("https://veloren.net/account/{path}/")) {
                     if let Screen::Login { error, .. } = &mut self.screen {
-                        *error = Some(format!("{}: {err}", self.i18n.read().get_msg("main-account-open_failed")));
+                        *error = Some(format!(
+                            "{}: {err}",
+                            self.i18n.read().get_msg("main-account-open_failed")
+                        ));
                     }
                 }
-            },
+            }
             Message::ShowServers => {
                 if matches!(&self.screen, Screen::Login { .. }) {
                     self.selected_server_index =
@@ -431,12 +430,12 @@ impl Controls {
                         screen: servers::Screen::new(),
                     };
                 }
-            },
+            }
             Message::ShowCredits => {
                 self.screen = Screen::Credits {
                     screen: credits::Screen::new(),
                 };
-            },
+            }
             Message::Multiplayer => {
                 self.screen = Screen::Connecting {
                     screen: connecting::Screen::new(ui),
@@ -449,31 +448,31 @@ impl Controls {
                     password: self.login_info.password.clone(),
                     server_address: self.login_info.server.trim().to_string(),
                 });
-            },
+            }
             Message::UnlockServerField => self.server_field_locked = false,
             Message::Username(new_value) => self.login_info.username = new_value,
             Message::LanguageChanged(new_value) => {
                 events.push(Event::ChangeLanguage(language_metadatas.remove(new_value)));
-            },
+            }
             Message::OpenLanguageMenu => self.show.toggle(Showing::Languages),
             Message::Password(new_value) => self.login_info.password = new_value,
             Message::Server(new_value) => {
                 self.login_info.server = new_value;
-            },
+            }
             Message::ServerChanged(new_value) => {
                 self.selected_server_index = Some(new_value);
                 self.login_info.server.clone_from(&servers[new_value]);
-            },
+            }
             Message::FocusPassword => {
                 if let Screen::Login { screen, .. } = &mut self.screen {
                     screen.banner.password = text_input::State::focused();
                     screen.banner.username = text_input::State::new();
                 }
-            },
+            }
             Message::CancelConnect => {
                 self.exit_connect_screen();
                 events.push(Event::CancelLoginAttempt);
-            },
+            }
             msg @ Message::TrustPromptAdd | msg @ Message::TrustPromptCancel => {
                 if let Screen::Connecting {
                     connection_state, ..
@@ -486,7 +485,7 @@ impl Controls {
                     *connection_state = ConnectionState::InProgress;
                     events.push(Event::AuthServerTrust(auth_server, added));
                 }
-            },
+            }
             Message::CloseError => {
                 if let Screen::Login { screen, error } = &mut self.screen {
                     *error = None;
@@ -497,13 +496,13 @@ impl Controls {
                         screen.banner.password = text_input::State::focused();
                     }
                 }
-            },
+            }
             Message::DeleteServer => {
                 if let Some(server_index) = self.selected_server_index {
                     events.push(Event::DeleteServer { server_index });
                     self.selected_server_index = None;
                 }
-            },
+            }
             /* Note: Keeping in case we re-add the disclaimer */
             /*Message::AcceptDisclaimer => {
                 if let Screen::Disclaimer { .. } = &self.screen {
@@ -640,7 +639,66 @@ impl MainMenuUi {
         }
     }
 
-    pub fn bg_img_spec(&self) -> &'static str { self.bg_img_spec }
+    #[cfg(target_os = "trueos")]
+    pub fn new_native(
+        settings: &Settings,
+        i18n: LocalizationHandle,
+        server: Option<String>,
+        resolution: vek::Vec2<u32>,
+        scale_factor: f64,
+    ) -> Self {
+        let mut ui = Ui::new_native(resolution, scale_factor);
+        let fonts = Fonts::load(i18n.read().fonts(), &mut ui).expect("Impossible to load fonts");
+        let bg_img_spec = rand_bg_image_spec();
+        let bg_img = Image::load_expect(bg_img_spec).read().to_image();
+        let logo_glow = logo_glow::LogoGlow::new(&mut ui);
+        let imgs = Imgs::load(&mut ui).expect("Failed to load images");
+        let bg = ui.add_graphic(Graphic::Image(bg_img, None));
+        let controls = Controls::new(fonts, imgs, bg, i18n, settings, server, logo_glow);
+        Self {
+            ui,
+            controls,
+            bg_img_spec,
+        }
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub fn maintain_native(
+        &mut self,
+        settings: &Settings,
+        runtime: &alloc::sync::Arc<tokio::runtime::Runtime>,
+        clipboard: &mut ui::ice::Clipboard,
+        resolution: vek::Vec2<u32>,
+        dt: Duration,
+    ) -> Result<(Vec<Event>, Vec<u8>), String> {
+        self.poll_account();
+        let (messages, pixels) = self.ui.maintain_native(
+            self.controls.view(settings, dt.as_secs_f32()),
+            resolution,
+            clipboard,
+        )?;
+        let mut events = Vec::new();
+        for message in messages {
+            self.controls
+                .update(message, &mut events, settings, &mut self.ui, runtime);
+        }
+        self.update_clipboard(clipboard);
+        Ok((events, pixels))
+    }
+
+    /// Exercise the shipped loading screen without creating a client/world.
+    #[cfg(target_os = "trueos")]
+    pub fn show_loading_proof(&mut self) {
+        self.controls.screen = Screen::Connecting {
+            screen: connecting::Screen::new(&mut self.ui),
+            connection_state: ConnectionState::InProgress,
+            init_stage: DetailedInitializationStage::StartingMultiplayer,
+        };
+    }
+
+    pub fn bg_img_spec(&self) -> &'static str {
+        self.bg_img_spec
+    }
 
     pub fn update_language(&mut self, i18n: LocalizationHandle, settings: &Settings) {
         self.controls.i18n = i18n;
@@ -659,16 +717,22 @@ impl MainMenuUi {
         self.controls.auth_trust_prompt(auth_server);
     }
 
-    pub fn show_info(&mut self, msg: String) { self.controls.connection_error(msg); }
+    pub fn show_info(&mut self, msg: String) {
+        self.controls.connection_error(msg);
+    }
 
     pub fn update_stage(&mut self, stage: DetailedInitializationStage) {
         tracing::trace!(?stage, "Updating stage");
         self.controls.update_init_stage(stage);
     }
 
-    pub fn connected(&mut self) { self.controls.exit_connect_screen(); }
+    pub fn connected(&mut self) {
+        self.controls.exit_connect_screen();
+    }
 
-    pub fn cancel_connection(&mut self) { self.controls.exit_connect_screen(); }
+    pub fn cancel_connection(&mut self) {
+        self.controls.exit_connect_screen();
+    }
 
     pub fn handle_event(&mut self, event: window::Event) -> bool {
         match event {
@@ -676,11 +740,11 @@ impl MainMenuUi {
             window::Event::IcedUi(event) => {
                 self.handle_ui_event(event);
                 true
-            },
+            }
             window::Event::ScaleFactorChanged(s) => {
                 self.ui.scale_factor_changed(s);
                 false
-            },
+            }
             _ => false,
         }
     }
@@ -708,6 +772,30 @@ impl MainMenuUi {
     pub fn maintain(&mut self, global_state: &mut GlobalState, dt: Duration) -> Vec<Event> {
         let mut events = Vec::new();
 
+        self.poll_account();
+
+        let (messages, _) = self.ui.maintain(
+            self.controls.view(&global_state.settings, dt.as_secs_f32()),
+            global_state.window.renderer_mut(),
+            None,
+            &mut global_state.clipboard,
+        );
+
+        messages.into_iter().for_each(|message| {
+            self.controls.update(
+                message,
+                &mut events,
+                &global_state.settings,
+                &mut self.ui,
+                &global_state.tokio_runtime,
+            )
+        });
+
+        self.update_clipboard(&mut global_state.clipboard);
+        events
+    }
+
+    fn poll_account(&mut self) {
         if let Screen::Login { screen, error } = &mut self.controls.screen {
             if let Some(result) = screen.account.poll() {
                 let i18n = self.controls.i18n.read();
@@ -717,50 +805,42 @@ impl MainMenuUi {
                         self.controls.login_info.username = username;
                         self.controls.login_info.password.clear();
                         i18n.get_msg("main-account-created").into_owned()
-                    },
-                    Err(response) => format!("{}\n{}", i18n.get_msg("main-account-failed"), response),
+                    }
+                    Err(response) => {
+                        format!("{}\n{}", i18n.get_msg("main-account-failed"), response)
+                    }
                 });
                 self.controls.show = Showing::Account;
             }
         }
+    }
 
-        let (messages, _) = self.ui.maintain(
-            self.controls.view(
-                &global_state.settings,
-                dt.as_secs_f32(),
-            ),
-            global_state.window.renderer_mut(),
-            None,
-            &mut global_state.clipboard,
-        );
-
-        messages.into_iter().for_each(|message| {
-            self.controls
-                .update(
-                    message,
-                    &mut events,
-                    &global_state.settings,
-                    &mut self.ui,
-                    &global_state.tokio_runtime,
-                )
-        });
-
+    fn update_clipboard(&mut self, clipboard: &mut ui::ice::Clipboard) {
         if let Screen::Login { screen, .. } = &self.controls.screen {
             if self.controls.show == Showing::Login {
                 if screen.banner.password.is_focused() {
-                    global_state.clipboard.focus(crate::clipboard::Kind::Password);
+                    clipboard.focus(crate::clipboard::Kind::Password);
                 } else if screen.banner.username.is_focused() || screen.banner.server.is_focused() {
-                    global_state.clipboard.focus(crate::clipboard::Kind::Text);
-                } else { global_state.clipboard.blur(); }
+                    clipboard.focus(crate::clipboard::Kind::Text);
+                } else {
+                    clipboard.blur();
+                }
             }
-        } else { global_state.clipboard.blur(); }
-        if let Some(message) = global_state.clipboard.take_message() {
-            if let Screen::Login { error, .. } = &mut self.controls.screen { *error = Some(message); }
+        } else {
+            clipboard.blur();
         }
-        events
+        if let Some(message) = clipboard.take_message() {
+            if let Screen::Login { error, .. } = &mut self.controls.screen {
+                *error = Some(message);
+            }
+        }
     }
 
-    pub fn render<'a>(&'a self, drawer: &mut UiDrawer<'_, 'a>) { self.ui.render(drawer); }
+    pub fn render<'a>(&'a self, drawer: &mut UiDrawer<'_, 'a>) {
+        self.ui.render(drawer);
+    }
 }
 
-pub fn rand_bg_image_spec() -> &'static str { BG_IMGS.choose(&mut rng()).unwrap() }
+pub fn rand_bg_image_spec() -> &'static str {
+    BG_IMGS.choose(&mut rng()).unwrap()
+}

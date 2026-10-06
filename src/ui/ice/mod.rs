@@ -66,6 +66,35 @@ impl IcedUi {
         })
     }
 
+    /// Native menu renderer: one logical pixel per surface pixel.
+    #[cfg(target_os = "trueos")]
+    pub fn new_native(resolution: Vec2<u32>, scale_factor: f64) -> Self {
+        Self {
+            renderer: IcedRenderer::new_native(resolution),
+            cache: Some(Cache::new()),
+            events: Vec::new(),
+            cursor_position: Vec2::zero(),
+            scale: Scale::new(resolution, scale_factor, ScaleMode::Absolute(1.0), 1.0),
+            scale_changed: false,
+        }
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub fn maintain_native<'a, M, E: Into<Element<'a, M>>>(
+        &mut self,
+        root: E,
+        resolution: Vec2<u32>,
+        clipboard: &mut Clipboard,
+    ) -> Result<(Vec<M>, Vec<u8>), String> {
+        if self.scale.surface_resized(resolution) || self.scale_changed {
+            self.scale_changed = false;
+            self.renderer.resize_native(resolution);
+        }
+        let (messages, primitive, _) = self.update_interface(root, clipboard);
+        let pixels = self.renderer.draw_native(primitive)?.to_vec();
+        Ok((messages, pixels))
+    }
+
     /// Add a new font that is referncable via the returned Id
     pub fn add_font(&mut self, font: RawFont) -> FontId {
         self.renderer.add_font(font)
@@ -176,6 +205,16 @@ impl IcedUi {
             }
         }
 
+        let (messages, primitive, interaction) = self.update_interface(root, clipboard);
+        self.renderer.draw(primitive, renderer, pool);
+        (messages, interaction)
+    }
+
+    fn update_interface<'a, M, E: Into<Element<'a, M>>>(
+        &mut self,
+        root: E,
+        clipboard: &mut Clipboard,
+    ) -> (Vec<M>, renderer::primitive::Primitive, mouse::Interaction) {
         let cursor_position = iced::Point {
             x: self.cursor_position.x,
             y: self.cursor_position.y,
@@ -224,9 +263,7 @@ impl IcedUi {
 
         self.cache = Some(user_interface.into_cache());
 
-        self.renderer.draw(primitive, renderer, pool);
-
-        (messages, mouse_interaction)
+        (messages, primitive, mouse_interaction)
     }
 
     pub fn render<'a>(&'a self, drawer: &mut UiDrawer<'_, 'a>) {

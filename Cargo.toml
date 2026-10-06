@@ -67,6 +67,7 @@ hyper-util = { version = "0.1.20", features = ["client-legacy", "http1", "tokio"
 i18n = { package = "veloren-client-i18n", path = "common/client-i18n" }
 i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
 image = { version = "^0.25", default-features = false, features = [] }
+microfont = { path = "../TRUEOS/vendor/microfont" }
 inline_tweak = { version = "^1.0.8" }
 itertools = { version = "^0.14" }
 kira = { version = "^0.12", optional = true, default-features = false, features = ["cpal", "symphonia", "ogg", "vorbis"] }

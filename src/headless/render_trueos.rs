@@ -46,7 +46,7 @@ impl Renderer {
             include_str!("render_textured.wgsl"),
             SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64,
         );
-        let context = trueos_wgpu::Context::open_with_package(package)
+        let context = trueos::async_fs::block_on(trueos_wgpu::Context::request_with_package(package))
             .map_err(|e| Error::Gpu(e.to_string()))?;
         let gpu = Gpu::new(
             context.device().clone(),

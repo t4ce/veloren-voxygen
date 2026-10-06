@@ -7,14 +7,14 @@ use crate::{
     render::{Renderer, Texture, UiTextureBindGroup, UiUploadBatchId},
     ui::KeyedJobs,
 };
+use alloc::{borrow::Cow, sync::Arc};
 use common::{figure::Segment, slowjob::SlowJobPool};
 use common_base::prof_span;
+use core::hash::Hash;
 use guillotiere::{SimpleAtlasAllocator, size2};
 use hashbrown::{HashMap, hash_map::Entry};
 use image::{DynamicImage, RgbaImage};
 use slab::Slab;
-use alloc::{borrow::Cow, sync::Arc};
-use core::hash::Hash;
 use tracing::{error, warn};
 use vek::*;
 
@@ -66,6 +66,13 @@ const GRAPHIC_CACHE_RELATIVE_SIZE: u32 = 1;
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 pub struct Id(u32);
 
+impl Id {
+    /// Construct a stable graphic handle for the CPU-backed TRUEOS UI adapter.
+    pub(crate) const fn from_index(index: u32) -> Self {
+        Self(index)
+    }
+}
+
 // TODO these can become invalid when clearing the cache
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
 pub struct TexId(usize);
@@ -103,16 +110,20 @@ impl CachedDetails {
                 aabr,
             } => (atlases[atlas_idx].1, valid, aabr),
             CachedDetails::Texture { index, valid } => {
-                (index, valid, Aabr {
-                    min: Vec2::zero(),
-                    // NOTE (as cast): We don't accept images larger than u16::MAX (rejected in
-                    // `cache_res`) (and probably would not be able to create a texture this
-                    // large).
-                    //
-                    // Note texture should always match the cached dimensions.
-                    max: textures[index].0.get_dimensions().xy().map(|e| e as u16),
-                })
-            },
+                (
+                    index,
+                    valid,
+                    Aabr {
+                        min: Vec2::zero(),
+                        // NOTE (as cast): We don't accept images larger than u16::MAX (rejected in
+                        // `cache_res`) (and probably would not be able to create a texture this
+                        // large).
+                        //
+                        // Note texture should always match the cached dimensions.
+                        max: textures[index].0.get_dimensions().xy().map(|e| e as u16),
+                    },
+                )
+            }
         }
     }
 
@@ -121,10 +132,10 @@ impl CachedDetails {
         match self {
             Self::Atlas { valid, .. } => {
                 *valid = false;
-            },
+            }
             Self::Texture { valid, .. } => {
                 *valid = false;
-            },
+            }
         }
     }
 
@@ -132,10 +143,10 @@ impl CachedDetails {
         match self {
             Self::Atlas { valid, .. } => {
                 *valid = true;
-            },
+            }
             Self::Texture { valid, .. } => {
                 *valid = true;
-            },
+            }
         }
     }
 }
@@ -208,14 +219,14 @@ impl TextureRequirements {
                         // TODO: reasonable to return None on this error case? We could potentially
                         // validate images sizes on add_graphic/replace_graphic?
                         return None;
-                    },
+                    }
                 };
 
                 Some(Self::Fixed {
                     size: image_dims,
                     border_color: *border_color,
                 })
-            },
+            }
             Graphic::Voxel(_, _, _) => Some(Self::Dependent),
             Graphic::Blank => None,
         }
@@ -303,12 +314,12 @@ impl GraphicCache {
                 let slot_mut = o.into_mut();
                 let old = core::mem::replace(slot_mut, graphic);
                 (old, slot_mut)
-            },
+            }
             Entry::Vacant(v) => {
                 // This was not an update, so no need to cleanup caches.
                 v.insert(graphic);
                 return;
-            },
+            }
         };
 
         let old_requirements = TextureRequirements::from_graphic(&old);
@@ -339,10 +350,10 @@ impl GraphicCache {
                         // resized version into the atlas). This is expected to not occur in all
                         // pratical cases we plan to support here (i.e. the size of the replacement
                         // image will always be the same).
-                        CachedDetails::Atlas { .. } => {},
+                        CachedDetails::Atlas { .. } => {}
                         CachedDetails::Texture { index, .. } => {
                             self.textures.remove(*index);
-                        },
+                        }
                     };
                     true
                 } else {
@@ -352,7 +363,9 @@ impl GraphicCache {
         }
     }
 
-    pub fn get_graphic(&self, id: Id) -> Option<&Graphic> { self.graphic_map.get(&id) }
+    pub fn get_graphic(&self, id: Id) -> Option<&Graphic> {
+        self.graphic_map.get(&id)
+    }
 
     /// Used to acquire textures for rendering
     pub fn get_tex(&self, id: TexId) -> (&Texture, &UiTextureBindGroup) {
@@ -372,7 +385,7 @@ impl GraphicCache {
                     // (and they can be rasterized at arbitrary resolution)
                     // (might need to return None here?)
                     Some((size.x, size.z))
-                },
+                }
                 Graphic::Blank => None,
             })
             .and_then(|(w, h)| match rot {
@@ -479,7 +492,7 @@ impl GraphicCache {
                     "A graphic was requested via an id which is not in use"
                 );
                 return None;
-            },
+            }
         };
 
         let requirements = TextureRequirements::from_graphic(graphic)?;
@@ -519,7 +532,7 @@ impl GraphicCache {
                     transformed_aabr_and_scale(aabr.map(|e| e as f64)),
                     TexId(idx),
                 ));
-            },
+            }
             Entry::Vacant(details) => details,
         };
 
@@ -591,7 +604,7 @@ impl GraphicCache {
                         valid: true,
                         aabr,
                     }
-                },
+                }
             }
         } else {
             // Create a texture just for this
@@ -664,11 +677,11 @@ fn prepare_graphic<'graphic>(
                     // NOTE: to_mut will clone the image if it was Cow::Borrowed
                     premultiply_alpha(rgba_cow.to_mut());
                     false
-                },
+                }
             };
 
             Some((rgba_cow, needs_gpu_premultiply))
-        },
+        }
         Graphic::Voxel(segment, trans, sample_strat) => keyed_jobs
             .spawn(pool, cache_key, || {
                 let segment = Arc::clone(segment);

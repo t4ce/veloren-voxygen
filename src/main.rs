@@ -57,7 +57,7 @@ fn main() {
                     println!("{backend}");
                 }
                 return;
-            },
+            }
             cli::Commands::ListWgpuDevices => {
                 let runtime = tokio::runtime::Runtime::new().unwrap();
                 let instance = Instance::new(
@@ -68,10 +68,9 @@ fn main() {
                     println!("{}", adapter.get_info().name);
                 }
                 return;
-            },
+            }
         }
     }
-
 
     let userdata_dir = common_base::userdata_dir();
 
@@ -122,8 +121,8 @@ fn main() {
     panic_handler::set_panic_hook(log_filename, logs_dir);
 
     // Setup tokio runtime
-    use common::consts::MIN_RECOMMENDED_TOKIO_THREADS;
     use alloc::sync::Arc;
+    use common::consts::MIN_RECOMMENDED_TOKIO_THREADS;
     use core::{sync::atomic::AtomicUsize, sync::atomic::Ordering};
     use tokio::runtime::Builder;
 
@@ -180,10 +179,22 @@ fn main() {
         });
     i18n.set_english_fallback(settings.language.use_english_fallback);
 
-    // Create window
-    use veloren_voxygen::{error::Error, render::RenderError};
-    let event_loop = veloren_voxygen::window::EventLoop::new().unwrap();
-    run::run(event_loop, move |event_loop| {
+    #[cfg(target_os = "trueos")]
+    {
+        if let Err(error) =
+            veloren_voxygen::menu::native::run(settings, i18n, tokio_runtime, config_dir, args)
+        {
+            panic!("Native menu failed: {error}");
+        }
+        return;
+    }
+
+    #[cfg(not(target_os = "trueos"))]
+    {
+        // Create window
+        use veloren_voxygen::{error::Error, render::RenderError};
+        let event_loop = veloren_voxygen::window::EventLoop::new().unwrap();
+        run::run(event_loop, move |event_loop| {
         let mut window = match Window::new(&settings, &tokio_runtime, event_loop) {
             Ok(ok) => ok,
             // Custom panic message when a graphics backend could not be found
@@ -235,6 +246,7 @@ fn main() {
         global_state
     })
     .unwrap();
+    }
 }
 
 #[cfg(feature = "headless")]

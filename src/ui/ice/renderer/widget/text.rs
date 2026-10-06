@@ -6,9 +6,15 @@ impl text::Renderer for IcedRenderer {
     type Font = FontId;
 
     // TODO: expose as setting
-    fn default_size(&self) -> u16 { 20 }
+    fn default_size(&self) -> u16 {
+        20
+    }
 
     fn measure(&self, content: &str, size: u16, font: Self::Font, bounds: Size) -> (f32, f32) {
+        #[cfg(target_os = "trueos")]
+        if self.is_native() {
+            return self.native_measure(content, size, bounds);
+        }
         // Using the physical scale might make these cached info usable below?
         // Although we also have a position of the screen so this could be useless
         let p_scale = self.p_scale;
@@ -25,7 +31,12 @@ impl text::Renderer for IcedRenderer {
             }],
         };
 
-        let maybe_rect = self.cache.glyph_calculator().glyph_bounds(section);
+        let maybe_rect = self
+            .cache
+            .as_ref()
+            .expect("GPU renderer cache")
+            .glyph_calculator()
+            .glyph_bounds(section);
         maybe_rect.map_or((0.0, 0.0), |rect| {
             (rect.width() / p_scale, rect.height() / p_scale)
         })
