@@ -15,12 +15,11 @@ use super::{
     Renderer, ShadowMap, ShadowMapRenderer,
     rain_occlusion_map::{RainOcclusionMap, RainOcclusionMapRenderer},
 };
+use alloc::sync::Arc;
 use common_base::prof_span;
 use core::ops::Range;
-use alloc::sync::Arc;
 use vek::Aabr;
 use wgpu_profiler::{OwningScope, Scope};
-
 
 /// Gpu timing label prefix associated with the UI alpha premultiplication pass.
 pub const UI_PREMULTIPLY_PASS: &str = "ui_premultiply_pass";
@@ -146,16 +145,15 @@ struct RendererBorrow<'frame> {
     queue: &'frame wgpu::Queue,
     #[allow(unused)]
     device: &'frame wgpu::Device,
-    
+
     shadow: Option<&'frame super::Shadow>,
     pipelines: Pipelines<'frame>,
-    locals: &'frame super::locals::Locals,
-    views: &'frame super::Views,
+    locals: Option<&'frame super::locals::Locals>,
+    views: Option<&'frame super::Views>,
     pipeline_modes: &'frame super::PipelineModes,
     quad_index_buffer_u16: &'frame Buffer<u16>,
     quad_index_buffer_u32: &'frame Buffer<u32>,
     ui_premultiply_uploads: &'frame mut ui::BatchedUploads,
-    
 }
 
 pub struct Drawer<'frame> {
@@ -197,16 +195,15 @@ impl<'frame> Drawer<'frame> {
         let borrow = RendererBorrow {
             queue: &renderer.queue,
             device: &renderer.device,
-            
+
             shadow,
             pipelines,
-            locals: &renderer.locals,
-            views: &renderer.views,
+            locals: renderer.scene.as_ref().map(|scene| &scene.locals),
+            views: renderer.scene.as_ref().map(|scene| &scene.views),
             pipeline_modes: &renderer.pipeline_modes,
             quad_index_buffer_u16: &renderer.quad_index_buffer_u16,
             quad_index_buffer_u32: &renderer.quad_index_buffer_u32,
             ui_premultiply_uploads: &mut renderer.ui_premultiply_uploads,
-            
         };
 
         let encoder = ManualScope::start("frame", &mut renderer.profiler, encoder);
@@ -311,6 +308,7 @@ impl<'frame> Drawer<'frame> {
 
     /// Returns None if all the pipelines are not available
     pub fn first_pass(&mut self) -> Option<FirstPassDrawer<'_>> {
+        let views = self.borrow.views?;
         let pipelines = self.borrow.pipelines.all()?;
         // Note: this becomes Some once pipeline creation is complete even if shadows
         // are not enabled
@@ -322,7 +320,7 @@ impl<'frame> Drawer<'frame> {
                 label: Some("first pass"),
                 color_attachments: &[
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &self.borrow.views.tgt_color,
+                        view: &views.tgt_color,
                         depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
@@ -331,7 +329,7 @@ impl<'frame> Drawer<'frame> {
                         },
                     }),
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &self.borrow.views.tgt_mat,
+                        view: &views.tgt_mat,
                         depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
@@ -341,7 +339,7 @@ impl<'frame> Drawer<'frame> {
                     }),
                 ],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.borrow.views.tgt_depth,
+                    view: &views.tgt_depth,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(0.0),
                         store: wgpu::StoreOp::Store,
@@ -367,6 +365,8 @@ impl<'frame> Drawer<'frame> {
 
     /// Returns None if the volumetrics pipeline is not available
     pub fn volumetric_pass(&mut self) -> Option<VolumetricPassDrawer<'_>> {
+        let views = self.borrow.views?;
+        self.borrow.locals?;
         let pipelines = &self.borrow.pipelines.all()?;
         let shadow = self.borrow.shadow?;
 
@@ -375,7 +375,7 @@ impl<'frame> Drawer<'frame> {
             wgpu::RenderPassDescriptor {
                 label: Some("volumetric pass (clouds)"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.borrow.views.tgt_color_pp,
+                    view: &views.tgt_color_pp,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -402,6 +402,7 @@ impl<'frame> Drawer<'frame> {
 
     /// Returns None if the trail pipeline is not available
     pub fn transparent_pass(&mut self) -> Option<TransparentPassDrawer<'_>> {
+        let views = self.borrow.views?;
         let pipelines = &self.borrow.pipelines.all()?;
         let shadow = self.borrow.shadow?;
 
@@ -410,7 +411,7 @@ impl<'frame> Drawer<'frame> {
             wgpu::RenderPassDescriptor {
                 label: Some("transparent pass (trails)"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.borrow.views.tgt_color_pp,
+                    view: &views.tgt_color_pp,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -419,7 +420,7 @@ impl<'frame> Drawer<'frame> {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.borrow.views.tgt_depth,
+                    view: &views.tgt_depth,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
@@ -446,8 +447,9 @@ impl<'frame> Drawer<'frame> {
     /// does nothing if the ingame pipelines are not yet ready
     /// does nothing if bloom is disabled
     pub fn run_bloom_passes(&mut self) {
-        let locals = &self.borrow.locals;
-        let views = &self.borrow.views;
+        let (Some(locals), Some(views)) = (self.borrow.locals, self.borrow.views) else {
+            return;
+        };
 
         let bloom_pipelines = match self.borrow.pipelines.all() {
             Some(super::Pipelines { bloom: Some(p), .. }) => p,
@@ -625,8 +627,6 @@ impl<'frame> Drawer<'frame> {
             borrow: &self.borrow,
         }
     }
-
-    
 
     /// Does nothing if the shadow pipelines are not available or shadow map
     /// rendering is disabled
@@ -1319,8 +1319,16 @@ impl VolumetricPassDrawer<'_> {
     pub fn draw_clouds(&mut self) {
         self.render_pass
             .set_pipeline(&self.clouds_pipeline.pipeline);
-        self.render_pass
-            .set_bind_group(2, &self.borrow.locals.clouds_bind.bind_group, &[]);
+        self.render_pass.set_bind_group(
+            2,
+            &self
+                .borrow
+                .locals
+                .expect("volumetric pass has scene locals")
+                .clouds_bind
+                .bind_group,
+            &[],
+        );
         self.render_pass.draw(0..3, 0..1);
     }
 }
@@ -1371,6 +1379,9 @@ pub struct ThirdPassDrawer<'pass> {
 impl<'pass> ThirdPassDrawer<'pass> {
     /// Does nothing if the postprocess pipeline is not available
     pub fn draw_postprocess(&mut self) {
+        let Some(locals) = self.borrow.locals else {
+            return;
+        };
         let postprocess = match self.borrow.pipelines.all() {
             Some(p) => &p.postprocess,
             None => return,
@@ -1378,7 +1389,7 @@ impl<'pass> ThirdPassDrawer<'pass> {
 
         let mut render_pass = self.render_pass.scope("postprocess");
         render_pass.set_pipeline(&postprocess.pipeline);
-        render_pass.set_bind_group(1, &self.borrow.locals.postprocess_bind.bind_group, &[]);
+        render_pass.set_bind_group(1, &locals.postprocess_bind.bind_group, &[]);
         render_pass.draw(0..3, 0..1);
     }
 

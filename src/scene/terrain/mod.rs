@@ -469,8 +469,12 @@ pub type SpriteRenderContextLazy = Box<dyn FnMut(&mut Renderer) -> SpriteRenderC
 
 impl SpriteRenderContext {
     pub fn new(renderer: &mut Renderer) -> SpriteRenderContextLazy {
-        let max_texture_size = renderer.max_texture_size();
+        Self::prepare(renderer.max_texture_size())
+    }
 
+    /// Begin CPU sprite meshing before a scene device is needed. GPU uploads
+    /// still happen only when a scene invokes the returned closure.
+    pub fn prepare(max_texture_size: u32) -> SpriteRenderContextLazy {
         struct SpriteWorkerResponse {
             //sprite_config: Arc<SpriteSpec>,
             sprite_data: HashMap<SpriteKind, FilteredSpriteData>,
@@ -598,6 +602,11 @@ impl SpriteRenderContext {
         let init = core::cell::OnceCell::new();
         let mut join_handle = Some(join_handle);
         let mut closure = move |renderer: &mut Renderer| {
+            // A negotiated smaller device needs a smaller atlas. Reuse the
+            // original preparation path rather than uploading an oversized one.
+            if renderer.max_texture_size() < max_texture_size {
+                return Self::prepare(renderer.max_texture_size())(renderer);
+            }
             // The second unwrap can only fail if the sprite meshing thread panics, which
             // implies that our sprite assets either were not found or did not
             // satisfy the size requirements for meshing, both of which are

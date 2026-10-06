@@ -97,6 +97,19 @@ impl LayeredPresenter {
             plan: plan.foreground,
         });
     }
+    pub fn clear_foreground(&self, revision: u64, size: Vec2<u32>) {
+        self.foreground.mailbox.submit(Job {
+            revision,
+            size,
+            plan: LayerPlan::default(),
+        });
+    }
+    pub fn foreground_published_revision(&self) -> u64 {
+        self.foreground
+            .mailbox
+            .published_revision
+            .load(Ordering::Acquire)
+    }
     pub(crate) fn take_activity(&self) -> (ProducerActivity, ProducerActivity) {
         (
             self.scene.mailbox.counters.take(),

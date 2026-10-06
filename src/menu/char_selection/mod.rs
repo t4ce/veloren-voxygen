@@ -35,6 +35,7 @@ impl CharSelectionState {
         client: Rc<RefCell<Client>>,
         persisted_state: Rc<RefCell<hud::PersistedHudState>>,
     ) -> Self {
+        global_state.window.renderer_mut().prepare_scene();
         let sprite_render_context = (global_state.lazy_init)(global_state.window.renderer_mut());
         let scene = Scene::new(
             global_state.window.renderer_mut(),

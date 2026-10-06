@@ -92,6 +92,11 @@ impl IcedUi {
     }
 
     #[cfg(target_os = "trueos")]
+    pub(crate) fn invalidate_native(&mut self) {
+        self.last_native_primitive = None;
+    }
+
+    #[cfg(target_os = "trueos")]
     pub fn maintain_native<'a, M, E: Into<Element<'a, M>>>(
         &mut self,
         root: E,

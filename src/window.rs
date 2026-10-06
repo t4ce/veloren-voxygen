@@ -5,13 +5,13 @@ use crate::{
     settings::{ControlSettings, ControllerSettings, Settings, controller::*},
     ui,
 };
+use alloc::sync::Arc;
 use common_base::span;
 use crossbeam_channel as channel;
 use gilrs::{Button as GilButton, EventType, Gilrs};
 use hashbrown::{HashMap, hash_set::Iter};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use alloc::sync::Arc;
 use strum::{AsRefStr, EnumIter};
 use tracing::{error, warn};
 use vek::*;
@@ -59,7 +59,9 @@ pub enum MappedInput<'a> {
 }
 
 impl MenuInput {
-    pub fn get_localization_key(&self) -> &str { self.as_ref() }
+    pub fn get_localization_key(&self) -> &str {
+        self.as_ref()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -212,7 +214,17 @@ pub enum LastInput {
 }
 
 pub struct Window {
-    renderer: Renderer,
+    renderer: Option<Renderer>,
+    #[cfg(target_os = "trueos")]
+    scene_init: Option<std::thread::JoinHandle<Result<Renderer, crate::render::RenderError>>>,
+    #[cfg(target_os = "trueos")]
+    display: winit::event_loop::OwnedDisplayHandle,
+    #[cfg(target_os = "trueos")]
+    menu_presenter: crate::ui::ice::renderer::presenter::LayeredPresenter,
+    #[cfg(target_os = "trueos")]
+    menu_revision: u64,
+    #[cfg(target_os = "trueos")]
+    menu_handoff: Option<u64>,
     window: Arc<dyn winit::window::Window>,
     cursor_grabbed: bool,
     pub pan_sensitivity: u32,
@@ -256,17 +268,22 @@ impl Window {
         runtime: &tokio::runtime::Runtime,
         event_loop: &dyn winit::event_loop::ActiveEventLoop,
     ) -> Result<Window, Error> {
-
         let window = settings.graphics.window;
 
         #[allow(unused_mut)] //ensure no weird issues on different platforms
         let mut attributes = winit::window::WindowAttributes::default()
             .with_title("Veloren")
             // Request Full HD in pixels, independently of desktop display scaling.
-            .with_surface_size(winit::dpi::PhysicalSize::new(window.size[0], window.size[1]))
+            .with_surface_size(winit::dpi::PhysicalSize::new(
+                window.size[0],
+                window.size[1],
+            ))
             .with_maximized(window.maximised);
 
-        #[cfg(all(unix, not(any(target_os = "windows", target_os = "macos", target_os = "trueos"))))]
+        #[cfg(all(
+            unix,
+            not(any(target_os = "windows", target_os = "macos", target_os = "trueos"))
+        ))]
         {
             use winit::platform::wayland::WindowAttributesExtWayland;
             attributes = attributes.with_name("net.veloren.veloren", "veloren");
@@ -279,14 +296,44 @@ impl Window {
             attributes, false,
         );
 
-        let window: Arc<dyn winit::window::Window> = Arc::from(event_loop.create_window(attributes).unwrap());
+        #[cfg(target_os = "trueos")]
+        let window: Arc<dyn winit::window::Window> = {
+            use winit::platform::trueos::ActiveEventLoopExtTrueOS;
+            Arc::from(
+                event_loop
+                    .create_layered_window(attributes, 60)
+                    .map_err(|error| Error::BackendError(Box::new(error)))?,
+            )
+        };
+        #[cfg(not(target_os = "trueos"))]
+        let window: Arc<dyn winit::window::Window> =
+            Arc::from(event_loop.create_window(attributes).unwrap());
 
-        let renderer = Renderer::new(
+        #[cfg(target_os = "trueos")]
+        let menu_presenter = {
+            use winit::platform::trueos::WindowExtTrueOS;
+            let size = window.surface_size();
+            let foreground = trueos::ui4_solara_text::SceneTarget::for_window(
+                window.trueos_window_id(),
+                size.width,
+                size.height,
+            )
+            .map_err(|error| Error::BackendError(Box::new(error)))?;
+            let background = foreground
+                .background()
+                .map_err(|error| Error::BackendError(Box::new(error)))?;
+            crate::ui::ice::renderer::presenter::LayeredPresenter::new(foreground, background)
+                .map_err(|error| Error::BackendError(Box::new(error)))?
+        };
+        #[cfg(target_os = "trueos")]
+        let renderer = None;
+        #[cfg(not(target_os = "trueos"))]
+        let renderer = Some(Renderer::new(
             Arc::clone(&window),
             event_loop.owned_display_handle(),
             settings.graphics.render_mode.clone(),
             runtime,
-        )?;
+        )?);
 
         let keypress_map = HashMap::new();
 
@@ -295,13 +342,13 @@ impl Window {
             Err(gilrs::Error::NotImplemented(_dummy)) => {
                 warn!("Controller input is unsupported on this platform.");
                 None
-            },
+            }
             Err(gilrs::Error::InvalidAxisToBtn) => {
                 error!(
                     "Invalid AxisToBtn controller mapping. Falling back to no controller support."
                 );
                 None
-            },
+            }
             Err(gilrs::Error::Other(e)) => {
                 error!(
                     ?e,
@@ -309,7 +356,7 @@ impl Window {
                      controller support."
                 );
                 None
-            },
+            }
             Err(e) => {
                 error!(
                     ?e,
@@ -317,7 +364,7 @@ impl Window {
                      controller support."
                 );
                 None
-            },
+            }
         };
 
         let (message_sender, message_receiver): (
@@ -329,6 +376,16 @@ impl Window {
 
         let mut this = Self {
             renderer,
+            #[cfg(target_os = "trueos")]
+            scene_init: None,
+            #[cfg(target_os = "trueos")]
+            display: event_loop.owned_display_handle(),
+            #[cfg(target_os = "trueos")]
+            menu_presenter,
+            #[cfg(target_os = "trueos")]
+            menu_revision: 0,
+            #[cfg(target_os = "trueos")]
+            menu_handoff: None,
             window,
             cursor_grabbed: false,
             pan_sensitivity: settings.gameplay.pan_sensitivity,
@@ -366,9 +423,109 @@ impl Window {
         Ok(this)
     }
 
-    pub fn renderer(&self) -> &Renderer { &self.renderer }
+    pub fn renderer(&self) -> &Renderer {
+        self.renderer.as_ref().expect("scene renderer is ready")
+    }
 
-    pub fn renderer_mut(&mut self) -> &mut Renderer { &mut self.renderer }
+    pub fn renderer_mut(&mut self) -> &mut Renderer {
+        self.renderer.as_mut().expect("scene renderer is ready")
+    }
+
+    pub fn maintain_renderer(&self) {
+        if let Some(renderer) = &self.renderer {
+            renderer.maintain();
+        }
+    }
+
+    /// CPU sprite preparation stays eager, independently of scene-device startup.
+    pub fn preparation_texture_limit(&self) -> u32 {
+        self.renderer
+            .as_ref()
+            .map_or(8192, Renderer::max_texture_size)
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub fn start_scene_renderer(
+        &mut self,
+        runtime: &Arc<tokio::runtime::Runtime>,
+        mode: crate::render::RenderMode,
+    ) -> Result<(), String> {
+        if self.renderer.is_some() || self.scene_init.is_some() {
+            return Ok(());
+        }
+        let window = Arc::clone(&self.window);
+        let display = self.display.clone();
+        let runtime = Arc::clone(runtime);
+        self.scene_init = Some(
+            std::thread::Builder::new()
+                .name("voxy-scene-init".into())
+                .spawn(move || Renderer::new(window, display, mode, &runtime))
+                .map_err(|error| format!("Could not start graphics initialization: {error}"))?,
+        );
+        Ok(())
+    }
+
+    /// Poll without joining an unfinished worker or acquiring a scene frame.
+    #[cfg(target_os = "trueos")]
+    pub fn poll_scene_renderer(&mut self) -> Result<Option<(usize, usize)>, String> {
+        if let Some(job) = &self.scene_init {
+            if !job.is_finished() {
+                return Ok(Some((0, 0)));
+            }
+            let renderer = self
+                .scene_init
+                .take()
+                .unwrap()
+                .join()
+                .map_err(|_| "Graphics initialization worker stopped unexpectedly".to_string())?
+                .map_err(|error| {
+                    tracing::error!(?error, "Game graphics initialization failed");
+                    "Could not start game graphics.\nThe main menu is still available. Details are in the log."
+                        .to_string()
+                })?;
+            self.renderer = Some(renderer);
+            self.resized = true;
+        }
+        let renderer = self
+            .renderer
+            .as_mut()
+            .ok_or("Graphics initialization has not started")?;
+        renderer.poll_pipeline_creation();
+        Ok(renderer.pipeline_creation_status())
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn present_menu(
+        &mut self,
+        size: Vec2<u32>,
+        plan: crate::ui::ice::renderer::bcs::FramePlan,
+    ) -> Result<(), String> {
+        self.menu_presenter.check()?;
+        if self.menu_handoff.is_none() {
+            self.menu_revision += 1;
+            self.menu_presenter.submit(self.menu_revision, size, plan);
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub fn resume_menu(&mut self) {
+        self.menu_handoff = None;
+    }
+
+    /// Retire the menu foreground before the first scene frame, without waiting
+    /// for GPU fences on the event thread. The scene producer remains idle.
+    #[cfg(target_os = "trueos")]
+    pub fn prepare_scene_display(&mut self) -> bool {
+        let revision = *self.menu_handoff.get_or_insert_with(|| {
+            self.menu_revision += 1;
+            let size = self.window.surface_size();
+            self.menu_presenter
+                .clear_foreground(self.menu_revision, Vec2::new(size.width, size.height));
+            self.menu_revision
+        });
+        self.menu_presenter.foreground_published_revision() >= revision
+    }
 
     pub fn resolve_deduplicated_events(
         &mut self,
@@ -419,8 +576,9 @@ impl Window {
             let scale_factor = self.window.scale_factor();
             let is_maximized = self.window.is_maximized();
 
-            self.renderer
-                .on_resize(Vec2::new(physical.width, physical.height));
+            if let Some(renderer) = &mut self.renderer {
+                renderer.on_resize(Vec2::new(physical.width, physical.height));
+            }
             self.events
                 .push(Event::Resize(Vec2::new(physical.width, physical.height)));
 
@@ -496,14 +654,14 @@ impl Window {
                                 for menu_input in menu_inputs {
                                     events.push(Event::MenuInput(*menu_input, is_pressed));
                                 }
-                            },
+                            }
                             MappedInput::Game(game_inputs) => {
                                 *last_input_menu = false;
                                 // Prioritize game layers over buttons
                                 for game_input in game_inputs {
                                     events.push(Event::InputUpdate(*game_input, is_pressed));
                                 }
-                            },
+                            }
                         }
                     }
                 }
@@ -524,7 +682,7 @@ impl Window {
                             self.gamelayer_mod2,
                             self.menu_open,
                         );
-                    },
+                    }
                     EventType::ButtonReleased(button, code) => {
                         handle_buttons(
                             controller,
@@ -539,7 +697,7 @@ impl Window {
                             self.gamelayer_mod2,
                             self.menu_open,
                         );
-                    },
+                    }
                     EventType::ButtonChanged(button, _value, code) => {
                         if let Some(actions) = controller
                             .inverse_game_analog_button_map
@@ -559,7 +717,7 @@ impl Window {
                                 match *action {}
                             }
                         }
-                    },
+                    }
 
                     EventType::AxisChanged(axis, value, code) => {
                         let value = if controller.inverted_axes.contains(&Axis::from((axis, code)))
@@ -588,12 +746,12 @@ impl Window {
                                             self.events.push(Event::AnalogGameInput(
                                                 AnalogGameInput::MovementX(value),
                                             ));
-                                        },
+                                        }
                                         AxisGameAction::MovementY => {
                                             self.events.push(Event::AnalogGameInput(
                                                 AnalogGameInput::MovementY(value),
                                             ));
-                                        },
+                                        }
                                         AxisGameAction::CameraX => {
                                             self.events.push(Event::AnalogGameInput(
                                                 AnalogGameInput::CameraX(
@@ -601,7 +759,7 @@ impl Window {
                                                         / 100.0,
                                                 ),
                                             ));
-                                        },
+                                        }
                                         AxisGameAction::CameraY => {
                                             let pan_invert_y = match controller.pan_invert_y {
                                                 true => -1.0,
@@ -616,7 +774,7 @@ impl Window {
                                                         / 100.0,
                                                 ),
                                             ));
-                                        },
+                                        }
                                     }
                                 }
                             }
@@ -631,27 +789,27 @@ impl Window {
                                         self.events.push(Event::AnalogMenuInput(
                                             AnalogMenuInput::MoveX(value),
                                         ));
-                                    },
+                                    }
                                     AxisMenuAction::MoveY => {
                                         self.events.push(Event::AnalogMenuInput(
                                             AnalogMenuInput::MoveY(value),
                                         ));
-                                    },
+                                    }
                                     AxisMenuAction::ScrollX => {
                                         self.events.push(Event::AnalogMenuInput(
                                             AnalogMenuInput::ScrollX(value),
                                         ));
-                                    },
+                                    }
                                     AxisMenuAction::ScrollY => {
                                         self.events.push(Event::AnalogMenuInput(
                                             AnalogMenuInput::ScrollY(value),
                                         ));
-                                    },
+                                    }
                                 }
                             }
                         }
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
         }
@@ -667,12 +825,12 @@ impl Window {
                         AnalogMenuInput::MoveX(d) => {
                             self.mouse_emulation_vec.x = d;
                             None
-                        },
+                        }
                         AnalogMenuInput::MoveY(d) => {
                             // This just has to be inverted for some reason
                             self.mouse_emulation_vec.y = -d;
                             None
-                        },
+                        }
                         input => Some(Event::AnalogMenuInput(input)),
                     },
                     Event::MenuInput(menu_input, state) => {
@@ -680,10 +838,10 @@ impl Window {
                         let mouse_button = match menu_input {
                             MenuInput::EmulateLeftClick => {
                                 conrod_core::input::state::mouse::Button::Left
-                            },
+                            }
                             MenuInput::EmulateRightClick => {
                                 conrod_core::input::state::mouse::Button::Right
-                            },
+                            }
                             _ => return Some(event),
                         };
                         Some(match state {
@@ -694,7 +852,7 @@ impl Window {
                                 conrod_core::input::Button::Mouse(mouse_button),
                             ))),
                         })
-                    },
+                    }
                     _ => Some(event),
                 })
                 .collect();
@@ -733,8 +891,8 @@ impl Window {
                 } else {
                     self.events.push(Event::CursorMove(delta));
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -751,17 +909,21 @@ impl Window {
             WindowEvent::CloseRequested => self.events.push(Event::Close),
             WindowEvent::SurfaceResized(_) => {
                 self.resized = true;
-            },
+            }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 // TODO: is window resized event emitted? or do we need to handle that here?
                 self.scale_factor = scale_factor;
                 self.events.push(Event::ScaleFactorChanged(scale_factor));
-            },
+            }
             WindowEvent::Moved(winit::dpi::PhysicalPosition { x, y }) => {
                 self.events
                     .push(Event::Moved(Vec2::new(x as u32, y as u32)));
-            },
-            WindowEvent::PointerButton { button: winit::event::ButtonSource::Mouse(button), state, .. } => {
+            }
+            WindowEvent::PointerButton {
+                button: winit::event::ButtonSource::Mouse(button),
+                state,
+                ..
+            } => {
                 let map_input = Window::map_input(
                     KeyMouse::Mouse(button),
                     controls,
@@ -781,7 +943,7 @@ impl Window {
                     }
                 }
                 self.events.push(Event::MouseButton(button, state));
-            },
+            }
             WindowEvent::ModifiersChanged(modifiers) => self.modifiers = modifiers.state(),
             WindowEvent::KeyboardInput {
                 event,
@@ -799,11 +961,14 @@ impl Window {
                 }
                 // Ignore Alt-F4 so we don't try to do anything heavy like take a screenshot
                 // when the window is about to close
-                if matches!(event, winit::event::KeyEvent {
-                    state: winit::event::ElementState::Pressed,
-                    logical_key: winit::keyboard::Key::Named(winit::keyboard::NamedKey::F4),
-                    ..
-                }) && self.modifiers.alt_key()
+                if matches!(
+                    event,
+                    winit::event::KeyEvent {
+                        state: winit::event::ElementState::Pressed,
+                        logical_key: winit::keyboard::Key::Named(winit::keyboard::NamedKey::F4),
+                        ..
+                    }
+                ) && self.modifiers.alt_key()
                 {
                     return;
                 }
@@ -824,7 +989,7 @@ impl Window {
                                     event.state == winit::event::ElementState::Pressed,
                                 ));
                             }
-                        },
+                        }
                         MappedInput::Game(game_inputs) => {
                             self.last_input_type_menu = false;
                             for game_input in game_inputs {
@@ -843,7 +1008,7 @@ impl Window {
                                             GameInput::Fullscreen,
                                             event.state,
                                         );
-                                    },
+                                    }
                                     GameInput::Screenshot => {
                                         self.take_screenshot = event.state
                                             == winit::event::ElementState::Pressed
@@ -856,28 +1021,28 @@ impl Window {
                                             GameInput::Screenshot,
                                             event.state,
                                         );
-                                    },
+                                    }
                                     _ => self.events.push(Event::InputUpdate(
                                         *game_input,
                                         event.state == winit::event::ElementState::Pressed,
                                     )),
                                 }
                             }
-                        },
+                        }
                     }
                 }
-            },
+            }
             WindowEvent::Focused(state) => {
                 self.focused = state;
                 self.events.push(Event::Focused(state));
-            },
+            }
             WindowEvent::PointerMoved { position, .. } => {
                 if self.cursor_grabbed {
                     self.reset_cursor_position();
                 } else {
                     self.cursor_position = position;
                 }
-            },
+            }
             WindowEvent::MouseWheel { delta, .. } if self.cursor_grabbed && self.focused => {
                 const DIFFERENCE_FROM_DEVICE_EVENT_ON_X11: f32 = -15.0;
                 self.events.push(Event::Zoom({
@@ -895,20 +1060,21 @@ impl Window {
                         * if self.zoom_inversion { -1.0 } else { 1.0 }
                         * DIFFERENCE_FROM_DEVICE_EVENT_ON_X11
                 }))
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
     /// Moves cursor by an offset
     pub fn offset_cursor(&self, d: Vec2<f32>) {
         if d != Vec2::zero()
-            && let Err(err) = self
-                .window
-                .set_cursor_position(winit::dpi::LogicalPosition::new(
+            && let Err(err) = self.window.set_cursor_position(
+                winit::dpi::LogicalPosition::new(
                     d.x as f64 + self.cursor_position.x,
                     d.y as f64 + self.cursor_position.y,
-                ).into())
+                )
+                .into(),
+            )
         {
             // Log this error once rather than every frame
             static SPAM_GUARD: std::sync::Once = std::sync::Once::new();
@@ -918,7 +1084,9 @@ impl Window {
         }
     }
 
-    pub fn is_cursor_grabbed(&self) -> bool { self.cursor_grabbed }
+    pub fn is_cursor_grabbed(&self) -> bool {
+        self.cursor_grabbed
+    }
 
     pub fn grab_cursor(&mut self, grab: bool) {
         use winit::window::CursorGrabMode;
@@ -962,7 +1130,9 @@ impl Window {
         settings.save_to_file_warn(config_dir);
     }
 
-    pub fn is_fullscreen(&self) -> bool { self.fullscreen.enabled }
+    pub fn is_fullscreen(&self) -> bool {
+        self.fullscreen.enabled
+    }
 
     /// Select a video mode that fits the specified requirements
     /// Returns None if a matching video mode doesn't exist or if
@@ -997,7 +1167,9 @@ impl Window {
                 let correct_depth = correct_depth.unwrap_or_else(|| {
                     correct_res
                         .iter()
-                        .find(|mode| mode.bit_depth().map(|depth| depth.get()).unwrap_or(0) == depth)
+                        .find(|mode| {
+                            mode.bit_depth().map(|depth| depth.get()).unwrap_or(0) == depth
+                        })
                         .cloned()
                 });
 
@@ -1008,7 +1180,12 @@ impl Window {
                         let correct_rate = correct_rate.unwrap_or_else(|| {
                             correct_res
                                 .iter()
-                                .find(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0) == rate)
+                                .find(|mode| {
+                                    mode.refresh_rate_millihertz()
+                                        .map(|rate| rate.get())
+                                        .unwrap_or(0)
+                                        == rate
+                                })
                                 .cloned()
                         });
 
@@ -1018,8 +1195,15 @@ impl Window {
                         // mode not to be found
                         correct_res
                             .iter()
-                            .filter(|mode| mode.bit_depth().map(|depth| depth.get()).unwrap_or(0) == depth)
-                            .find(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0) == rate)
+                            .filter(|mode| {
+                                mode.bit_depth().map(|depth| depth.get()).unwrap_or(0) == depth
+                            })
+                            .find(|mode| {
+                                mode.refresh_rate_millihertz()
+                                    .map(|rate| rate.get())
+                                    .unwrap_or(0)
+                                    == rate
+                            })
                             .cloned()
                             .or_else(|| {
                                 if correct_depth.is_none() && correct_rate.is_none() {
@@ -1039,7 +1223,7 @@ impl Window {
                                     Some(correct_rate),
                                 )
                             })
-                    },
+                    }
                     // A bit depth and no refresh rate is given
                     // if no video mode with the given bit depth exists, fall
                     // back to a video mode that fits only the resolution
@@ -1059,10 +1243,10 @@ impl Window {
                                 Some(correct_depth),
                                 None,
                             )
-                        },
+                        }
                     },
                 }
-            },
+            }
             // No bit depth is given
             None => match refresh_rate_millihertz {
                 // No bit depth and a refresh rate is given
@@ -1071,7 +1255,12 @@ impl Window {
                     let correct_rate = correct_rate.unwrap_or_else(|| {
                         correct_res
                             .iter()
-                            .find(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0) == rate)
+                            .find(|mode| {
+                                mode.refresh_rate_millihertz()
+                                    .map(|rate| rate.get())
+                                    .unwrap_or(0)
+                                    == rate
+                            })
                             .cloned()
                     });
 
@@ -1093,9 +1282,9 @@ impl Window {
                                 None,
                                 Some(correct_rate),
                             )
-                        },
+                        }
                     }
-                },
+                }
                 // No bit depth and no refresh rate is given
                 // get the video mode with the specified resolution and the max bit depth and
                 // refresh rate
@@ -1103,7 +1292,11 @@ impl Window {
                     .into_iter()
                     // Prefer bit depth over refresh rate
                     .sorted_by_key(|mode| mode.bit_depth().map(|depth| depth.get()).unwrap_or(0))
-                    .max_by_key(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0)),
+                    .max_by_key(|mode| {
+                        mode.refresh_rate_millihertz()
+                            .map(|rate| rate.get())
+                            .unwrap_or(0)
+                    }),
             },
         }
     }
@@ -1143,8 +1336,14 @@ impl Window {
                     let mode = monitor
                         .video_modes()
                         // Prefer bit depth over refresh rate
-                        .sorted_by_key(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0))
-                        .sorted_by_key(|mode| mode.bit_depth().map(|depth| depth.get()).unwrap_or(0))
+                        .sorted_by_key(|mode| {
+                            mode.refresh_rate_millihertz()
+                                .map(|rate| rate.get())
+                                .unwrap_or(0)
+                        })
+                        .sorted_by_key(|mode| {
+                            mode.bit_depth().map(|depth| depth.get()).unwrap_or(0)
+                        })
                         .max_by_key(|mode| mode.size().width);
 
                     if mode.is_none() {
@@ -1156,7 +1355,7 @@ impl Window {
                     warn!("Failed to select video mode, can't get the current monitor!");
                     None
                 }
-            },
+            }
         }
     }
 
@@ -1182,30 +1381,35 @@ impl Window {
                     );
                     winit::monitor::Fullscreen::Borderless(None)
                 }
-            },
+            }
             FullscreenMode::Borderless => {
                 // None here will fullscreen on the current monitor
                 winit::monitor::Fullscreen::Borderless(None)
-            },
+            }
         }));
     }
 
-    pub fn needs_refresh_resize(&mut self) { self.needs_refresh_resize = true; }
-
-    pub fn set_size(&mut self, new_size: Vec2<u32>) {
-        self.window
-            .set_min_surface_size(Some(winit::dpi::LogicalSize::new(
-                new_size.x as f64,
-                new_size.y as f64,
-            ).into()));
+    pub fn needs_refresh_resize(&mut self) {
+        self.needs_refresh_resize = true;
     }
 
-    pub fn send_event(&mut self, event: Event) { self.events.push(event) }
+    pub fn set_size(&mut self, new_size: Vec2<u32>) {
+        self.window.set_min_surface_size(Some(
+            winit::dpi::LogicalSize::new(new_size.x as f64, new_size.y as f64).into(),
+        ));
+    }
+
+    pub fn send_event(&mut self, event: Event) {
+        self.events.push(event)
+    }
 
     pub fn take_screenshot(&mut self, settings: &Settings) {
         let sender = self.message_sender.clone();
         let mut path = settings.screenshots_path.clone();
-        self.renderer.create_screenshot(move |image| {
+        let Some(renderer) = &mut self.renderer else {
+            return;
+        };
+        renderer.create_screenshot(move |image| {
             use std::time::SystemTime;
 
             // Handle any error if there was one when generating the image.
@@ -1215,7 +1419,7 @@ impl Window {
                     warn!(?e, "Couldn't generate screenshot");
                     let _result = sender.send(format!("Error when generating screenshot: {}", e));
                     return;
-                },
+                }
             };
 
             // Check if folder exists and create it if it does not
@@ -1287,12 +1491,12 @@ impl Window {
                 controls.modify_binding(game_input, key_mouse);
                 *remapping = RemappingMode::None;
                 None
-            },
+            }
             RemappingMode::RemapKeyboardMenu(menu_input) => {
                 controls.modify_menu_binding(menu_input, key_mouse);
                 *remapping = RemappingMode::None;
                 None
-            },
+            }
             RemappingMode::None => {
                 if !menu_open {
                     // If a menu is not open, simply return any game inputs
@@ -1312,7 +1516,7 @@ impl Window {
                         .get_associated_game_inputs(&key_mouse)
                         .map(|game_inputs| MappedInput::Game(game_inputs.iter()))
                 }
-            },
+            }
             _ => None,
         }
     }
@@ -1347,17 +1551,17 @@ impl Window {
                 controller.modify_layer_binding(game_input, new_layer_entry);
                 *remapping = RemappingMode::None;
                 None
-            },
+            }
             RemappingMode::RemapGamepadButtons(game_input) => {
                 controller.modify_button_binding(game_input, *button);
                 *remapping = RemappingMode::None;
                 None
-            },
+            }
             RemappingMode::RemapGamepadMenu(menu_input) => {
                 controller.modify_menu_binding(menu_input, *button);
                 *remapping = RemappingMode::None;
                 None
-            },
+            }
             RemappingMode::None => {
                 // have to check l_entry1 and l_entry2 so LB+RB can be treated equivalent to
                 // RB+LB
@@ -1415,28 +1619,44 @@ impl Window {
                             .map(|game_inputs| MappedInput::Game(game_inputs.iter()))
                     }
                 }
-            },
+            }
             _ => None,
         }
     }
 
-    pub fn set_remapping_mode(&mut self, r_mode: RemappingMode) { self.remapping_mode = r_mode; }
+    pub fn set_remapping_mode(&mut self, r_mode: RemappingMode) {
+        self.remapping_mode = r_mode;
+    }
 
-    pub fn reset_mapping_mode(&mut self) { self.remapping_mode = RemappingMode::None; }
+    pub fn reset_mapping_mode(&mut self) {
+        self.remapping_mode = RemappingMode::None;
+    }
 
-    pub fn window(&self) -> &dyn winit::window::Window { self.window.as_ref() }
+    pub fn window(&self) -> &dyn winit::window::Window {
+        self.window.as_ref()
+    }
 
-    pub fn modifiers(&self) -> winit::keyboard::ModifiersState { self.modifiers }
+    pub fn modifiers(&self) -> winit::keyboard::ModifiersState {
+        self.modifiers
+    }
 
-    pub fn scale_factor(&self) -> f64 { self.scale_factor }
+    pub fn scale_factor(&self) -> f64 {
+        self.scale_factor
+    }
 
-    pub fn last_input(&self) -> LastInput { self.last_input }
+    pub fn last_input(&self) -> LastInput {
+        self.last_input
+    }
 
     /// Returns true if the last input type was MenuInput, otherwise returns
     /// false
-    pub fn last_input_type_menu(&self) -> bool { self.last_input_type_menu }
+    pub fn last_input_type_menu(&self) -> bool {
+        self.last_input_type_menu
+    }
 
-    pub fn controller_type(&self) -> ControllerType { self.controller_type }
+    pub fn controller_type(&self) -> ControllerType {
+        self.controller_type
+    }
 }
 
 #[derive(Default, Copy, Clone, Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]

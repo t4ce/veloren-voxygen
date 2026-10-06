@@ -1,7 +1,14 @@
 pub(crate) mod client_init;
+#[cfg(target_os = "trueos")]
+mod scene_login;
 pub(crate) mod ui;
 
 use super::{char_selection::CharSelectionState, dummy_scene::Scene, server_info::ServerInfoState};
+use crate::client::{
+    Client, ClientInitStage, ServerInfo,
+    addr::ConnectionArgs,
+    error::{InitProtocolError, NetworkConnectError, NetworkError},
+};
 use crate::{
     Direction, GlobalState, PlayState, PlayStateResult, hud,
     render::{Drawer, GlobalsBindGroup},
@@ -9,20 +16,15 @@ use crate::{
     settings::Settings,
     window::Event,
 };
+use alloc::{rc::Rc, sync::Arc};
 use chrono::{DateTime, Local, Utc};
-use crate::client::{
-    Client, ClientInitStage, ServerInfo,
-    addr::ConnectionArgs,
-    error::{InitProtocolError, NetworkConnectError, NetworkError},
-};
 use client_init::{ClientInit, Error as InitError, Msg as InitMsg};
 use common::{comp, event::UpdateCharacterMetadata};
 use common_base::span;
 use common_net::msg::ClientType;
-use i18n::{LocalizationGuard, LocalizationHandle, fluent_args};
 use core::cell::RefCell;
+use i18n::{LocalizationGuard, LocalizationHandle, fluent_args};
 use std::path::Path;
-use alloc::{rc::Rc, sync::Arc};
 use tokio::runtime;
 use tracing::error;
 use ui::{Event as MainMenuEvent, MainMenuUi};
@@ -54,10 +56,19 @@ impl InitState {
     }
 }
 
+#[cfg(target_os = "trueos")]
+struct SceneLogin {
+    username: String,
+    password: String,
+    connection_args: ConnectionArgs,
+}
+
 pub struct MainMenuState {
     main_menu_ui: MainMenuUi,
     init: InitState,
-    scene: Scene,
+    #[cfg(target_os = "trueos")]
+    pending_login: scene_login::DeferredLogin<SceneLogin>,
+    scene: Option<Scene>,
 }
 
 impl MainMenuState {
@@ -66,13 +77,23 @@ impl MainMenuState {
         Self {
             main_menu_ui: MainMenuUi::new(global_state),
             init: InitState::None,
-            scene: Scene::new(global_state.window.renderer_mut()),
+            #[cfg(target_os = "trueos")]
+            pending_login: scene_login::DeferredLogin::default(),
+            #[cfg(target_os = "trueos")]
+            scene: None,
+            #[cfg(not(target_os = "trueos"))]
+            scene: Some(Scene::new(global_state.window.renderer_mut())),
         }
     }
 }
 
 impl PlayState for MainMenuState {
     fn enter(&mut self, global_state: &mut GlobalState, _: Direction) {
+        #[cfg(target_os = "trueos")]
+        {
+            global_state.window.resume_menu();
+            self.main_menu_ui.invalidate_native();
+        }
         // Kick off title music
         if global_state.settings.audio.output.is_enabled() && global_state.audio.music_enabled() {
             global_state.audio.play_title_music();
@@ -84,7 +105,6 @@ impl PlayState for MainMenuState {
         // Set scale mode in case it was change
         self.main_menu_ui
             .set_scale_mode(global_state.settings.interface.ui_scale);
-
     }
 
     fn tick(&mut self, global_state: &mut GlobalState, events: Vec<Event>) -> PlayStateResult {
@@ -106,9 +126,202 @@ impl PlayState for MainMenuState {
             }
         }
 
+        // Maintain the UI.
+        for event in self
+            .main_menu_ui
+            .maintain(global_state, global_state.clock.real_dt())
+        {
+            match event {
+                MainMenuEvent::LoginAttempt {
+                    username,
+                    password,
+                    server_address,
+                } => {
+                    global_state.portal_credentials =
+                        Some(Arc::new(crate::server_portal::PortalCredentials::new(
+                            username.clone(),
+                            password.clone(),
+                        )));
+                    let net_settings = &mut global_state.settings.networking;
+                    let use_srv = net_settings.use_srv;
+                    let use_quic = net_settings.use_quic;
+                    let validate_tls = net_settings.validate_tls;
+                    net_settings.username.clone_from(&username);
+                    net_settings.default_server.clone_from(&server_address);
+                    if !server_address.is_empty() && !net_settings.servers.contains(&server_address)
+                    {
+                        net_settings.servers.push(server_address.clone());
+                    }
+                    global_state
+                        .settings
+                        .save_to_file_warn(&global_state.config_dir);
+
+                    let connection_args = if use_srv {
+                        ConnectionArgs::Srv {
+                            hostname: server_address,
+                            prefer_ipv6: false,
+                            validate_tls,
+                            use_quic,
+                        }
+                    } else if use_quic {
+                        ConnectionArgs::Quic {
+                            hostname: server_address,
+                            prefer_ipv6: false,
+                            validate_tls,
+                        }
+                    } else {
+                        ConnectionArgs::Tcp {
+                            hostname: server_address,
+                            prefer_ipv6: false,
+                        }
+                    };
+                    #[cfg(target_os = "trueos")]
+                    {
+                        if comp::Player::alias_validate(&username).is_err() {
+                            global_state.info_message =
+                                Some("Please enter a valid username.".into());
+                            self.main_menu_ui.cancel_connection();
+                            continue;
+                        }
+                        if matches!(self.init, InitState::None) && !self.pending_login.is_pending()
+                        {
+                            match global_state.window.start_scene_renderer(
+                                &global_state.tokio_runtime,
+                                global_state.settings.graphics.render_mode.clone(),
+                            ) {
+                                Ok(()) => {
+                                    self.pending_login.begin(SceneLogin {
+                                        username,
+                                        password,
+                                        connection_args,
+                                    });
+                                }
+                                Err(error) => {
+                                    global_state.info_message = Some(error);
+                                    self.main_menu_ui.cancel_connection();
+                                }
+                            }
+                        }
+                    }
+                    #[cfg(not(target_os = "trueos"))]
+                    attempt_login(
+                        &mut global_state.info_message,
+                        username,
+                        password,
+                        connection_args,
+                        &mut self.init,
+                        &global_state.tokio_runtime,
+                        global_state
+                            .settings
+                            .language
+                            .send_to_server
+                            .then_some(global_state.settings.language.selected_language.clone()),
+                        &global_state.i18n,
+                        &global_state.config_dir,
+                        global_state.args.client_type.0,
+                    );
+                }
+                MainMenuEvent::CancelLoginAttempt => {
+                    // init contains InitState::Client(ClientInit), which spawns a thread which
+                    // contains a TcpStream::connect() call This call is
+                    // blocking TODO fix when the network rework happens
+                    self.init = InitState::None;
+                    self.main_menu_ui.cancel_connection();
+                    #[cfg(target_os = "trueos")]
+                    {
+                        self.pending_login.cancel();
+                        global_state.window.resume_menu();
+                        self.main_menu_ui.invalidate_native();
+                    }
+                }
+                MainMenuEvent::ChangeLanguage(new_language) => {
+                    global_state.settings.language.selected_language =
+                        new_language.language_identifier;
+                    global_state.i18n = LocalizationHandle::load_expect(
+                        &global_state.settings.language.selected_language,
+                    );
+                    global_state
+                        .i18n
+                        .set_english_fallback(global_state.settings.language.use_english_fallback);
+                    self.main_menu_ui
+                        .update_language(global_state.i18n, &global_state.settings);
+                }
+                MainMenuEvent::Quit => return PlayStateResult::Shutdown,
+                // Note: Keeping in case we re-add the disclaimer
+                /*MainMenuEvent::DisclaimerAccepted => {
+                    global_state.settings.show_disclaimer = false
+                },*/
+                MainMenuEvent::AuthServerTrust(auth_server, trust) => {
+                    if trust {
+                        global_state
+                            .settings
+                            .networking
+                            .trusted_auth_servers
+                            .insert(auth_server.clone());
+                        global_state
+                            .settings
+                            .save_to_file_warn(&global_state.config_dir);
+                    }
+                    self.init
+                        .client()
+                        .map(|init| init.auth_trust(auth_server, trust));
+                }
+                MainMenuEvent::DeleteServer { server_index } => {
+                    let net_settings = &mut global_state.settings.networking;
+                    net_settings.servers.remove(server_index);
+
+                    global_state
+                        .settings
+                        .save_to_file_warn(&global_state.config_dir);
+                }
+            }
+        }
+
         if let Some(client_stage_update) = self.init.client().and_then(|init| init.stage_update()) {
             self.main_menu_ui
                 .update_stage(DetailedInitializationStage::Client(client_stage_update));
+        }
+
+        // Graphics startup is a login stage, before ClientInit can open a socket.
+        #[cfg(target_os = "trueos")]
+        match self
+            .pending_login
+            .poll(|| global_state.window.poll_scene_renderer())
+        {
+            scene_login::Status::Idle => {}
+            scene_login::Status::Waiting(done, total) => {
+                self.main_menu_ui
+                    .update_stage(DetailedInitializationStage::CreatingRenderPipeline(
+                        done, total,
+                    ))
+            }
+            scene_login::Status::Ready(SceneLogin {
+                username,
+                password,
+                connection_args,
+            }) => {
+                attempt_login(
+                    &mut global_state.info_message,
+                    username,
+                    password,
+                    connection_args,
+                    &mut self.init,
+                    &global_state.tokio_runtime,
+                    global_state
+                        .settings
+                        .language
+                        .send_to_server
+                        .then_some(global_state.settings.language.selected_language.clone()),
+                    &global_state.i18n,
+                    &global_state.config_dir,
+                    global_state.args.client_type.0,
+                );
+            }
+            scene_login::Status::Failed(error) => {
+                tracing::error!(%error, "Scene startup failed before server connection");
+                self.main_menu_ui.cancel_connection();
+                global_state.info_message = Some(error);
+            }
         }
 
         // Poll client creation.
@@ -119,7 +332,7 @@ impl PlayState for MainMenuState {
                 crate::ecs::init(client.state_mut().ecs_mut());
                 self.init =
                     InitState::Pipeline(Box::new(client), hud::PersistedHudState::default());
-            },
+            }
             Some(InitMsg::Done(Err(e))) => {
                 self.init = InitState::None;
                 error!(?e, "Client Init failed raw error");
@@ -129,12 +342,15 @@ impl PlayState for MainMenuState {
                 error!(?e, "Client Init failed");
                 global_state.info_message = Some(
                     localized_strings
-                        .get_msg_ctx("main-login-client_init_failed", &i18n::fluent_args! {
-                            "init_fail_reason" => e
-                        })
+                        .get_msg_ctx(
+                            "main-login-client_init_failed",
+                            &i18n::fluent_args! {
+                                "init_fail_reason" => e
+                            },
+                        )
                         .into_owned(),
                 );
-            },
+            }
             Some(InitMsg::IsAuthTrusted(auth_server)) => {
                 if global_state
                     .settings
@@ -147,8 +363,8 @@ impl PlayState for MainMenuState {
                     // Show warning that auth server is not trusted and prompt for approval
                     self.main_menu_ui.auth_trust_prompt(auth_server);
                 }
-            },
-            None => {},
+            }
+            None => {}
         }
 
         // Tick the client to keep the connection alive if we are waiting on pipelines
@@ -160,7 +376,7 @@ impl PlayState for MainMenuState {
                 Ok(events) => {
                     for event in events {
                         match event {
-                            crate::client::Event::SetViewDistance(_vd) => {},
+                            crate::client::Event::SetViewDistance(_vd) => {}
                             crate::client::Event::Disconnect => {
                                 global_state.info_message = Some(
                                     localized_strings
@@ -168,7 +384,7 @@ impl PlayState for MainMenuState {
                                         .into_owned(),
                                 );
                                 self.init = InitState::None;
-                            },
+                            }
                             crate::client::Event::Chat(m) => {
                                 if let InitState::Pipeline(client, persisted_state) = &mut self.init
                                 {
@@ -178,27 +394,26 @@ impl PlayState for MainMenuState {
                                         m,
                                     )
                                 }
-                            },
+                            }
                             crate::client::Event::MapMarker(marker_event) => {
                                 if let InitState::Pipeline(_client, persisted_state) =
                                     &mut self.init
                                 {
                                     persisted_state.location_markers.update(marker_event);
                                 }
-                            },
+                            }
                             #[expect(unused_variables)]
-                            crate::client::Event::PluginDataReceived(data) => {
-                            },
-                            _ => {},
+                            crate::client::Event::PluginDataReceived(data) => {}
+                            _ => {}
                         }
                     }
-                },
+                }
                 Err(err) => {
                     error!(?err, "[main menu] Failed to tick the client");
                     global_state.info_message =
                         Some(get_client_msg_error(err, None, &global_state.i18n.read()));
                     self.init = InitState::None;
-                },
+                }
             }
         }
 
@@ -211,6 +426,10 @@ impl PlayState for MainMenuState {
                 );
             // If complete go to char select screen
             } else {
+                #[cfg(target_os = "trueos")]
+                if !global_state.window.prepare_scene_display() {
+                    return PlayStateResult::Continue;
+                }
                 // Always succeeds since we check above
                 if let InitState::Pipeline(mut client, persisted_state) =
                     core::mem::replace(&mut self.init, InitState::None)
@@ -257,120 +476,6 @@ impl PlayState for MainMenuState {
             }
         }
 
-        // Maintain the UI.
-        for event in self
-            .main_menu_ui
-            .maintain(global_state, global_state.clock.real_dt())
-        {
-            match event {
-                MainMenuEvent::LoginAttempt {
-                    username,
-                    password,
-                    server_address,
-                } => {
-                    global_state.portal_credentials = Some(Arc::new(crate::server_portal::PortalCredentials::new(
-                        username.clone(), password.clone(),
-                    )));
-                    let net_settings = &mut global_state.settings.networking;
-                    let use_srv = net_settings.use_srv;
-                    let use_quic = net_settings.use_quic;
-                    let validate_tls = net_settings.validate_tls;
-                    net_settings.username.clone_from(&username);
-                    net_settings.default_server.clone_from(&server_address);
-                    if !server_address.is_empty() && !net_settings.servers.contains(&server_address)
-                    {
-                        net_settings.servers.push(server_address.clone());
-                    }
-                    global_state
-                        .settings
-                        .save_to_file_warn(&global_state.config_dir);
-
-                    let connection_args = if use_srv {
-                        ConnectionArgs::Srv {
-                            hostname: server_address,
-                            prefer_ipv6: false,
-                            validate_tls,
-                            use_quic,
-                        }
-                    } else if use_quic {
-                        ConnectionArgs::Quic {
-                            hostname: server_address,
-                            prefer_ipv6: false,
-                            validate_tls,
-                        }
-                    } else {
-                        ConnectionArgs::Tcp {
-                            hostname: server_address,
-                            prefer_ipv6: false,
-                        }
-                    };
-                    attempt_login(
-                        &mut global_state.info_message,
-                        username,
-                        password,
-                        connection_args,
-                        &mut self.init,
-                        &global_state.tokio_runtime,
-                        global_state
-                            .settings
-                            .language
-                            .send_to_server
-                            .then_some(global_state.settings.language.selected_language.clone()),
-                        &global_state.i18n,
-                        &global_state.config_dir,
-                        global_state.args.client_type.0,
-                    );
-                },
-                MainMenuEvent::CancelLoginAttempt => {
-                    // init contains InitState::Client(ClientInit), which spawns a thread which
-                    // contains a TcpStream::connect() call This call is
-                    // blocking TODO fix when the network rework happens
-                    self.init = InitState::None;
-                    self.main_menu_ui.cancel_connection();
-                },
-                MainMenuEvent::ChangeLanguage(new_language) => {
-                    global_state.settings.language.selected_language =
-                        new_language.language_identifier;
-                    global_state.i18n = LocalizationHandle::load_expect(
-                        &global_state.settings.language.selected_language,
-                    );
-                    global_state
-                        .i18n
-                        .set_english_fallback(global_state.settings.language.use_english_fallback);
-                    self.main_menu_ui
-                        .update_language(global_state.i18n, &global_state.settings);
-                },
-                MainMenuEvent::Quit => return PlayStateResult::Shutdown,
-                // Note: Keeping in case we re-add the disclaimer
-                /*MainMenuEvent::DisclaimerAccepted => {
-                    global_state.settings.show_disclaimer = false
-                },*/
-                MainMenuEvent::AuthServerTrust(auth_server, trust) => {
-                    if trust {
-                        global_state
-                            .settings
-                            .networking
-                            .trusted_auth_servers
-                            .insert(auth_server.clone());
-                        global_state
-                            .settings
-                            .save_to_file_warn(&global_state.config_dir);
-                    }
-                    self.init
-                        .client()
-                        .map(|init| init.auth_trust(auth_server, trust));
-                },
-                MainMenuEvent::DeleteServer { server_index } => {
-                    let net_settings = &mut global_state.settings.networking;
-                    net_settings.servers.remove(server_index);
-
-                    global_state
-                        .settings
-                        .save_to_file_warn(&global_state.config_dir);
-                },
-            }
-        }
-
         if let Some(info) = global_state.info_message.take() {
             self.main_menu_ui.show_info(info);
         }
@@ -378,11 +483,24 @@ impl PlayState for MainMenuState {
         PlayStateResult::Continue
     }
 
-    fn name(&self) -> &'static str { "Title" }
+    fn name(&self) -> &'static str {
+        "Title"
+    }
 
-    fn capped_fps(&self) -> bool { true }
+    fn capped_fps(&self) -> bool {
+        true
+    }
 
-    fn globals_bind_group(&self) -> &GlobalsBindGroup { self.scene.global_bind_group() }
+    fn uses_native_ui(&self) -> bool {
+        cfg!(target_os = "trueos")
+    }
+
+    fn globals_bind_group(&self) -> &GlobalsBindGroup {
+        self.scene
+            .as_ref()
+            .expect("GPU menu has globals")
+            .global_bind_group()
+    }
 
     fn render(&self, drawer: &mut Drawer<'_>, _: &Settings) {
         // Draw the UI to the screen.
@@ -411,9 +529,9 @@ pub(crate) fn get_client_msg_error(
     // Build metadata does not determine wire compatibility. Only the numeric
     // game version can identify a version mismatch after ServerInfo arrives.
     let net_error = |error: String, mismatched_server_info: Option<ServerInfo>| -> String {
-        if let Some(server_info) = mismatched_server_info.filter(|info| {
-            info.game_version != common::util::GAME_VERSION
-        }) {
+        if let Some(server_info) =
+            mismatched_server_info.filter(|info| info.game_version != common::util::GAME_VERSION)
+        {
             version_error(common::util::GAME_VERSION, server_info.game_version)
         } else {
             format!(
@@ -433,16 +551,19 @@ pub(crate) fn get_client_msg_error(
                 localization.get_msg("main-login-internal_error"),
                 e
             )
-        },
+        }
         Error::AuthErr(e) => format!(
             "{}: {}",
             localization.get_msg("main-login-authentication_error"),
             e
         ),
         Error::Kicked(reason) => localization
-            .get_msg_ctx("main-login-kicked", &fluent_args! {
-                "reason" => reason,
-            })
+            .get_msg_ctx(
+                "main-login-kicked",
+                &fluent_args! {
+                    "reason" => reason,
+                },
+            )
             .into(),
         Error::TooManyPlayers => localization.get_msg("main-login-server_full").into(),
         Error::AuthServerNotTrusted => localization
@@ -458,14 +579,20 @@ pub(crate) fn get_client_msg_error(
             let end_date = end_time.with_timezone(&Local);
             let end_date_str = end_date.format("%Y-%m-%d %H:%M").to_string();
 
-            localization.get_msg_ctx("main-login-banned_until", &fluent_args! {
-                "reason" => ban_info.reason,
-                "end_date" => end_date_str,
-            })
+            localization.get_msg_ctx(
+                "main-login-banned_until",
+                &fluent_args! {
+                    "reason" => ban_info.reason,
+                    "end_date" => end_date_str,
+                },
+            )
         } else {
-            localization.get_msg_ctx("main-login-banned", &fluent_args! {
-                "reason" => ban_info.reason
-            })
+            localization.get_msg_ctx(
+                "main-login-banned",
+                &fluent_args! {
+                    "reason" => ban_info.reason
+                },
+            )
         }
         .into(),
         Error::InvalidCharacter => localization.get_msg("main-login-invalid_character").into(),
@@ -481,24 +608,26 @@ pub(crate) fn get_client_msg_error(
             match e.kind() {
                 std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotConnected => {
                     NO_SERVER_MESSAGE.into()
-                },
+                }
                 std::io::ErrorKind::TimedOut => localization.get_msg("main-login-timeout").into(),
                 _ => "Couldn't connect to the server.\nCheck the address and try again.".into(),
             }
-        },
+        }
         Error::NetworkErr(NetworkError::ConnectFailed(NetworkConnectError::Handshake(
             InitProtocolError::Custom(_),
         ))) => NO_SERVER_MESSAGE.into(),
         Error::NetworkErr(_) => {
             "Couldn't complete the game connection.\nCheck the server address and try again.".into()
-        },
+        }
         Error::ParticipantErr(e) => net_error(e.to_string(), mismatched_server_info),
         Error::StreamErr(e) => net_error(e.to_string(), mismatched_server_info),
         Error::RustlsErr(e) => net_error(e.to_string(), mismatched_server_info),
-        Error::HostnameLookupFailed(_) => localization.get_msg("main-login-server_not_found").into(),
+        Error::HostnameLookupFailed(_) => {
+            localization.get_msg("main-login-server_not_found").into()
+        }
         Error::Other(e) => {
             format!("{}: {}", localization.get_msg("common-error"), e)
-        },
+        }
         Error::AuthClientError(e) => match e {
             // TODO: remove parentheses
             crate::client::AuthClientError::RequestError(e) => format!(
@@ -532,7 +661,7 @@ pub(crate) fn get_client_msg_error(
                 localization.get_msg("main-login-failed_auth_server_url_invalid"),
                 e
             )
-        },
+        }
     }
 }
 
@@ -576,16 +705,19 @@ fn attempt_login(
                         .get_msg("main-login-username_bad_characters")
                         .into_owned(),
                 );
-            },
+            }
             comp::AliasError::TooLong => {
                 *info_message = Some(
                     localization
-                        .get_msg_ctx("main-login-username_too_long", &i18n::fluent_args! {
-                            "max_len" => comp::MAX_ALIAS_LEN
-                        })
+                        .get_msg_ctx(
+                            "main-login-username_too_long",
+                            &i18n::fluent_args! {
+                                "max_len" => comp::MAX_ALIAS_LEN
+                            },
+                        )
                         .into_owned(),
                 );
-            },
+            }
         }
         return;
     }

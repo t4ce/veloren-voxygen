@@ -185,8 +185,8 @@ fn main() {
         });
     i18n.set_english_fallback(settings.language.use_english_fallback);
 
-    // Run the original play-state stack on TRUEOS as well. Renderer/platform
-    // failures must surface here rather than stopping at the menu-only gate.
+    // Keep the original play-state stack. TRUEOS first publishes its UI4 menu;
+    // scene-device initialization is requested by Login, before connecting.
     {
         // Create window
         use veloren_voxygen::{error::Error, render::RenderError};
@@ -218,7 +218,7 @@ fn main() {
 
         let clipboard = veloren_voxygen::ui::ice::Clipboard::connect(window.window());
 
-        let lazy_init = SpriteRenderContext::new(window.renderer_mut());
+        let lazy_init = SpriteRenderContext::prepare(window.preparation_texture_limit());
 
         let global_state = GlobalState {
             userdata_dir,

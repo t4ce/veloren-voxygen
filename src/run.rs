@@ -228,7 +228,7 @@ fn handle_main_events_cleared(
         span!(guard, "Render");
 
         // Render the screen using the global renderer
-        if let Some(mut drawer) = global_state
+        if !last.uses_native_ui() && let Some(mut drawer) = global_state
             .window
             .renderer_mut()
             .start_recording_frame(last.globals_bind_group())

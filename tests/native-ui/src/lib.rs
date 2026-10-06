@@ -5,6 +5,8 @@ extern crate alloc;
 mod connection_screen;
 #[path = "../../../src/menu/main/ui/login_focus.rs"]
 mod login_focus;
+#[path = "../../../src/menu/main/scene_login.rs"]
+mod scene_login;
 extern crate self as iced;
 extern crate self as trueos;
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -389,6 +391,23 @@ mod scheduling {
         assert_eq!(activity.begins, 2);
         presenter.check().unwrap();
     }
+    #[test]
+    fn scene_handoff_clears_only_foreground_and_allows_menu_to_resume() {
+        let (scene, scene_state, _) = target(true);
+        let (foreground, ui_state, _) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        presenter.submit(1, vek::Vec2::new(640, 480), plan(0.0));
+        wait(|| presenter.published_revision() == 1);
+        let background_publications = scene_state.lock().unwrap().publications;
+        presenter.clear_foreground(2, vek::Vec2::new(640, 480));
+        wait(|| presenter.foreground_published_revision() == 2);
+        assert!(ui_state.lock().unwrap().commands.last().unwrap().is_empty());
+        assert_eq!(scene_state.lock().unwrap().publications, background_publications);
+        presenter.submit(3, vek::Vec2::new(640, 480), plan(0.0));
+        wait(|| presenter.published_revision() == 3);
+        assert!(!ui_state.lock().unwrap().commands.last().unwrap().is_empty());
+    }
+
     #[test]
     fn shutdown_does_not_wait_for_a_display_receipt() {
         let (scene, state, _) = target(false);

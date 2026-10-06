@@ -125,7 +125,7 @@ impl GlobalState {
     pub fn maintain(&mut self) {
         span!(_guard, "maintain", "GlobalState::maintain");
         self.audio.maintain();
-        self.window.renderer().maintain()
+        self.window.maintain_renderer()
     }
 
 }
@@ -168,6 +168,9 @@ pub trait PlayState {
 
     /// Determines whether the play state should have an enforced FPS cap
     fn capped_fps(&self) -> bool;
+
+    /// UI4 menus publish independently of the scene renderer.
+    fn uses_native_ui(&self) -> bool { false }
 
     fn globals_bind_group(&self) -> &GlobalsBindGroup;
 

@@ -771,6 +771,23 @@ pub struct MainMenuUi {
 
 impl MainMenuUi {
     pub fn new(global_state: &mut GlobalState) -> Self {
+        #[cfg(target_os = "trueos")]
+        {
+            let size = global_state.window.window().surface_size();
+            return Self::new_native(
+                &global_state.settings,
+                global_state.i18n,
+                global_state.args.server.clone(),
+                vek::Vec2::new(size.width, size.height),
+                global_state.window.scale_factor(),
+            );
+        }
+        #[cfg(not(target_os = "trueos"))]
+        Self::new_gpu(global_state)
+    }
+
+    #[cfg(not(target_os = "trueos"))]
+    fn new_gpu(global_state: &mut GlobalState) -> Self {
         // Load language
         let i18n = &global_state.i18n.read();
         // TODO: don't add default font twice
@@ -995,7 +1012,46 @@ impl MainMenuUi {
         self.ui.set_scaling_mode(scale_mode);
     }
 
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn invalidate_native(&mut self) {
+        self.ui.invalidate_native();
+    }
+
     pub fn maintain(&mut self, global_state: &mut GlobalState, dt: Duration) -> Vec<Event> {
+        #[cfg(target_os = "trueos")]
+        {
+            let size = global_state.window.window().surface_size();
+            let size = vek::Vec2::new(size.width, size.height);
+            if size.x == 0 || size.y == 0 {
+                return Vec::new();
+            }
+            return match self.maintain_native(
+                &global_state.settings,
+                &global_state.tokio_runtime,
+                &mut global_state.clipboard,
+                size,
+                dt,
+            ) {
+                Ok((events, plan)) => {
+                    if let Some(plan) = plan {
+                        if let Err(error) = global_state.window.present_menu(size, plan) {
+                            global_state.info_message = Some(error);
+                        }
+                    }
+                    events
+                }
+                Err(error) => {
+                    global_state.info_message = Some(error);
+                    Vec::new()
+                }
+            };
+        }
+        #[cfg(not(target_os = "trueos"))]
+        self.maintain_gpu(global_state, dt)
+    }
+
+    #[cfg(not(target_os = "trueos"))]
+    fn maintain_gpu(&mut self, global_state: &mut GlobalState, dt: Duration) -> Vec<Event> {
         let mut events = Vec::new();
 
         #[cfg(feature = "picasso-assets")]

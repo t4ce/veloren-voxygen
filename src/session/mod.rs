@@ -144,6 +144,7 @@ impl SessionState {
         client: Rc<RefCell<Client>>,
         persisted_state: Rc<RefCell<PersistedHudState>>,
     ) -> Self {
+        global_state.window.renderer_mut().prepare_scene();
         // Create a scene for this session. The scene handles visible elements of the
         // game world.
         let mut scene = Scene::new(

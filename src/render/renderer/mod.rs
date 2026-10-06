@@ -32,10 +32,10 @@ use super::{
     },
     texture::Texture,
 };
+use alloc::sync::Arc;
 use common::assets::{self, AssetExt, AssetHandle, ReloadWatcher};
 use common_base::span;
 use core::convert::TryFrom;
-use alloc::sync::Arc;
 use tracing::{error, info, warn};
 use vek::*;
 
@@ -78,9 +78,6 @@ impl core::ops::Deref for Layouts {
 
 /// Render target views
 struct Views {
-    // NOTE: unused for now, maybe... we will want it for something
-    _win_depth: wgpu::TextureView,
-
     tgt_color: wgpu::TextureView,
     tgt_mat: wgpu::TextureView,
     tgt_depth: wgpu::TextureView,
@@ -88,6 +85,12 @@ struct Views {
     bloom_tgts: Option<[wgpu::TextureView; bloom::NUM_SIZES]>,
     // TODO: rename
     tgt_color_pp: wgpu::TextureView,
+}
+
+/// Allocated only when a state opens a 3D scene, never for the title UI.
+struct SceneResources {
+    views: Views,
+    locals: Locals,
 }
 
 /// Shadow rendering textures, layouts, pipelines, and bind groups
@@ -156,8 +159,7 @@ pub struct Renderer {
     layouts: Layouts,
     // Note: we keep these here since their bind groups need to be updated if we resize the
     // color/depth textures
-    locals: Locals,
-    views: Views,
+    scene: Option<SceneResources>,
     noise_tex: Texture,
 
     quad_index_buffer_u16: Buffer<u16>,
@@ -178,8 +180,6 @@ pub struct Renderer {
     profiler_features_enabled: bool,
 
     ui_premultiply_uploads: ui::BatchedUploads,
-
-    
 
     // This checks is added because windows resizes the window to 0,0 when
     // minimizing and this causes a bunch of validation errors
@@ -245,7 +245,9 @@ impl Renderer {
 
         let surface = instance
             .create_surface(Arc::clone(&window))
-            .map_err(|error| RenderError::CustomError(format!("Scene surface creation: {error}")))?;
+            .map_err(|error| {
+                RenderError::CustomError(format!("Scene surface creation: {error}"))
+            })?;
 
         let adapters = runtime.block_on(instance.enumerate_adapters(backends));
 
@@ -441,26 +443,14 @@ impl Renderer {
 
         surface.configure(&device, &surface_config);
 
-        let shadow_views = ShadowMap::create_shadow_views(
+        let shadow_views = Self::create_shadow_views(
             &device,
             (dims.width, dims.height),
-            &ShadowMapMode::try_from(pipeline_modes.shadow).unwrap_or_default(),
+            &pipeline_modes,
             max_texture_size,
-        )
-        .map_err(|err| {
-            warn!("Could not create shadow map views: {:?}", err);
-        })
-        .ok();
-
-        let rain_occlusion_view = RainOcclusionMap::create_view(
-            &device,
-            &pipeline_modes.rain_occlusion,
-            max_texture_size,
-        )
-        .map_err(|err| {
-            warn!("Could not create rain occlusion map views: {:?}", err);
-        })
-        .ok();
+        );
+        let rain_occlusion_view =
+            Self::create_rain_view(&device, &pipeline_modes, max_texture_size);
 
         let shaders = Shaders::load_expect("");
         let shaders_watcher = shaders.reload_watcher();
@@ -529,14 +519,6 @@ impl Renderer {
             creating,
         };
 
-        let (views, bloom_sizes) = Self::create_rt_views(
-            &device,
-            (dims.width, dims.height),
-            &pipeline_modes,
-            &other_modes,
-            intermediate_format,
-        );
-
         let create_sampler = |filter| {
             device.create_sampler(&wgpu::SamplerDescriptor {
                 label: None,
@@ -562,37 +544,12 @@ impl Renderer {
             Some(AddressMode::Repeat),
         )?;
 
-        let clouds_locals =
-            Self::create_consts_inner(&device, &queue, &[clouds::Locals::default()]);
-        let postprocess_locals =
-            Self::create_consts_inner(&device, &queue, &[postprocess::Locals::default()]);
-
-        let locals = Locals::new(
-            &device,
-            &layouts,
-            clouds_locals,
-            postprocess_locals,
-            &views.tgt_color,
-            &views.tgt_mat,
-            &views.tgt_depth,
-            views.bloom_tgts.as_ref().map(|tgts| locals::BloomParams {
-                locals: bloom_sizes.map(|size| {
-                    Self::create_consts_inner(&device, &queue, &[bloom::Locals::new(size)])
-                }),
-                src_views: [&views.tgt_color_pp, &tgts[1], &tgts[2], &tgts[3], &tgts[4]],
-                final_tgt_view: &tgts[0],
-            }),
-            &views.tgt_color_pp,
-            &sampler,
-            &depth_sampler,
-        );
-
         let quad_index_buffer_u16 =
             create_quad_index_buffer_u16(&device, QUAD_INDEX_BUFFER_U16_START_VERT_LEN as usize);
         let quad_index_buffer_u32 =
             create_quad_index_buffer_u32(&device, QUAD_INDEX_BUFFER_U32_START_VERT_LEN as usize);
         other_modes.profiler_enabled &= profiler_features_enabled;
-        
+
         let profiler = wgpu_profiler::GpuProfiler::new(
             &device,
             wgpu_profiler::GpuProfilerSettings {
@@ -602,8 +559,6 @@ impl Renderer {
             },
         )
         .expect("Error creating profiler");
-
-        
 
         let present_modes = surface
             .get_capabilities(&adapter)
@@ -631,8 +586,7 @@ impl Renderer {
             recreation_pending: None,
 
             layouts,
-            locals,
-            views,
+            scene: None,
 
             sampler,
             depth_sampler,
@@ -655,8 +609,6 @@ impl Renderer {
             profiler_features_enabled,
 
             ui_premultiply_uploads: Default::default(),
-
-            
 
             is_minimized: false,
 
@@ -778,6 +730,77 @@ impl Renderer {
         vec
     }
 
+    /// Open the scene targets only at character selection or world entry.
+    pub fn prepare_scene(&mut self) {
+        if self.scene.is_some() {
+            return;
+        }
+        let (views, bloom_sizes) = Self::create_rt_views(
+            &self.device,
+            self.resolution.into_tuple(),
+            &self.pipeline_modes,
+            &self.other_modes,
+            self.intermediate_format,
+        );
+        let clouds_locals =
+            Self::create_consts_inner(&self.device, &self.queue, &[clouds::Locals::default()]);
+        let postprocess_locals =
+            Self::create_consts_inner(&self.device, &self.queue, &[postprocess::Locals::default()]);
+
+        let locals = Locals::new(
+            &self.device,
+            &self.layouts,
+            clouds_locals,
+            postprocess_locals,
+            &views.tgt_color,
+            &views.tgt_mat,
+            &views.tgt_depth,
+            views.bloom_tgts.as_ref().map(|tgts| locals::BloomParams {
+                locals: bloom_sizes.map(|size| {
+                    Self::create_consts_inner(
+                        &self.device,
+                        &self.queue,
+                        &[bloom::Locals::new(size)],
+                    )
+                }),
+                src_views: [&views.tgt_color_pp, &tgts[1], &tgts[2], &tgts[3], &tgts[4]],
+                final_tgt_view: &tgts[0],
+            }),
+            &views.tgt_color_pp,
+            &self.sampler,
+            &self.depth_sampler,
+        );
+
+        self.scene = Some(SceneResources { views, locals });
+    }
+
+    fn create_shadow_views(
+        device: &wgpu::Device,
+        size: (u32, u32),
+        modes: &PipelineModes,
+        max_texture_size: u32,
+    ) -> Option<(Texture, Texture)> {
+        let ShadowMode::Map(mode) = modes.shadow else {
+            return None;
+        };
+        ShadowMap::create_shadow_views(device, size, &mode, max_texture_size)
+            .map_err(|error| warn!(?error, "Could not create shadow map views"))
+            .ok()
+    }
+
+    fn create_rain_view(
+        device: &wgpu::Device,
+        modes: &PipelineModes,
+        max_texture_size: u32,
+    ) -> Option<Texture> {
+        if !modes.rain_enabled {
+            return None;
+        }
+        RainOcclusionMap::create_view(device, &modes.rain_occlusion, max_texture_size)
+            .map_err(|error| warn!(?error, "Could not create rain occlusion map view"))
+            .ok()
+    }
+
     /// Resize internal render targets to match window render target dimensions.
     pub fn on_resize(&mut self, dims: Vec2<u32>) {
         // Avoid panics when creating texture with w,h of 0,0.
@@ -789,135 +812,109 @@ impl Renderer {
             self.surface_config.height = dims.y;
             self.surface.configure(&self.device, &self.surface_config);
 
-            // Resize other render targets
-            let (views, bloom_sizes) = Self::create_rt_views(
-                &self.device,
-                (dims.x, dims.y),
-                &self.pipeline_modes,
-                &self.other_modes,
-                self.intermediate_format,
-            );
-            self.views = views;
+            if let Some(scene) = &mut self.scene {
+                // Resize other render targets
+                let (views, bloom_sizes) = Self::create_rt_views(
+                    &self.device,
+                    (dims.x, dims.y),
+                    &self.pipeline_modes,
+                    &self.other_modes,
+                    self.intermediate_format,
+                );
+                scene.views = views;
 
-            let bloom_params = self
-                .views
-                .bloom_tgts
-                .as_ref()
-                .map(|tgts| locals::BloomParams {
-                    locals: bloom_sizes.map(|size| {
-                        Self::create_consts_inner(
-                            &self.device,
-                            &self.queue,
-                            &[bloom::Locals::new(size)],
-                        )
-                    }),
-                    src_views: [
-                        &self.views.tgt_color_pp,
-                        &tgts[1],
-                        &tgts[2],
-                        &tgts[3],
-                        &tgts[4],
-                    ],
-                    final_tgt_view: &tgts[0],
-                });
+                let bloom_params =
+                    scene
+                        .views
+                        .bloom_tgts
+                        .as_ref()
+                        .map(|tgts| locals::BloomParams {
+                            locals: bloom_sizes.map(|size| {
+                                Self::create_consts_inner(
+                                    &self.device,
+                                    &self.queue,
+                                    &[bloom::Locals::new(size)],
+                                )
+                            }),
+                            src_views: [
+                                &scene.views.tgt_color_pp,
+                                &tgts[1],
+                                &tgts[2],
+                                &tgts[3],
+                                &tgts[4],
+                            ],
+                            final_tgt_view: &tgts[0],
+                        });
 
-            self.locals.rebind(
-                &self.device,
-                &self.layouts,
-                &self.views.tgt_color,
-                &self.views.tgt_mat,
-                &self.views.tgt_depth,
-                bloom_params,
-                &self.views.tgt_color_pp,
-                &self.sampler,
-                &self.depth_sampler,
-            );
+                scene.locals.rebind(
+                    &self.device,
+                    &self.layouts,
+                    &scene.views.tgt_color,
+                    &scene.views.tgt_mat,
+                    &scene.views.tgt_depth,
+                    bloom_params,
+                    &scene.views.tgt_color_pp,
+                    &self.sampler,
+                    &self.depth_sampler,
+                );
+            }
 
-            // Get mutable reference to shadow views out of the current state
-            let shadow_views = match &mut self.state {
+            // Shadow and rain settings are independent; neither may gate the
+            // other's resizing or bind-group updates.
+            let (shadow_views, rain_view) = match &mut self.state {
                 State::Interface {
                     shadow_views,
                     rain_occlusion_view,
                     ..
-                } => shadow_views
-                    .as_mut()
-                    .map(|s| (&mut s.0, &mut s.1))
-                    .zip(rain_occlusion_view.as_mut()),
-                State::Complete {
-                    shadow:
-                        Shadow {
-                            map: ShadowMap::Enabled(shadow_map),
-                            rain_map: RainOcclusionMap::Enabled(rain_occlusion_map),
-                            ..
-                        },
-                    ..
-                } => Some((
-                    (&mut shadow_map.point_depth, &mut shadow_map.directed_depth),
-                    &mut rain_occlusion_map.depth,
-                )),
-                State::Complete { .. } => None,
-                State::Nothing => None, // Should never hit this
+                } => (
+                    shadow_views.as_mut().map(|s| (&mut s.0, &mut s.1)),
+                    rain_occlusion_view.as_mut(),
+                ),
+                State::Complete { shadow, .. } => (
+                    match &mut shadow.map {
+                        ShadowMap::Enabled(map) => {
+                            Some((&mut map.point_depth, &mut map.directed_depth))
+                        }
+                        _ => None,
+                    },
+                    match &mut shadow.rain_map {
+                        RainOcclusionMap::Enabled(map) => Some(&mut map.depth),
+                        _ => None,
+                    },
+                ),
+                State::Nothing => (None, None),
             };
-
-            let mut update_shadow_bind = false;
-            let (shadow_views, rain_views) = shadow_views.unzip();
-
-            if let (Some((point_depth, directed_depth)), ShadowMode::Map(mode)) =
-                (shadow_views, self.pipeline_modes.shadow)
-            {
-                match ShadowMap::create_shadow_views(
+            let mut changed = false;
+            if let Some((point, directed)) = shadow_views {
+                if let Some((new_point, new_directed)) = Self::create_shadow_views(
                     &self.device,
                     (dims.x, dims.y),
-                    &mode,
+                    &self.pipeline_modes,
                     self.max_texture_size,
                 ) {
-                    Ok((new_point_depth, new_directed_depth)) => {
-                        *point_depth = new_point_depth;
-                        *directed_depth = new_directed_depth;
-
-                        update_shadow_bind = true;
-                    }
-                    Err(err) => {
-                        warn!("Could not create shadow map views: {:?}", err);
-                    }
+                    *point = new_point;
+                    *directed = new_directed;
+                    changed = true;
                 }
             }
-            if let Some(rain_depth) = rain_views {
-                match RainOcclusionMap::create_view(
+            if let Some(rain) = rain_view {
+                if let Some(new_rain) = Self::create_rain_view(
                     &self.device,
-                    &self.pipeline_modes.rain_occlusion,
+                    &self.pipeline_modes,
                     self.max_texture_size,
                 ) {
-                    Ok(new_rain_depth) => {
-                        *rain_depth = new_rain_depth;
-
-                        update_shadow_bind = true;
-                    }
-                    Err(err) => {
-                        warn!("Could not create rain occlusion map view: {:?}", err);
-                    }
+                    *rain = new_rain;
+                    changed = true;
                 }
             }
-            if update_shadow_bind {
-                // Recreate the shadow bind group if needed
-                if let State::Complete {
-                    shadow:
-                        Shadow {
-                            bind,
-                            map: ShadowMap::Enabled(shadow_map),
-                            rain_map: RainOcclusionMap::Enabled(rain_occlusion_map),
-                            ..
-                        },
-                    ..
-                } = &mut self.state
-                {
-                    *bind = self.layouts.global.bind_shadow_textures(
-                        &self.device,
-                        &shadow_map.point_depth,
-                        &shadow_map.directed_depth,
-                        &rain_occlusion_map.depth,
-                    );
-                }
+            if changed && let State::Complete { shadow, .. } = &mut self.state {
+                let (point, directed) = shadow.map.textures();
+                shadow.bind = self.layouts.global.bind_shadow_textures(
+                    &self.device,
+                    point,
+                    directed,
+                    shadow.rain_map.texture(),
+                );
             }
         } else {
             self.is_minimized = true;
@@ -941,7 +938,7 @@ impl Renderer {
         format: wgpu::TextureFormat,
     ) -> (Views, [Vec2<f32>; bloom::NUM_SIZES]) {
         let upscaled = Vec2::<u32>::from(size)
-            .map(|e| (e as f32 * other_modes.upscale_mode.factor) as u32)
+            .map(|e| ((e as f32 * other_modes.upscale_mode.factor) as u32).max(1))
             .into_tuple();
         let (width, height) = upscaled;
         let sample_count = pipeline_modes.aa.samples();
@@ -1025,34 +1022,6 @@ impl Renderer {
             swizzle: wgpu::TextureComponentSwizzle::default(),
         });
 
-        let win_depth_tex = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: wgpu::Extent3d {
-                width: size.0,
-                height: size.1,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: levels,
-            sample_count,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        // TODO: Consider no depth buffer for the final draw to the window?
-        let win_depth_view = win_depth_tex.create_view(&wgpu::TextureViewDescriptor {
-            label: None,
-            format: Some(wgpu::TextureFormat::Depth32Float),
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            usage: None,
-            aspect: wgpu::TextureAspect::DepthOnly,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
-            swizzle: wgpu::TextureComponentSwizzle::default(),
-        });
-
         (
             Views {
                 tgt_color: tgt_color_view,
@@ -1060,7 +1029,6 @@ impl Renderer {
                 tgt_depth: tgt_depth_view,
                 bloom_tgts: bloom_tgt_views,
                 tgt_color_pp: tgt_color_pp_view,
-                _win_depth: win_depth_view,
             },
             bloom_sizes.map(|s| s.map(|e| e as f32)),
         )
@@ -1148,6 +1116,52 @@ impl Renderer {
             }
         }
 
+        self.poll_pipeline_creation();
+
+        let texture = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(texture) => texture,
+            wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
+                warn!("Suboptimal swap chain, recreating");
+                drop(texture);
+                self.surface.configure(&self.device, &self.surface_config);
+                return Ok(None);
+            }
+            wgpu::CurrentSurfaceTexture::Lost => {
+                warn!("Surface lost, recreating");
+                self.surface = self
+                    .instance
+                    .create_surface(Arc::clone(&self.window))
+                    .map_err(|err| {
+                        RenderError::CustomError(format!("Failed to recreate surface: {err}"))
+                    })?;
+                self.surface.configure(&self.device, &self.surface_config);
+                return Ok(None);
+            }
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                warn!("Outdated swap chain, recreating");
+                self.surface.configure(&self.device, &self.surface_config);
+                return Ok(None);
+            }
+            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                return Ok(None);
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                return Err(RenderError::CustomError(
+                    "Surface acquisition validation failed".into(),
+                ));
+            }
+        };
+        let encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("A render encoder"),
+            });
+
+        Ok(Some(drawer::Drawer::new(encoder, self, texture, globals)))
+    }
+
+    /// Complete shader/pipeline work without recording or presenting a scene.
+    pub fn poll_pipeline_creation(&mut self) {
         // Handle polling background pipeline creation/recreation
         // Temporarily set to nothing and then replace in the statement below
         let state = core::mem::replace(&mut self.state, State::Nothing);
@@ -1235,37 +1249,64 @@ impl Renderer {
                     rain_occlusion_pipelines,
                     postprocess_layout,
                 ))) => {
-                    if let (
-                        Some(point_pipeline),
-                        Some(terrain_directed_pipeline),
-                        Some(figure_directed_pipeline),
-                        Some(debug_directed_pipeline),
-                        ShadowMap::Enabled(shadow_map),
-                    ) = (
+                    // Reuse map textures for unrelated shader changes. A toggle
+                    // or resolution change replaces them, and drops disabled maps.
+                    let shadow_views = if self.pipeline_modes.shadow == new_pipeline_modes.shadow {
+                        match shadow.map {
+                            ShadowMap::Enabled(map) => Some((map.point_depth, map.directed_depth)),
+                            _ => None,
+                        }
+                    } else {
+                        Self::create_shadow_views(
+                            &self.device,
+                            self.resolution.into_tuple(),
+                            &new_pipeline_modes,
+                            self.max_texture_size,
+                        )
+                    };
+                    let rain_view = if self.pipeline_modes.rain_enabled
+                        == new_pipeline_modes.rain_enabled
+                        && self.pipeline_modes.rain_occlusion == new_pipeline_modes.rain_occlusion
+                    {
+                        match shadow.rain_map {
+                            RainOcclusionMap::Enabled(map) => Some(map.depth),
+                            _ => None,
+                        }
+                    } else {
+                        Self::create_rain_view(
+                            &self.device,
+                            &new_pipeline_modes,
+                            self.max_texture_size,
+                        )
+                    };
+                    let map = ShadowMap::new(
+                        &self.device,
+                        &self.queue,
                         shadow_pipelines.point,
                         shadow_pipelines.directed,
                         shadow_pipelines.figure,
                         shadow_pipelines.debug,
-                        &mut shadow.map,
-                    ) {
-                        shadow_map.point_pipeline = point_pipeline;
-                        shadow_map.terrain_directed_pipeline = terrain_directed_pipeline;
-                        shadow_map.figure_directed_pipeline = figure_directed_pipeline;
-                        shadow_map.debug_directed_pipeline = debug_directed_pipeline;
-                    }
-
-                    if let (
-                        Some(terrain_directed_pipeline),
-                        Some(figure_directed_pipeline),
-                        RainOcclusionMap::Enabled(rain_occlusion_map),
-                    ) = (
+                        shadow_views,
+                    );
+                    let rain_map = RainOcclusionMap::new(
+                        &self.device,
+                        &self.queue,
                         rain_occlusion_pipelines.terrain,
                         rain_occlusion_pipelines.figure,
-                        &mut shadow.rain_map,
-                    ) {
-                        rain_occlusion_map.terrain_pipeline = terrain_directed_pipeline;
-                        rain_occlusion_map.figure_pipeline = figure_directed_pipeline;
-                    }
+                        rain_view,
+                    );
+                    let (point, directed) = map.textures();
+                    let bind = self.layouts.global.bind_shadow_textures(
+                        &self.device,
+                        point,
+                        directed,
+                        rain_map.texture(),
+                    );
+                    shadow = Shadow {
+                        map,
+                        rain_map,
+                        bind,
+                    };
 
                     self.pipeline_modes = new_pipeline_modes;
                     self.layouts.postprocess = postprocess_layout;
@@ -1322,47 +1363,6 @@ impl Renderer {
         {
             self.recreate_pipelines(new_pipeline_modes);
         }
-
-        let texture = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(texture) => texture,
-            wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
-                warn!("Suboptimal swap chain, recreating");
-                drop(texture);
-                self.surface.configure(&self.device, &self.surface_config);
-                return Ok(None);
-            }
-            wgpu::CurrentSurfaceTexture::Lost => {
-                warn!("Surface lost, recreating");
-                self.surface = self
-                    .instance
-                    .create_surface(Arc::clone(&self.window))
-                    .map_err(|err| {
-                        RenderError::CustomError(format!("Failed to recreate surface: {err}"))
-                    })?;
-                self.surface.configure(&self.device, &self.surface_config);
-                return Ok(None);
-            }
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                warn!("Outdated swap chain, recreating");
-                self.surface.configure(&self.device, &self.surface_config);
-                return Ok(None);
-            }
-            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
-                return Ok(None);
-            }
-            wgpu::CurrentSurfaceTexture::Validation => {
-                return Err(RenderError::CustomError(
-                    "Surface acquisition validation failed".into(),
-                ));
-            }
-        };
-        let encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("A render encoder"),
-            });
-
-        Ok(Some(drawer::Drawer::new(encoder, self, texture, globals)))
     }
 
     /// Recreate the pipelines
@@ -1424,11 +1424,21 @@ impl Renderer {
     }
 
     pub fn update_clouds_locals(&mut self, new_val: clouds::Locals) {
-        self.locals.clouds.update(&self.queue, &[new_val], 0)
+        self.scene
+            .as_mut()
+            .expect("scene resources are ready")
+            .locals
+            .clouds
+            .update(&self.queue, &[new_val], 0)
     }
 
     pub fn update_postprocess_locals(&mut self, new_val: postprocess::Locals) {
-        self.locals.postprocess.update(&self.queue, &[new_val], 0)
+        self.scene
+            .as_mut()
+            .expect("scene resources are ready")
+            .locals
+            .postprocess
+            .update(&self.queue, &[new_val], 0)
     }
 
     /// Create a new set of instances with the provided values.

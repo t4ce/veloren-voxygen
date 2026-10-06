@@ -12,8 +12,8 @@ use super::{
     ImmutableLayouts, Layouts,
     shaders::Shaders,
 };
-use common_base::{prof_span, prof_span_alloc};
 use alloc::sync::Arc;
+use common_base::{prof_span, prof_span_alloc};
 use std::sync::OnceLock;
 
 /// All the pipelines
@@ -149,12 +149,12 @@ struct ShaderModules {
     postprocess_frag: wgpu::ShaderModule,
     blit_vert: wgpu::ShaderModule,
     blit_frag: wgpu::ShaderModule,
-    point_light_shadows_vert: wgpu::ShaderModule,
-    light_shadows_directed_vert: wgpu::ShaderModule,
-    light_shadows_figure_vert: wgpu::ShaderModule,
-    light_shadows_debug_vert: wgpu::ShaderModule,
-    rain_occlusion_directed_vert: wgpu::ShaderModule,
-    rain_occlusion_figure_vert: wgpu::ShaderModule,
+    point_light_shadows_vert: Option<wgpu::ShaderModule>,
+    light_shadows_directed_vert: Option<wgpu::ShaderModule>,
+    light_shadows_figure_vert: Option<wgpu::ShaderModule>,
+    light_shadows_debug_vert: Option<wgpu::ShaderModule>,
+    rain_occlusion_directed_vert: Option<wgpu::ShaderModule>,
+    rain_occlusion_figure_vert: Option<wgpu::ShaderModule>,
 }
 
 impl ShaderModules {
@@ -240,7 +240,10 @@ impl ShaderModules {
         }
 
         // Stable define order keeps source hashes reproducible for baked variants.
-        let mut experimental = pipeline_modes.experimental_shaders.iter().collect::<Vec<_>>();
+        let mut experimental = pipeline_modes
+            .experimental_shaders
+            .iter()
+            .collect::<Vec<_>>();
         experimental.sort_by_key(|shader| format!("{shader:?}"));
         for shader in experimental {
             constants += &format!(
@@ -321,7 +324,10 @@ impl ShaderModules {
                     "/shaderbin/postprocess-frag.glsl"
                 ))
             } else {
-                &shaders.get(name).unwrap_or_else(|| panic!("Can't retrieve shader: {}", name)).0
+                &shaders
+                    .get(name)
+                    .unwrap_or_else(|| panic!("Can't retrieve shader: {}", name))
+                    .0
             };
             compiler.create_shader_module(device, glsl, stage, name)
         };
@@ -374,30 +380,54 @@ impl ShaderModules {
             postprocess_frag: create_shader("postprocess-frag", ShaderStage::Fragment)?,
             blit_vert: create_shader("blit-vert", ShaderStage::Vertex)?,
             blit_frag: create_shader("blit-frag", ShaderStage::Fragment)?,
-            point_light_shadows_vert: create_shader(
-                "point-light-shadows-vert",
-                ShaderStage::Vertex,
-            )?,
-            light_shadows_directed_vert: create_shader(
-                "light-shadows-directed-vert",
-                ShaderStage::Vertex,
-            )?,
-            light_shadows_figure_vert: create_shader(
-                "light-shadows-figure-vert",
-                ShaderStage::Vertex,
-            )?,
-            light_shadows_debug_vert: create_shader(
-                "light-shadows-debug-vert",
-                ShaderStage::Vertex,
-            )?,
-            rain_occlusion_directed_vert: create_shader(
-                "rain-occlusion-directed-vert",
-                ShaderStage::Vertex,
-            )?,
-            rain_occlusion_figure_vert: create_shader(
-                "rain-occlusion-figure-vert",
-                ShaderStage::Vertex,
-            )?,
+            point_light_shadows_vert: if pipeline_modes.shadow.is_map() {
+                Some(create_shader(
+                    "point-light-shadows-vert",
+                    ShaderStage::Vertex,
+                )?)
+            } else {
+                None
+            },
+            light_shadows_directed_vert: if pipeline_modes.shadow.is_map() {
+                Some(create_shader(
+                    "light-shadows-directed-vert",
+                    ShaderStage::Vertex,
+                )?)
+            } else {
+                None
+            },
+            light_shadows_figure_vert: if pipeline_modes.shadow.is_map() {
+                Some(create_shader(
+                    "light-shadows-figure-vert",
+                    ShaderStage::Vertex,
+                )?)
+            } else {
+                None
+            },
+            light_shadows_debug_vert: if pipeline_modes.shadow.is_map() {
+                Some(create_shader(
+                    "light-shadows-debug-vert",
+                    ShaderStage::Vertex,
+                )?)
+            } else {
+                None
+            },
+            rain_occlusion_directed_vert: if pipeline_modes.rain_enabled {
+                Some(create_shader(
+                    "rain-occlusion-directed-vert",
+                    ShaderStage::Vertex,
+                )?)
+            } else {
+                None
+            },
+            rain_occlusion_figure_vert: if pipeline_modes.rain_enabled {
+                Some(create_shader(
+                    "rain-occlusion-figure-vert",
+                    ShaderStage::Vertex,
+                )?)
+            } else {
+                None
+            },
         })
     }
 }
@@ -768,78 +798,114 @@ fn register_create_ingame_and_shadow_pipelines(
     // Pipeline for rendering point light terrain shadow maps.
     let point_shadow = tasks.register(
         move |needs| {
-            shadow::PointShadowPipeline::new(
-                needs.device,
-                &needs.shaders.point_light_shadows_vert,
-                &needs.layouts.global,
-                &needs.layouts.terrain,
-                needs.pipeline_modes.aa,
-            )
+            needs.pipeline_modes.shadow.is_map().then(|| {
+                shadow::PointShadowPipeline::new(
+                    needs.device,
+                    needs
+                        .shaders
+                        .point_light_shadows_vert
+                        .as_ref()
+                        .expect("enabled effect has shader"),
+                    &needs.layouts.global,
+                    &needs.layouts.terrain,
+                    needs.pipeline_modes.aa,
+                )
+            })
         },
         "point shadow pipeline creation",
     );
     // Pipeline for rendering directional light terrain shadow maps.
     let terrain_directed_shadow = tasks.register(
         move |needs| {
-            shadow::ShadowPipeline::new(
-                needs.device,
-                &needs.shaders.light_shadows_directed_vert,
-                &needs.layouts.global,
-                &needs.layouts.terrain,
-                needs.pipeline_modes.aa,
-            )
+            needs.pipeline_modes.shadow.is_map().then(|| {
+                shadow::ShadowPipeline::new(
+                    needs.device,
+                    needs
+                        .shaders
+                        .light_shadows_directed_vert
+                        .as_ref()
+                        .expect("enabled effect has shader"),
+                    &needs.layouts.global,
+                    &needs.layouts.terrain,
+                    needs.pipeline_modes.aa,
+                )
+            })
         },
         "terrain directed shadow pipeline creation",
     );
     // Pipeline for rendering directional light figure shadow maps.
     let figure_directed_shadow = tasks.register(
         move |needs| {
-            shadow::ShadowFigurePipeline::new(
-                needs.device,
-                &needs.shaders.light_shadows_figure_vert,
-                &needs.layouts.global,
-                &needs.layouts.figure,
-                needs.pipeline_modes.aa,
-            )
+            needs.pipeline_modes.shadow.is_map().then(|| {
+                shadow::ShadowFigurePipeline::new(
+                    needs.device,
+                    needs
+                        .shaders
+                        .light_shadows_figure_vert
+                        .as_ref()
+                        .expect("enabled effect has shader"),
+                    &needs.layouts.global,
+                    &needs.layouts.figure,
+                    needs.pipeline_modes.aa,
+                )
+            })
         },
         "figure directed shadow pipeline creation",
     );
     // Pipeline for rendering directional light debug shadow maps.
     let debug_directed_shadow = tasks.register(
         |needs| {
-            shadow::ShadowDebugPipeline::new(
-                needs.device,
-                &needs.shaders.light_shadows_debug_vert,
-                &needs.layouts.global,
-                &needs.layouts.debug,
-                needs.pipeline_modes.aa,
-            )
+            needs.pipeline_modes.shadow.is_map().then(|| {
+                shadow::ShadowDebugPipeline::new(
+                    needs.device,
+                    needs
+                        .shaders
+                        .light_shadows_debug_vert
+                        .as_ref()
+                        .expect("enabled effect has shader"),
+                    &needs.layouts.global,
+                    &needs.layouts.debug,
+                    needs.pipeline_modes.aa,
+                )
+            })
         },
         "figure directed shadow pipeline creation",
     );
     // Pipeline for rendering directional light terrain rain occlusion maps.
     let terrain_directed_rain_occlusion = tasks.register(
         |needs| {
-            rain_occlusion::RainOcclusionPipeline::new(
-                needs.device,
-                &needs.shaders.rain_occlusion_directed_vert,
-                &needs.layouts.global,
-                &needs.layouts.terrain,
-                needs.pipeline_modes.aa,
-            )
+            needs.pipeline_modes.rain_enabled.then(|| {
+                rain_occlusion::RainOcclusionPipeline::new(
+                    needs.device,
+                    needs
+                        .shaders
+                        .rain_occlusion_directed_vert
+                        .as_ref()
+                        .expect("enabled effect has shader"),
+                    &needs.layouts.global,
+                    &needs.layouts.terrain,
+                    needs.pipeline_modes.aa,
+                )
+            })
         },
         "terrain directed rain occlusion pipeline creation",
     );
     // Pipeline for rendering directional light figure rain occlusion maps.
     let figure_directed_rain_occlusion = tasks.register(
         |needs| {
-            rain_occlusion::RainOcclusionFigurePipeline::new(
-                needs.device,
-                &needs.shaders.rain_occlusion_figure_vert,
-                &needs.layouts.global,
-                &needs.layouts.figure,
-                needs.pipeline_modes.aa,
-            )
+            needs.pipeline_modes.rain_enabled.then(|| {
+                rain_occlusion::RainOcclusionFigurePipeline::new(
+                    needs.device,
+                    needs
+                        .shaders
+                        .rain_occlusion_figure_vert
+                        .as_ref()
+                        .expect("enabled effect has shader"),
+                    &needs.layouts.global,
+                    &needs.layouts.figure,
+                    needs.pipeline_modes.aa,
+                )
+            })
         },
         "figure directed rain occlusion pipeline creation",
     );
@@ -862,18 +928,16 @@ fn register_create_ingame_and_shadow_pipelines(
             terrain: terrain.resolve(),
             // player_shadow_pipeline: player_shadow_pipeline.resolve(),
         },
-        // TODO: If these are ever actually optionally done, ideally they will not be counted as
-        // tasks to do beforehand (i.e. implement it as skipping registering them above).
-        // TODO: Skip creating these if the shadow map setting is not enabled.
+        // Disabled effects return no pipeline and require no full-size maps.
         shadow: ShadowPipelines {
-            point: Some(point_shadow.resolve()),
-            directed: Some(terrain_directed_shadow.resolve()),
-            figure: Some(figure_directed_shadow.resolve()),
-            debug: Some(debug_directed_shadow.resolve()),
+            point: point_shadow.resolve(),
+            directed: terrain_directed_shadow.resolve(),
+            figure: figure_directed_shadow.resolve(),
+            debug: debug_directed_shadow.resolve(),
         },
         rain_occlusion: RainOcclusionPipelines {
-            terrain: Some(terrain_directed_rain_occlusion.resolve()),
-            figure: Some(figure_directed_rain_occlusion.resolve()),
+            terrain: terrain_directed_rain_occlusion.resolve(),
+            figure: figure_directed_rain_occlusion.resolve(),
         },
     }
 }
@@ -965,7 +1029,8 @@ pub(super) fn initial_create_pipelines(
             pipelines()
         };
 
-        pipeline_send.send(pipelines).expect("Channel disconnected");
+        // Closing/cancelling the window may retire this renderer before compilation finishes.
+        let _ = pipeline_send.send(pipelines);
     });
 
     Ok((interface_pipelines, pipeline_creation))
