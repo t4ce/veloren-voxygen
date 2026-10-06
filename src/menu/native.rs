@@ -1,11 +1,12 @@
-//! Shipped iced menus on TRUEOS: microfont composition followed by an opaque
-//! retained-sprite copy. No world renderer or WGPU Instance is created here.
+//! Shipped iced menus on a paired UI4 scene/UI window. Independent render
+//! workers keep GPU admission and retirement outside Winit input dispatch.
 use super::main::{
     DetailedInitializationStage,
     client_init::{ClientInit, Msg},
     ui::{Event, MainMenuUi},
 };
 use crate::client::addr::ConnectionArgs;
+use crate::ui::ice::renderer::presenter::LayeredPresenter;
 use crate::{
     cli,
     settings::Settings,
@@ -17,14 +18,14 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use trueos::ui4_solara_text::{Damage, Error as UiError, SceneTarget, SpriteCorner, SpriteQuad};
+use trueos::ui4_solara_text::SceneTarget;
 use vek::Vec2;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::ModifiersState,
-    platform::trueos::WindowExtTrueOS,
+    platform::trueos::{ActiveEventLoopExtTrueOS, WindowExtTrueOS},
     window::{Window, WindowAttributes, WindowId},
 };
 
@@ -52,6 +53,7 @@ pub fn run(
         .map_err(|e| e.to_string())?
         .run_app(app)
         .map_err(|e| e.to_string())?;
+    tracing::info!("Native menu event loop returned; Winit released its window");
     match failure.lock().unwrap().take() {
         Some(error) => Err(error),
         None => Ok(()),
@@ -70,21 +72,14 @@ struct App {
     error: Arc<std::sync::Mutex<Option<String>>>,
 }
 struct State {
+    // Join render workers before dropping the owning Winit window.
+    presenter: LayeredPresenter,
     window: Arc<dyn Window>,
-    target: SceneTarget,
     ui: MainMenuUi,
     clipboard: Clipboard,
     modifiers: ModifiersState,
-    size: Vec2<u32>,
-    last_pixels: Vec<u8>,
-    serial: Option<u64>,
-    pending: Option<Pending>,
-    first_presented: bool,
-}
-struct Pending {
-    pixels: Vec<u8>,
-    size: Vec2<u32>,
-    phase: u8,
+    input_logged: u8,
+    revision: u64,
 }
 
 impl App {
@@ -98,22 +93,8 @@ impl App {
         let dt = now.saturating_duration_since(self.last_tick);
         self.last_tick = now;
         let state = self.state.as_mut().unwrap();
-        // Never overwrite a retained source while its exact publication is pending.
-        if let Some(serial) = state.serial {
-            if !state
-                .target
-                .was_presented(serial)
-                .map_err(|e| format!("presentation: {e:?}"))?
-            {
-                return Ok(());
-            }
-            state.serial = None;
-            if !state.first_presented {
-                state.first_presented = true;
-                tracing::info!(serial, "Native iced opaque frame reached SURFLIVE");
-            }
-        }
-        if state.pending.is_none() {
+        state.presenter.check()?;
+        {
             let size = state.window.surface_size();
             let size = Vec2::new(size.width, size.height);
             if size.x == 0 || size.y == 0 {
@@ -138,7 +119,7 @@ impl App {
                     None => {}
                 }
             }
-            let (events, pixels) = state.ui.maintain_native(
+            let (events, plan) = state.ui.maintain_native(
                 &self.settings,
                 &self.runtime,
                 &mut state.clipboard,
@@ -147,7 +128,10 @@ impl App {
             )?;
             for event in events {
                 match event {
-                    Event::Quit => event_loop.exit(),
+                    Event::Quit => {
+                        tracing::info!("Native menu exit requested by Quit control");
+                        event_loop.exit();
+                    }
                     Event::CancelLoginAttempt => {
                         self.init = None;
                         state.ui.cancel_connection();
@@ -231,87 +215,15 @@ impl App {
                     }
                 }
             }
-            if pixels == state.last_pixels && size == state.size {
-                return Ok(());
-            }
-            if size != state.size {
-                state.target =
-                    SceneTarget::for_window(state.window.trueos_window_id(), size.x, size.y)
-                        .map_err(|e| format!("resize target: {e:?}"))?;
-                state.size = size;
-            }
-            state.pending = Some(Pending {
-                pixels,
-                size,
-                phase: 0,
-            });
-        }
-        // Keep the same write lease and transaction on Busy; retry only its current phase.
-        let pending = state.pending.as_mut().unwrap();
-        loop {
-            let result = match pending.phase {
-                0 => state.target.upload_sprite_rgba8(
-                    1,
-                    pending.size.x,
-                    pending.size.y,
-                    &pending.pixels,
-                ),
-                1 => state.target.begin_gpu_frame(),
-                2 => state.target.draw_sprite_quads(&[full_quad(pending.size)]),
-                _ => match state
-                    .target
-                    .publish_tracked(Damage::full(pending.size.x, pending.size.y))
-                {
-                    Ok(serial) => {
-                        state.serial = Some(serial);
-                        state.last_pixels = state.pending.take().unwrap().pixels;
-                        return Ok(());
-                    }
-                    Err(UiError::Busy) => return Ok(()),
-                    Err(error) => return Err(format!("publish: {error:?}")),
-                },
-            };
-            match result {
-                Ok(()) => pending.phase += 1,
-                Err(UiError::Busy) => return Ok(()),
-                Err(error) => {
-                    return Err(format!("native frame phase {}: {error:?}", pending.phase));
-                }
+            if let Some(plan) = plan {
+                state.revision += 1;
+                state.presenter.submit(state.revision, size, plan);
             }
         }
+        Ok(())
     }
 }
-fn full_quad(size: Vec2<u32>) -> SpriteQuad {
-    SpriteQuad {
-        sprite_id: 1,
-        c0: SpriteCorner {
-            x: 0.,
-            y: 0.,
-            u: 0.,
-            v: 0.,
-        },
-        c1: SpriteCorner {
-            x: size.x as f32,
-            y: 0.,
-            u: 1.,
-            v: 0.,
-        },
-        c2: SpriteCorner {
-            x: size.x as f32,
-            y: size.y as f32,
-            u: 1.,
-            v: 1.,
-        },
-        c3: SpriteCorner {
-            x: 0.,
-            y: size.y as f32,
-            u: 0.,
-            v: 1.,
-        },
-        color_rgba: u32::MAX,
-        source_over: false,
-    }
-}
+
 impl ApplicationHandler for App {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
         if self.state.is_some() {
@@ -320,13 +232,14 @@ impl ApplicationHandler for App {
         let result = (|| {
             let window: Arc<dyn Window> = Arc::from(
                 event_loop
-                    .create_window(
+                    .create_layered_window(
                         WindowAttributes::default()
                             .with_title("Voxygen")
                             .with_surface_size(winit::dpi::PhysicalSize::new(
                                 self.settings.graphics.window.size[0],
                                 self.settings.graphics.window.size[1],
                             )),
+                        60,
                     )
                     .map_err(|e| e.to_string())?,
             );
@@ -334,6 +247,13 @@ impl ApplicationHandler for App {
             let size = Vec2::new(size.width, size.height);
             let target = SceneTarget::for_window(window.trueos_window_id(), size.x, size.y)
                 .map_err(|e| format!("window target: {e:?}"))?;
+            let background = target
+                .background()
+                .map_err(|e| format!("scene layer: {e:?}"))?;
+            let presenter = LayeredPresenter::new(target, background)?;
+            tracing::info!(
+                "Native menu uses independent scene/UI producers; foreground BCS0, display-plane alpha"
+            );
             let mut ui = MainMenuUi::new_native(
                 &self.settings,
                 self.i18n,
@@ -350,15 +270,12 @@ impl ApplicationHandler for App {
             let clipboard = Clipboard::connect(window.as_ref());
             Ok::<_, String>(State {
                 window,
-                target,
+                presenter,
                 ui,
                 clipboard,
-                size,
                 modifiers: ModifiersState::empty(),
-                last_pixels: Vec::new(),
-                pending: None,
-                serial: None,
-                first_presented: false,
+                input_logged: 0,
+                revision: 0,
             })
         })();
         match result {
@@ -374,6 +291,7 @@ impl ApplicationHandler for App {
             return;
         }
         if matches!(event, WindowEvent::CloseRequested) {
+            tracing::info!("Native menu received window CloseRequested");
             event_loop.exit();
             return;
         }
@@ -384,6 +302,15 @@ impl ApplicationHandler for App {
             state
                 .ui
                 .handle_event(crate::window::Event::ScaleFactorChanged(*scale_factor));
+        }
+        let (input_bit, input_kind) = match &event {
+            WindowEvent::PointerButton { .. } => (1, "pointer button"),
+            WindowEvent::KeyboardInput { .. } => (2, "keyboard"),
+            _ => (0, ""),
+        };
+        if input_bit != 0 && state.input_logged & input_bit == 0 {
+            state.input_logged |= input_bit;
+            tracing::info!(input_kind, "Native menu received routed Winit input");
         }
         if let Some(event) = window_event(&event, state.window.scale_factor(), state.modifiers) {
             state.ui.handle_ui_event(event);

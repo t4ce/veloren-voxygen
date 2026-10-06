@@ -1,0 +1,14 @@
+[package]
+name = "voxy-native-ui-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+image = { version = "0.25", default-features = false }
+vek = "0.17"
+glyph_brush = "0.7"
+microfont = { path = "../../../TRUEOS/vendor/microfont" }
+tracing = "0.1"

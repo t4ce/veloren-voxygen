@@ -1,7 +1,7 @@
 //    tooltip_manager: TooltipManager,
 mod cache;
 pub mod component;
-mod renderer;
+pub(crate) mod renderer;
 pub mod widget;
 mod winit;
 
@@ -35,6 +35,8 @@ pub struct IcedUi {
     // Scaling of the ui
     scale: Scale,
     scale_changed: bool,
+    #[cfg(target_os = "trueos")]
+    last_native_primitive: Option<renderer::primitive::Primitive>,
 }
 impl IcedUi {
     pub fn new(
@@ -63,6 +65,8 @@ impl IcedUi {
             cursor_position: Vec2::zero(),
             scale,
             scale_changed: false,
+            #[cfg(target_os = "trueos")]
+            last_native_primitive: None,
         })
     }
 
@@ -76,6 +80,8 @@ impl IcedUi {
             cursor_position: Vec2::zero(),
             scale: Scale::new(resolution, scale_factor, ScaleMode::Absolute(1.0), 1.0),
             scale_changed: false,
+            #[cfg(target_os = "trueos")]
+            last_native_primitive: None,
         }
     }
 
@@ -85,14 +91,34 @@ impl IcedUi {
         root: E,
         resolution: Vec2<u32>,
         clipboard: &mut Clipboard,
-    ) -> Result<(Vec<M>, Vec<u8>), String> {
+    ) -> Result<(Vec<M>, Option<renderer::bcs::FramePlan>), String> {
         if self.scale.surface_resized(resolution) || self.scale_changed {
             self.scale_changed = false;
             self.renderer.resize_native(resolution);
+            self.last_native_primitive = None;
         }
         let (messages, primitive, _) = self.update_interface(root, clipboard);
-        let pixels = self.renderer.draw_native(primitive)?.to_vec();
-        Ok((messages, pixels))
+        // Iced events/layout continue every tick. Only changed draw output
+        // needs a new retained command plan.
+        if self.last_native_primitive.as_ref() == Some(&primitive) {
+            return Ok((messages, None));
+        }
+        let started = std::time::Instant::now();
+        let plan = self.renderer.draw_native(&primitive)?;
+        let elapsed = started.elapsed();
+        if elapsed >= std::time::Duration::from_millis(100) {
+            tracing::warn!(
+                elapsed_ms = elapsed.as_millis(),
+                "Native iced asset preparation exceeded input tick budget"
+            );
+        }
+        self.last_native_primitive = Some(primitive);
+        Ok((messages, Some(plan)))
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub fn mark_scene_image(&mut self, id: graphic::Id) {
+        self.renderer.mark_scene_image(id);
     }
 
     /// Add a new font that is referncable via the returned Id
@@ -102,15 +128,27 @@ impl IcedUi {
 
     /// Allows clearing out the fonts when switching languages
     pub fn clear_fonts(&mut self, default_font: Font) {
+        #[cfg(target_os = "trueos")]
+        {
+            self.last_native_primitive = None;
+        }
         self.renderer.clear_fonts(default_font);
     }
 
     /// Add a new graphic that is referencable via the returned Id
     pub fn add_graphic(&mut self, graphic: Graphic) -> Id {
+        #[cfg(target_os = "trueos")]
+        {
+            self.last_native_primitive = None;
+        }
         self.renderer.add_graphic(graphic)
     }
 
     pub fn replace_graphic(&mut self, id: Id, graphic: Graphic) {
+        #[cfg(target_os = "trueos")]
+        {
+            self.last_native_primitive = None;
+        }
         self.renderer.replace_graphic(id, graphic);
     }
 
@@ -147,7 +185,6 @@ impl IcedUi {
                 // TODO: determine why iced moved cursor position out of the `Cache` and if we
                 // may need to handle this in a different way to address
                 // whatever issue iced was trying to address
-                self.cursor_position = Vec2::new(x, y);
                 self.events.push(Event::Mouse(mouse::Event::CursorMoved {
                     position: iced::Point::new(x, y),
                 }));
@@ -215,7 +252,7 @@ impl IcedUi {
         root: E,
         clipboard: &mut Clipboard,
     ) -> (Vec<M>, renderer::primitive::Primitive, mouse::Interaction) {
-        let cursor_position = iced::Point {
+        let mut cursor_position = iced::Point {
             x: self.cursor_position.x,
             y: self.cursor_position.y,
         };
@@ -236,6 +273,11 @@ impl IcedUi {
             span!(_guard, "update user_interface");
             let mut messages = Vec::new();
             for event in &self.events {
+                // Replay pointer positions in order. A later move (including
+                // another mouse) must not change where an earlier click lands.
+                if let Event::Mouse(mouse::Event::CursorMoved { position }) = event {
+                    cursor_position = *position;
+                }
                 if matches!(
                     event,
                     Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
@@ -253,6 +295,7 @@ impl IcedUi {
             }
             messages
         };
+        self.cursor_position = Vec2::new(cursor_position.x, cursor_position.y);
         // Clear events
         self.events.clear();
 

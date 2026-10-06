@@ -502,17 +502,16 @@ impl Controls {
                     events.push(Event::DeleteServer { server_index });
                     self.selected_server_index = None;
                 }
-            }
-            /* Note: Keeping in case we re-add the disclaimer */
-            /*Message::AcceptDisclaimer => {
-                if let Screen::Disclaimer { .. } = &self.screen {
-                    events.push(Event::DisclaimerAccepted);
-                    self.screen = Screen::Login {
-                        screen: login::Screen::default(),
-                        error: None,
-                    };
-                }
-            },*/
+            } /* Note: Keeping in case we re-add the disclaimer */
+              /*Message::AcceptDisclaimer => {
+                  if let Screen::Disclaimer { .. } = &self.screen {
+                      events.push(Event::DisclaimerAccepted);
+                      self.screen = Screen::Login {
+                          screen: login::Screen::default(),
+                          error: None,
+                      };
+                  }
+              },*/
         }
     }
 
@@ -654,6 +653,8 @@ impl MainMenuUi {
         let logo_glow = logo_glow::LogoGlow::new(&mut ui);
         let imgs = Imgs::load(&mut ui).expect("Failed to load images");
         let bg = ui.add_graphic(Graphic::Image(bg_img, None));
+        ui.mark_scene_image(bg);
+        ui.mark_scene_image(imgs.bg);
         let controls = Controls::new(fonts, imgs, bg, i18n, settings, server, logo_glow);
         Self {
             ui,
@@ -670,9 +671,9 @@ impl MainMenuUi {
         clipboard: &mut ui::ice::Clipboard,
         resolution: vek::Vec2<u32>,
         dt: Duration,
-    ) -> Result<(Vec<Event>, Vec<u8>), String> {
+    ) -> Result<(Vec<Event>, Option<ui::ice::renderer::bcs::FramePlan>), String> {
         self.poll_account();
-        let (messages, pixels) = self.ui.maintain_native(
+        let (messages, plan) = self.ui.maintain_native(
             self.controls.view(settings, dt.as_secs_f32()),
             resolution,
             clipboard,
@@ -683,7 +684,7 @@ impl MainMenuUi {
                 .update(message, &mut events, settings, &mut self.ui, runtime);
         }
         self.update_clipboard(clipboard);
-        Ok((events, pixels))
+        Ok((events, plan))
     }
 
     /// Exercise the shipped loading screen without creating a client/world.

@@ -1,6 +1,8 @@
-#[cfg(any(target_os = "trueos", test))]
-mod blit;
+#[cfg(target_os = "trueos")]
+pub(crate) mod bcs;
 mod defaults;
+#[cfg(target_os = "trueos")]
+pub(crate) mod presenter;
 pub(super) mod primitive;
 pub mod style;
 mod widget;
@@ -92,7 +94,7 @@ pub struct IcedRenderer {
     // Consts for default ui drawing position (ie the interface)
     interface_locals: Option<UiBoundLocals>,
     #[cfg(target_os = "trueos")]
-    native: Option<blit::Renderer>,
+    native: Option<bcs::Renderer>,
 
     // Used to delay cache resizing until after current frame is drawn
     //need_cache_resize: bool,
@@ -164,7 +166,7 @@ impl IcedRenderer {
             draw_commands: Vec::new(),
             model: None,
             interface_locals: None,
-            native: Some(blit::Renderer::new(
+            native: Some(bcs::Renderer::new(
                 physical_resolution.x,
                 physical_resolution.y,
             )),
@@ -290,11 +292,19 @@ impl IcedRenderer {
     }
 
     #[cfg(target_os = "trueos")]
-    pub fn draw_native(&mut self, primitive: Primitive) -> Result<&[u8], String> {
+    pub fn draw_native(&mut self, primitive: &Primitive) -> Result<bcs::FramePlan, String> {
         self.native
             .as_mut()
             .expect("native renderer state")
-            .rasterize(&primitive)
+            .prepare(primitive)
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub fn mark_scene_image(&mut self, id: graphic::Id) {
+        self.native
+            .as_mut()
+            .expect("native renderer state")
+            .mark_scene_image(id);
     }
 
     pub(super) fn is_native(&self) -> bool {
@@ -565,7 +575,7 @@ impl IcedRenderer {
     ) -> Vec<glyph_brush::SectionGlyph> {
         use glyph_brush::ab_glyph::{Glyph, GlyphId, PxScale, point};
 
-        let scale = blit::font_scale(size);
+        let scale = bcs::font_scale(size);
         let cell_w = (microfont::FWIDTH as u32 * scale) as f32;
         let cell_h = (microfont::FHEIGHT as u32 * scale) as f32;
         let max_cols = if bounds.width.is_finite() && bounds.width > 0.0 {
@@ -573,7 +583,7 @@ impl IcedRenderer {
         } else {
             usize::MAX
         };
-        let lines = blit::native_text_lines(text, max_cols);
+        let lines = bcs::native_text_lines(text, max_cols);
         let total_height = lines.len() as f32 * cell_h;
         let top = match vertical_alignment {
             iced::VerticalAlignment::Top => bounds.y,
@@ -617,12 +627,12 @@ impl IcedRenderer {
 
     #[cfg(target_os = "trueos")]
     pub(super) fn native_measure_value(&self, text: &str, size: u16) -> f32 {
-        text.chars().count() as f32 * microfont::FWIDTH as f32 * blit::font_scale(size) as f32
+        text.chars().count() as f32 * microfont::FWIDTH as f32 * bcs::font_scale(size) as f32
     }
 
     #[cfg(target_os = "trueos")]
     pub(super) fn native_measure(&self, text: &str, size: u16, bounds: iced::Size) -> (f32, f32) {
-        let scale = blit::font_scale(size) as f32;
+        let scale = bcs::font_scale(size) as f32;
         let cell_w = microfont::FWIDTH as f32 * scale;
         let cell_h = microfont::FHEIGHT as f32 * scale;
         let max_cols = if bounds.width.is_finite() && bounds.width > 0.0 {
@@ -630,7 +640,7 @@ impl IcedRenderer {
         } else {
             usize::MAX
         };
-        let (width, lines) = blit::native_line_metrics(text, max_cols);
+        let (width, lines) = bcs::native_line_metrics(text, max_cols);
         (width as f32 * cell_w, lines as f32 * cell_h)
     }
 

@@ -1,0 +1,302 @@
+//! Host harness for the production native draw planner; UI4 records are inert.
+#![allow(dead_code)]
+extern crate alloc;
+extern crate self as iced;
+extern crate self as trueos;
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Rectangle {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+pub mod ui4_solara_text {
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum SpriteBackend {
+        Bcs0,
+        Compositor,
+        PremultipliedCompositor,
+    }
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct SpriteCorner {
+        pub x: f32,
+        pub y: f32,
+        pub u: f32,
+        pub v: f32,
+    }
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct SpriteQuad {
+        pub sprite_id: u32,
+        pub c0: SpriteCorner,
+        pub c1: SpriteCorner,
+        pub c2: SpriteCorner,
+        pub c3: SpriteCorner,
+        pub color_rgba: u32,
+        pub source_over: bool,
+    }
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct SpriteCommand {
+        pub quad: SpriteQuad,
+        pub backend: SpriteBackend,
+    }
+    #[derive(Clone, Copy, Debug)]
+    pub enum Error {
+        Busy,
+        Invalid,
+    }
+    pub struct Damage;
+    impl Damage {
+        pub fn full(_: u32, _: u32) -> Self {
+            Self
+        }
+    }
+    #[derive(Default)]
+    pub struct Observations {
+        pub begins: usize,
+        pub draws: usize,
+        pub publications: u64,
+        pub lease: bool,
+        pub busy_draw: bool,
+        pub stale_receipts: bool,
+        pub commands: Vec<Vec<SpriteCommand>>,
+    }
+    pub struct SceneTarget {
+        pub observations: std::sync::Arc<std::sync::Mutex<Observations>>,
+        pub live: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    }
+    impl SceneTarget {
+        pub fn set_extent(&mut self, _: u32, _: u32) -> Result<(), Error> {
+            Ok(())
+        }
+        pub fn upload_sprite_rgba8(
+            &mut self,
+            _: u32,
+            _: u32,
+            _: u32,
+            _: &[u8],
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+        pub fn begin_gpu_frame(&mut self) -> Result<(), Error> {
+            let mut state = self.observations.lock().unwrap();
+            if state.lease {
+                return Err(Error::Invalid);
+            }
+            if state.publications > 0 && !self.live.load(std::sync::atomic::Ordering::Acquire) {
+                return Err(Error::Busy);
+            }
+            state.lease = true;
+            state.begins += 1;
+            Ok(())
+        }
+        pub fn draw_sprite_commands(&mut self, commands: &[SpriteCommand]) -> Result<(), Error> {
+            let mut state = self.observations.lock().unwrap();
+            if !state.lease {
+                return Err(Error::Invalid);
+            }
+            if state.busy_draw {
+                state.busy_draw = false;
+                state.lease = false;
+                return Err(Error::Busy);
+            }
+            state.draws += 1;
+            state.commands.push(commands.to_vec());
+            Ok(())
+        }
+        pub fn publish_tracked(&mut self, _: Damage) -> Result<u64, Error> {
+            let mut state = self.observations.lock().unwrap();
+            if !state.lease {
+                return Err(Error::Invalid);
+            }
+            state.lease = false;
+            state.publications += 1;
+            Ok(state.publications)
+        }
+        pub fn was_presented(&self, _: u64) -> Result<bool, Error> {
+            Ok(!self.observations.lock().unwrap().stale_receipts
+                && self.live.load(std::sync::atomic::Ordering::Acquire))
+        }
+    }
+}
+pub mod ui {
+    pub mod graphic {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub struct Id(u32);
+        impl Id {
+            pub fn from_index(index: u32) -> Self {
+                Self(index)
+            }
+        }
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub enum Rotation {
+            None,
+            Cw90,
+            Cw180,
+            Cw270,
+        }
+    }
+    pub mod ice {
+        pub mod widget {
+            pub mod image {
+                pub type Handle = crate::ui::graphic::Id;
+            }
+        }
+        pub mod renderer {
+            pub mod primitive {
+                include!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../../src/ui/ice/renderer/primitive.rs"
+                ));
+            }
+            pub mod bcs;
+            pub mod presenter;
+        }
+    }
+}
+
+#[cfg(test)]
+mod scheduling {
+    use super::{
+        ui::ice::renderer::{
+            bcs::{FramePlan, LayerPlan},
+            presenter::LayeredPresenter,
+        },
+        ui4_solara_text::*,
+    };
+    use std::{
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicBool, Ordering},
+        },
+        thread,
+        time::{Duration, Instant},
+    };
+    fn target(live: bool) -> (SceneTarget, Arc<Mutex<Observations>>, Arc<AtomicBool>) {
+        let observations = Arc::new(Mutex::new(Observations::default()));
+        let live = Arc::new(AtomicBool::new(live));
+        (
+            SceneTarget {
+                observations: observations.clone(),
+                live: live.clone(),
+            },
+            observations,
+            live,
+        )
+    }
+    fn wait(mut predicate: impl FnMut() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !predicate() {
+            assert!(Instant::now() < deadline, "producer did not make progress");
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+    fn plan(x: f32) -> FramePlan {
+        let quad = SpriteQuad {
+            sprite_id: 0,
+            c0: SpriteCorner {
+                x,
+                y: 0.,
+                u: 0.,
+                v: 0.,
+            },
+            c1: SpriteCorner {
+                x: x + 1.,
+                y: 0.,
+                u: 1.,
+                v: 0.,
+            },
+            c2: SpriteCorner {
+                x: x + 1.,
+                y: 1.,
+                u: 1.,
+                v: 1.,
+            },
+            c3: SpriteCorner {
+                x,
+                y: 1.,
+                u: 0.,
+                v: 1.,
+            },
+            color_rgba: u32::MAX,
+            source_over: true,
+        };
+        FramePlan {
+            foreground: LayerPlan {
+                uploads: vec![],
+                commands: vec![SpriteCommand {
+                    quad,
+                    backend: SpriteBackend::Bcs0,
+                }],
+            },
+            background: LayerPlan::default(),
+        }
+    }
+    #[test]
+    fn scene_receipt_never_blocks_the_foreground_producer() {
+        let (scene, scene_state, _) = target(false);
+        let (foreground, ui_state, _) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        presenter.submit(1, vek::Vec2::new(8, 8), plan(1.));
+        wait(|| scene_state.lock().unwrap().publications == 1);
+        // Paired resizing requires the foreground to publish while the scene
+        // has no SURFLIVE receipt yet; waiting on it would deadlock both layers.
+        wait(|| ui_state.lock().unwrap().publications == 1);
+        presenter.submit(2, vek::Vec2::new(8, 8), plan(2.));
+        wait(|| ui_state.lock().unwrap().publications == 2);
+        assert_eq!(ui_state.lock().unwrap().commands[1][0].quad.c0.x, 2.);
+        presenter.check().unwrap();
+    }
+    #[test]
+    fn only_latest_unleased_ui_work_survives_backpressure() {
+        let (scene, _, _) = target(true);
+        let (foreground, state, live) = target(false);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        presenter.submit(1, vek::Vec2::new(8, 8), plan(1.));
+        wait(|| state.lock().unwrap().publications == 1);
+        presenter.submit(2, vek::Vec2::new(8, 8), plan(2.));
+        presenter.submit(3, vek::Vec2::new(8, 8), plan(3.));
+        live.store(true, Ordering::Release);
+        wait(|| state.lock().unwrap().publications == 2);
+        assert_eq!(state.lock().unwrap().commands[1][0].quad.c0.x, 3.);
+        presenter.check().unwrap();
+    }
+    #[test]
+    fn superseded_display_receipts_do_not_freeze_new_frames() {
+        let (scene, scene_state, _) = target(true);
+        let (foreground, ui_state, _) = target(true);
+        scene_state.lock().unwrap().stale_receipts = true;
+        ui_state.lock().unwrap().stale_receipts = true;
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        presenter.submit(1, vek::Vec2::new(8, 8), plan(1.));
+        wait(|| ui_state.lock().unwrap().publications == 1);
+        presenter.submit(2, vek::Vec2::new(10, 10), plan(2.));
+        wait(|| {
+            ui_state.lock().unwrap().publications == 2
+                && scene_state.lock().unwrap().publications == 2
+        });
+        presenter.check().unwrap();
+    }
+    #[test]
+    fn canceled_busy_draw_reacquires_a_fresh_lease() {
+        let (scene, _, _) = target(true);
+        let (foreground, ui_state, _) = target(true);
+        ui_state.lock().unwrap().busy_draw = true;
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        presenter.submit(1, vek::Vec2::new(8, 8), plan(1.));
+        wait(|| ui_state.lock().unwrap().publications == 1);
+        assert_eq!(ui_state.lock().unwrap().begins, 2);
+        assert_eq!(ui_state.lock().unwrap().draws, 1);
+        presenter.check().unwrap();
+    }
+    #[test]
+    fn shutdown_does_not_wait_for_a_display_receipt() {
+        let (scene, state, _) = target(false);
+        let (foreground, _, _) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        presenter.submit(1, vek::Vec2::new(8, 8), plan(1.));
+        wait(|| state.lock().unwrap().publications == 1);
+        let start = Instant::now();
+        drop(presenter);
+        assert!(start.elapsed() < Duration::from_millis(200));
+    }
+}

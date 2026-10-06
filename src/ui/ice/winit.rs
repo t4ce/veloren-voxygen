@@ -7,8 +7,17 @@ use winit::{event::WindowEvent, keyboard::NamedKey};
 
 pub use crate::clipboard::Clipboard;
 impl Clipboard {
-    pub fn connect(_window: &dyn winit::window::Window) -> Self {
-        Self::default()
+    pub fn connect(window: &dyn winit::window::Window) -> Self {
+        #[cfg(target_os = "trueos")]
+        {
+            use winit::platform::trueos::WindowExtTrueOS;
+            Self::for_frame(window.trueos_window_id())
+        }
+        #[cfg(not(target_os = "trueos"))]
+        {
+            let _ = window;
+            Self::default()
+        }
     }
 }
 

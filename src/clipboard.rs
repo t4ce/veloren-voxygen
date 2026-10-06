@@ -40,12 +40,12 @@ impl Clipboard {
         }
         #[cfg(target_os = "trueos")]
         {
+            // Gate setup is background state, not a copy/paste attempt.
+            // Keep failures silent and retry on the next focus update.
             let Some(window) = self.window else {
-                self.report("TRUEOS clipboard is unavailable");
                 return;
             };
-            if let Err(e) = trueos::clipboard::focus(window, Some(os_kind(kind))) {
-                self.report(e.message());
+            if trueos::clipboard::focus(window, Some(os_kind(kind))).is_err() {
                 return;
             }
         }
@@ -57,9 +57,7 @@ impl Clipboard {
         }
         #[cfg(target_os = "trueos")]
         if let Some(window) = self.window {
-            if let Err(e) = trueos::clipboard::focus(window, None) {
-                self.report(e.message());
-            }
+            let _ = trueos::clipboard::focus(window, None);
         }
         self.focused = None;
     }
