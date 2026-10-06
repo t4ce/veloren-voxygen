@@ -55,7 +55,7 @@ impl Screen {
         let delete_button = Container::new(
             Container::new(neat_button(
                 &mut self.delete_button,
-                i18n.get_msg("common-delete_server"),
+                "Delete",
                 FILL_FRAC_ONE,
                 button_style,
                 Some(Message::DeleteServer),

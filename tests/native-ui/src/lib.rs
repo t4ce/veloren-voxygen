@@ -1,6 +1,8 @@
 //! Host harness for the production native draw planner; UI4 records are inert.
 #![allow(dead_code)]
 extern crate alloc;
+#[path = "../../../src/menu/connection_screen.rs"]
+mod connection_screen;
 extern crate self as iced;
 extern crate self as trueos;
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -262,8 +264,11 @@ mod scheduling {
         // Paired resizing requires the foreground to publish while the scene
         // has no SURFLIVE receipt yet; waiting on it would deadlock both layers.
         wait(|| ui_state.lock().unwrap().publications == 1);
+        wait(|| presenter.published_revision() == 1);
         presenter.submit(2, vek::Vec2::new(8, 8), plan(2.));
         wait(|| ui_state.lock().unwrap().publications == 2);
+        // The unchanged background also acknowledges the new revision.
+        wait(|| presenter.published_revision() == 2);
         assert_eq!(ui_state.lock().unwrap().commands[1][0].quad.c0.x, 2.);
         presenter.check().unwrap();
     }
@@ -274,10 +279,14 @@ mod scheduling {
         let presenter = LayeredPresenter::new(foreground, scene).unwrap();
         presenter.submit(1, vek::Vec2::new(8, 8), plan(1.));
         wait(|| state.lock().unwrap().publications == 1);
+        wait(|| presenter.published_revision() == 1);
         presenter.submit(2, vek::Vec2::new(8, 8), plan(2.));
         presenter.submit(3, vek::Vec2::new(8, 8), plan(3.));
+        // A queued animation frame is not visible while UI admission is busy.
+        assert_eq!(presenter.published_revision(), 1);
         live.store(true, Ordering::Release);
         wait(|| state.lock().unwrap().publications == 2);
+        wait(|| presenter.published_revision() == 3);
         assert_eq!(state.lock().unwrap().commands[1][0].quad.c0.x, 3.);
         presenter.check().unwrap();
     }
@@ -333,6 +342,7 @@ mod scheduling {
         });
         assert_eq!(actual_work, 0);
         assert_eq!(state.lock().unwrap().publications, 1);
+        wait(|| presenter.published_revision() == 2);
     }
     #[test]
     fn canceled_busy_draw_reacquires_a_fresh_lease() {

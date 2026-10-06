@@ -10,7 +10,7 @@ use std::{
     collections::HashSet,
     sync::{
         Arc, Condvar, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     thread::{self, JoinHandle},
@@ -29,6 +29,7 @@ struct Mailbox {
     latest: Mutex<Option<Job>>,
     wake: Condvar,
     stopped: AtomicBool,
+    published_revision: AtomicU64,
     counters: ProducerCounters,
 }
 impl Mailbox {
@@ -102,6 +103,18 @@ impl LayeredPresenter {
             self.foreground.mailbox.counters.take(),
         )
     }
+    pub(crate) fn published_revision(&self) -> u64 {
+        self.scene
+            .mailbox
+            .published_revision
+            .load(Ordering::Acquire)
+            .min(
+                self.foreground
+                    .mailbox
+                    .published_revision
+                    .load(Ordering::Acquire),
+            )
+    }
     pub fn check(&self) -> Result<(), String> {
         match self.errors.try_recv() {
             Ok(error) => Err(error),
@@ -162,6 +175,10 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
             })
         {
             mailbox.counters.unchanged.fetch_add(1, Ordering::Relaxed);
+            // The existing publication already has this revision's contents.
+            mailbox
+                .published_revision
+                .store(current.revision, Ordering::Release);
             job = None;
             continue;
         }
@@ -243,6 +260,9 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     .fetch_add(micros(call_started.elapsed()), Ordering::Relaxed);
                 match result {
                     Ok(()) => {
+                        mailbox
+                            .published_revision
+                            .store(current.revision, Ordering::Release);
                         mailbox
                             .counters
                             .publications

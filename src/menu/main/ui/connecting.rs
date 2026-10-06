@@ -1,5 +1,6 @@
 use super::{ConnectionState, Imgs, Message};
 
+use crate::client::ClientInitStage;
 use crate::{
     game_input::GameInput,
     menu::main::DetailedInitializationStage,
@@ -10,7 +11,6 @@ use crate::{
         ice::{Element, IcedUi as Ui, Id, component::neat_button, style, widget::Image},
     },
 };
-use crate::client::ClientInitStage;
 use common::assets::{self, AssetExt, Ron};
 use i18n::Localization;
 use iced::{Align, Column, Container, Length, Row, Space, Text, button};
@@ -83,9 +83,9 @@ impl Screen {
         controls: &ControlSettings,
     ) -> Element<'_, Message> {
         // TODO: add built in support for animated images
-        let frame_index = (time * self.loading_animation.speed_factor as f64)
-            % self.loading_animation.frames.len() as f64;
-        let frame_id = self.loading_animation.frames[frame_index as usize];
+        let animation = &self.loading_animation;
+        let frame_index = (time * animation.speed_factor as f64) % animation.frames.len() as f64;
+        let frame_id = animation.frames[frame_index as usize];
 
         let children = match connection_state {
             ConnectionState::InProgress => {
@@ -131,23 +131,23 @@ impl Screen {
                     let stage_message = match init_stage {
                         DetailedInitializationStage::StartingMultiplayer => {
                             i18n.get_msg("hud-init-stage-multiplayer")
-                        },
+                        }
                         DetailedInitializationStage::Client(client_stage) => match client_stage {
                             ClientInitStage::ConnectionEstablish => {
                                 i18n.get_msg("hud-init-stage-client-connection-establish")
-                            },
+                            }
                             ClientInitStage::WatingForServerVersion => {
                                 i18n.get_msg("hud-init-stage-client-request-server-version")
-                            },
+                            }
                             ClientInitStage::Authentication => {
                                 i18n.get_msg("hud-init-stage-client-authentication")
-                            },
+                            }
                             ClientInitStage::LoadingInitData => {
                                 i18n.get_msg("hud-init-stage-client-load-init-data")
-                            },
+                            }
                             ClientInitStage::StartingClient => {
                                 i18n.get_msg("hud-init-stage-client-starting-client")
-                            },
+                            }
                         },
                         DetailedInitializationStage::CreatingRenderPipeline(done, total) => i18n
                             .get_msg_ctx(
@@ -215,7 +215,7 @@ impl Screen {
                     Space::new(Length::Fill, Length::Fill).into(),
                     bottom_bar.into(),
                 ]
-            },
+            }
             ConnectionState::AuthTrustPrompt { msg, .. } => {
                 let text = Text::new(msg).size(fonts.cyri.scale(25));
 
@@ -270,7 +270,7 @@ impl Screen {
                     container.into(),
                     Space::new(Length::Fill, Length::Units(fonts.cyri.scale(15))).into(),
                 ]
-            },
+            }
         };
 
         Column::with_children(children)

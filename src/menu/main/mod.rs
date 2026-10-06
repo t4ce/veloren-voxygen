@@ -139,8 +139,7 @@ impl PlayState for MainMenuState {
                 if global_state
                     .settings
                     .networking
-                    .trusted_auth_servers
-                    .contains(&auth_server)
+                    .is_auth_server_trusted(&auth_server)
                 {
                     // Can't fail since we just polled it, it must be Some
                     self.init.client().unwrap().auth_trust(auth_server, true);
@@ -475,17 +474,25 @@ pub(crate) fn get_client_msg_error(
                 .into_owned(),
             mismatched_server_info,
         ),
-        Error::NetworkErr(e) => net_error(e.to_string(), mismatched_server_info),
+        Error::NetworkErr(NetworkError::ConnectFailed(NetworkConnectError::Io(e))) => {
+            match e.kind() {
+                std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotConnected => {
+                    NO_SERVER_MESSAGE.into()
+                },
+                std::io::ErrorKind::TimedOut => localization.get_msg("main-login-timeout").into(),
+                _ => "Couldn't connect to the server.\nCheck the address and try again.".into(),
+            }
+        },
+        Error::NetworkErr(NetworkError::ConnectFailed(NetworkConnectError::Handshake(
+            InitProtocolError::Custom(_),
+        ))) => NO_SERVER_MESSAGE.into(),
+        Error::NetworkErr(_) => {
+            "Couldn't complete the game connection.\nCheck the server address and try again.".into()
+        },
         Error::ParticipantErr(e) => net_error(e.to_string(), mismatched_server_info),
         Error::StreamErr(e) => net_error(e.to_string(), mismatched_server_info),
         Error::RustlsErr(e) => net_error(e.to_string(), mismatched_server_info),
-        Error::HostnameLookupFailed(e) => {
-            format!(
-                "{}: {}",
-                localization.get_msg("main-login-server_not_found"),
-                e
-            )
-        },
+        Error::HostnameLookupFailed(_) => localization.get_msg("main-login-server_not_found").into(),
         Error::Other(e) => {
             format!("{}: {}", localization.get_msg("common-error"), e)
         },
@@ -526,7 +533,10 @@ pub(crate) fn get_client_msg_error(
     }
 }
 
-fn get_client_init_msg_error(
+const NO_SERVER_MESSAGE: &str =
+    "The host appears to have no server running.\nCheck the address and try again.";
+
+pub(crate) fn get_client_init_msg_error(
     error: client_init::Error,
     localized_strings: &LocalizationHandle,
 ) -> String {
@@ -538,7 +548,7 @@ fn get_client_init_msg_error(
             mismatched_server_info,
         } => get_client_msg_error(error, mismatched_server_info, &localization),
         InitError::ClientCrashed => localization.get_msg("main-login-client_crashed").into(),
-        InitError::ServerNotFound => localization.get_msg("main-login-server_not_found").into(),
+        InitError::ServerNotFound => NO_SERVER_MESSAGE.into(),
     }
 }
 

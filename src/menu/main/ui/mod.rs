@@ -373,6 +373,17 @@ impl Controls {
         ui: &mut Ui,
         runtime: &alloc::sync::Arc<tokio::runtime::Runtime>,
     ) {
+        if matches!(&self.screen, Screen::Connecting { .. })
+            && !matches!(
+                &message,
+                Message::Quit
+                    | Message::CancelConnect
+                    | Message::TrustPromptAdd
+                    | Message::TrustPromptCancel
+            )
+        {
+            return;
+        }
         let servers = &settings.networking.servers;
         let mut language_metadatas = i18n::list_localizations();
 

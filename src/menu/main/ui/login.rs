@@ -128,7 +128,11 @@ impl Screen {
             Container::new(
                 Column::with_children(vec![
                     Scrollable::new(&mut self.error_scroll)
-                        .push(Text::new(error).size(fonts.cyri.scale(18)).width(Length::Fill))
+                        .push(
+                            Text::new(error)
+                                .size(fonts.cyri.scale(18))
+                                .width(Length::Fill),
+                        )
                         .height(Length::Fill)
                         .into(),
                     Container::new(neat_button(
@@ -438,15 +442,13 @@ impl LoginBanner {
             .spacing(5)
             .into(),
             Space::new(Length::Fill, Length::Units(8)).into(),
-            Column::with_children(vec![
-                neat_button(
-                    &mut self.multiplayer_button,
-                    i18n.get_msg("common-multiplayer"),
-                    FILL_FRAC_TWO,
-                    button_style,
-                    Some(Message::Multiplayer),
-                ),
-            ])
+            Column::with_children(vec![neat_button(
+                &mut self.multiplayer_button,
+                i18n.get_msg("common-multiplayer"),
+                FILL_FRAC_TWO,
+                button_style,
+                Some(Message::Multiplayer),
+            )])
             .max_width(170)
             .height(Length::Units(200))
             .spacing(8)

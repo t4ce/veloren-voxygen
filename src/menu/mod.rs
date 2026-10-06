@@ -5,3 +5,6 @@ pub mod server_info;
 
 #[cfg(target_os = "trueos")]
 pub mod native;
+
+#[cfg(target_os = "trueos")]
+mod connection_screen;

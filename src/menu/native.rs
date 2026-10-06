@@ -1,5 +1,6 @@
 //! Shipped iced menus on a paired UI4 scene/UI window. Independent render
 //! workers keep GPU admission and retirement outside Winit input dispatch.
+use super::connection_screen::ConnectionScreen;
 use super::main::{
     DetailedInitializationStage,
     client_init::{ClientInit, Msg},
@@ -45,6 +46,8 @@ pub fn run(
         args,
         state: None,
         init: None,
+        client: None,
+        connection_screen: ConnectionScreen::default(),
         last_tick: Instant::now(),
         error: Arc::clone(&failure),
     };
@@ -68,9 +71,26 @@ struct App {
     args: cli::Args,
     state: Option<State>,
     init: Option<ClientInit>,
+    client: Option<ConnectedClient>,
+    connection_screen: ConnectionScreen,
     last_tick: Instant,
     error: Arc<std::sync::Mutex<Option<String>>>,
 }
+
+struct ConnectedClient {
+    client: Box<crate::client::Client>,
+    last_tick: Instant,
+    characters_pending: bool,
+}
+
+/// Client::drop waits for network disconnect. Keep that teardown off the
+/// Winit input thread, including a completed client cancelled during the hold.
+fn retire_client(runtime: &tokio::runtime::Runtime, client: &mut Option<ConnectedClient>) {
+    if let Some(client) = client.take() {
+        runtime.spawn_blocking(move || drop(client));
+    }
+}
+
 struct State {
     // Join render workers before dropping the owning Winit window.
     presenter: LayeredPresenter,
@@ -140,23 +160,98 @@ impl App {
             }
             if let Some(init) = &self.init {
                 while let Some(stage) = init.stage_update() {
+                    tracing::info!(?stage, "Native login initialization stage");
                     state
                         .ui
                         .update_stage(DetailedInitializationStage::Client(stage));
                 }
                 match init.poll() {
-                    Some(Msg::IsAuthTrusted(server)) => state.ui.auth_trust_prompt(server),
+                    Some(Msg::IsAuthTrusted(server)) => {
+                        // Compatibility with an initializer that still emits
+                        // the old request: resolve it without showing a dialog.
+                        init.auth_trust(server, true);
+                    }
                     Some(Msg::Done(result)) => {
                         self.init = None;
                         match result {
-                            // Character preview/world resources belong to the next renderer step.
-                            Ok(_client) => state.ui.show_info("Connected. Native character preview renderer is not available yet.".into()),
-                            Err(error) => state.ui.show_info(format!("Connection failed: {error:?}")),
+                            Ok(mut client) => {
+                                // ClientInit has completed handshake, login,
+                                // initial data loading and StartingClient here.
+                                crate::ecs::init(client.state_mut().ecs_mut());
+                                let characters_pending = !client.are_plugins_missing();
+                                if characters_pending {
+                                    client.load_character_list();
+                                }
+                                self.client = Some(ConnectedClient {
+                                    client: Box::new(client),
+                                    last_tick: Instant::now(),
+                                    characters_pending,
+                                });
+                                tracing::info!(
+                                    "Native login complete; client ready at character selection"
+                                );
+                                self.connection_screen.complete("Login complete.\nThe character screen is not ready to render yet.".into());
+                            }
+                            Err(error) => {
+                                tracing::warn!(?error, "Native multiplayer connection failed");
+                                self.connection_screen.complete(
+                                    super::main::get_client_init_msg_error(error, &self.i18n),
+                                );
+                            }
                         }
                     }
                     None => {}
                 }
             }
+            // Follow the character-selection client's normal network upkeep
+            // without starting a renderer or selecting an in-game character.
+            let session_error = self.client.as_mut().and_then(|session| {
+                let elapsed = now.saturating_duration_since(session.last_tick);
+                if elapsed < Duration::from_millis(33) {
+                    return None;
+                }
+                session.last_tick = now;
+                let result = session
+                    .client
+                    .tick(common::comp::ControllerInputs::default(), elapsed);
+                session.client.cleanup();
+                if session.characters_pending && !session.client.character_list().loading {
+                    tracing::info!(
+                        characters = session.client.character_list().characters.len(),
+                        "Native character list received"
+                    );
+                    session.characters_pending = false;
+                }
+                match result {
+                    Ok(events)
+                        if events
+                            .iter()
+                            .any(|event| matches!(event, crate::client::Event::Disconnect)) =>
+                    {
+                        Some("The server disconnected.\nPlease log in again.".into())
+                    }
+                    Ok(_) => None,
+                    Err(error) => {
+                        tracing::warn!(?error, "Native character-selection connection failed");
+                        Some(super::main::get_client_msg_error(
+                            error,
+                            None,
+                            &self.i18n.read(),
+                        ))
+                    }
+                }
+            });
+            if let Some(error) = session_error {
+                retire_client(&self.runtime, &mut self.client);
+                if self.connection_screen.is_active() {
+                    self.connection_screen.complete(error);
+                } else {
+                    state.ui.show_info(error);
+                }
+            }
+            // maintain_native prepares the current screen before applying its
+            // messages. A Login click's plan still belongs to the login screen.
+            let rendered_connecting = state.ui.native_activity_screen() == "connecting";
             let maintain_started = Instant::now();
             let (events, plan) = state.ui.maintain_native(
                 &self.settings,
@@ -176,8 +271,18 @@ impl App {
                         event_loop.exit();
                     }
                     Event::CancelLoginAttempt => {
-                        self.init = None;
+                        if let Some(mut init) = self.init.take() {
+                            init.cancel();
+                            // A completion already queued in its receiver may
+                            // own a Client too; destroy it on the worker.
+                            self.runtime.spawn_blocking(move || drop(init));
+                        }
+                        // A fast successful login may already be maintained
+                        // while its visible transition waits for the minimum.
+                        retire_client(&self.runtime, &mut self.client);
+                        self.connection_screen.cancel();
                         state.ui.cancel_connection();
+                        tracing::info!("Native connection cancelled; minimum appearance bypassed");
                     }
                     Event::LoginAttempt {
                         username,
@@ -196,6 +301,8 @@ impl App {
                             );
                             continue;
                         }
+                        retire_client(&self.runtime, &mut self.client);
+                        self.connection_screen.begin();
                         let net = &mut self.settings.networking;
                         net.username.clone_from(&username);
                         net.default_server.clone_from(&server_address);
@@ -261,6 +368,26 @@ impl App {
             if let Some(plan) = plan {
                 state.revision += 1;
                 state.presenter.submit(state.revision, size, plan);
+                if rendered_connecting {
+                    self.connection_screen.submitted(state.revision);
+                }
+            }
+            // Start the minimum only after both render workers publish the
+            // loading screen; upload/queue time does not count as appearance.
+            if self
+                .connection_screen
+                .published(state.presenter.published_revision(), Instant::now())
+            {
+                tracing::info!(
+                    minimum_ms = 3000,
+                    "Native connection screen published; appearance timer started"
+                );
+            }
+            // Handle input first so an explicit Cancel wins even on the tick
+            // where a pending success or failure becomes eligible to display.
+            if let Some(message) = self.connection_screen.take_ready(Instant::now()) {
+                state.ui.show_info(message);
+                tracing::info!("Native connection outcome shown after minimum appearance");
             }
         }
         state.report_activity(false);

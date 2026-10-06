@@ -12,7 +12,7 @@ const VELOREN_USERDATA_ENV: &str = "VELOREN_USERDATA";
 ///
 /// The first specified in this list is used.
 ///   1. The VELOREN_USERDATA runtime environment variable
-///   2. On TRUEOS, the app-relative `userdata` directory
+///   2. On TRUEOS, the shared `/apps/voxy/userdata` directory
 ///   3. The VELOREN_USERDATA_STRATEGY compile time environment variable
 ///   4. The CARGO_WORKSPACE_DIR/userdata compile time environment variable
 ///      defined in .cargo/config.toml
@@ -30,12 +30,11 @@ pub fn userdata_dir() -> PathBuf {
     // 1. The VELOREN_USERDATA runtime environment variable
     std::env::var_os(VELOREN_USERDATA_ENV)
         .map(PathBuf::from)
-        // TRUEOS resolves relative paths inside the app's filesystem root.
-        // Executable discovery is unsupported; shared storage can be selected
-        // explicitly with VELOREN_USERDATA=common/veloren/userdata.
+        // Rooted app userdata survives container replacement. TRUEOS exports
+        // this subtree to the app's containers; relative paths stay private.
         .or_else(|| {
             #[cfg(target_os = "trueos")]
-            { Some(PathBuf::from("userdata")) }
+            { Some(PathBuf::from("/apps/voxy/userdata")) }
             #[cfg(not(target_os = "trueos"))]
             { None }
         })

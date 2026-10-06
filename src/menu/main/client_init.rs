@@ -38,6 +38,8 @@ pub struct ClientInit {
     stage_rx: Receiver<ClientInitStage>,
     trust_tx: Sender<AuthTrust>,
     cancel: Arc<AtomicBool>,
+    #[cfg(target_os = "trueos")]
+    abort_handle: tokio::task::AbortHandle,
 }
 impl ClientInit {
     pub fn new(
@@ -58,7 +60,15 @@ impl ClientInit {
         let runtime2 = Arc::clone(&runtime);
         let config_dir = config_dir.to_path_buf();
 
-        runtime.spawn(async move {
+        let _task = runtime.spawn(async move {
+            // This TRUEOS build approves the game server's authentication
+            // provider directly, without a UI prompt or saved trust-list gate.
+            #[cfg(target_os = "trueos")]
+            let trust_fn = {
+                drop(trust_rx);
+                |_auth_server: &str| true
+            };
+            #[cfg(not(target_os = "trueos"))]
             let trust_fn = |auth_server: &str| {
                 let _ = tx.send(Msg::IsAuthTrusted(auth_server.to_string()));
                 trust_rx
@@ -100,6 +110,21 @@ impl ClientInit {
                     Err(ClientError::NetworkErr(NetworkError::ConnectFailed(
                         NetworkConnectError::Io(e),
                     ))) => {
+                        // A closed/refused endpoint will not complete this
+                        // attempt. Return its useful error to the login dialog
+                        // instead of silently retrying for four minutes.
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotConnected
+                        ) {
+                            last_err = Some(Error::ClientError {
+                                error: ClientError::NetworkErr(NetworkError::ConnectFailed(
+                                    NetworkConnectError::Io(e),
+                                )),
+                                mismatched_server_info,
+                            });
+                            break 'tries;
+                        }
                         warn!(?e, "Failed to connect to the server. Retrying...");
                     },
                     Err(e) => {
@@ -128,6 +153,8 @@ impl ClientInit {
             stage_rx: init_stage_rx,
             trust_tx,
             cancel,
+            #[cfg(target_os = "trueos")]
+            abort_handle: _task.abort_handle(),
         }
     }
 
@@ -150,7 +177,12 @@ impl ClientInit {
         let _ = self.trust_tx.send(AuthTrust(auth_server, trusted));
     }
 
-    pub fn cancel(&mut self) { self.cancel.store(true, Ordering::Relaxed); }
+    pub fn cancel(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
+        // Stop the current handshake/login future as well as future retries.
+        #[cfg(target_os = "trueos")]
+        self.abort_handle.abort();
+    }
 }
 
 impl Drop for ClientInit {
