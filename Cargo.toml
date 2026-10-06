@@ -1,0 +1,190 @@
+# TRUEOS-only full-client Blueprint. The original main.rs is the entry point.
+# Platform adapters are intentionally still pending.
+[package]
+name = "voxy"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+autobins = false
+autoexamples = false
+autobenches = false
+autotests = false
+
+[package.metadata.trueos-blueprint]
+profile = "release"
+replicatable = false
+
+[package.metadata.trueos-blueprint.build-env-paths]
+CARGO_WORKSPACE_DIR = "."
+
+[features]
+default = ["trueos-blueprint", "audio"]
+trueos-blueprint = ["picasso-assets"]
+audio = ["dep:kira", "dep:cpal"]
+headless = ["wgpu/wgsl"]
+picasso-assets = ["common/picasso-assets"]
+noaudio = []
+
+# Full client dependencies are available to TRUEOS, rather than desktop-gated.
+[dependencies]
+anim = { package = "veloren-voxygen-anim", path = "anim" }
+authc = { git = "https://gitlab.com/veloren/auth.git", rev = "ae0e16783a9f9041951296885f082308e155db79" }
+bitflags = { version = "^2.2.1", features = ["serde"] }
+bytemuck = { version = "^1.7", features = ["derive"] }
+byteorder = { version = "^1.3.2" }
+bytes = { version = "^1" }
+chrono = { version = "^0.4.24", default-features = false, features = ["clock", "std", "serde"] }
+chumsky = { version = "^0.13", default-features = false, features = ["std"] }
+clap = { version = "^4.2", features = ["derive", "env"] }
+common = { package = "veloren-common", path = "common", features = ["no-assets"] }
+common-base = { package = "veloren-common-base", path = "common/base" }
+common-ecs = { package = "veloren-common-ecs", path = "common/ecs" }
+common-frontend = { package = "veloren-common-frontend", path = "common/frontend" }
+common-i18n = { package = "veloren-common-i18n", path = "common/i18n" }
+common-net = { package = "veloren-common-net", path = "common/net" }
+common-state = { package = "veloren-common-state", path = "common/state" }
+common-systems = { package = "veloren-common-systems", path = "common/systems" }
+conrod_core = { path = "vendor/conrod/conrod_core" }
+cpal = { version = "^0.18", optional = true }
+crossbeam-channel = { version = "^0.5.15" }
+crossbeam-utils = { version = "^0.8.7" }
+directories-next = { version = "^2.0" }
+dot_vox = { version = "^5.1" }
+enum-map = { version = "^2.4" }
+euc = { path = "vendor/euc" }
+fxhash = { version = "^0.2.1" }
+gilrs = { version = "^0.11.0", features = ["serde-serialize"] }
+glyph_brush = { version = "^0.7.0" }
+guillotiere = { version = "^0.7.0" }
+hashbrown = { version = "^0.17", default-features = false, features = ["rayon", "serde", "nightly", "default-hasher", "inline-more", "equivalent"] }
+hex = { version = "^0.4.3" }
+hickory-resolver = { version = "^0.26.1", features = ["system-config", "tokio"] }
+http-body-util = { version = "^0.1" }
+hyper = { version = "^1", default-features = false, features = ["client", "http1"] }
+hyper-rustls = { version = "^0.27", default-features = false, features = ["http1", "ring"] }
+hyper-util = { version = "^0.1", features = ["client-legacy", "http1", "tokio"] }
+i18n = { package = "veloren-client-i18n", path = "common/client-i18n" }
+i18n-helpers = { package = "veloren-voxygen-i18n-helpers", path = "common/i18n-helpers" }
+image = { version = "^0.25", default-features = false, features = ["png", "ico"] }
+inline_tweak = { version = "^1.0.8" }
+itertools = { version = "^0.14" }
+kira = { version = "^0.12", optional = true, default-features = false, features = ["cpal", "symphonia", "ogg", "vorbis"] }
+lazy_static = { version = "^1.4.0" }
+mumble-link = { version = "^0.2.0" }
+network = { package = "veloren-network", path = "network", default-features = false, features = ["compression", "quic"] }
+num-integer = { version = "^0.1" }
+num-traits = { version = "^0.2" }
+open = { version = "^5.3.2" }
+ordered-float = { version = "^5" }
+quinn = { version = "^0.11", features = ["rustls"] }
+rand = { version = "^0.10", features = ["alloc"] }
+rand_chacha = { version = "^0.10" }
+regex = { version = "^1.11" }
+ron = { version = "^0.12", default-features = false, features = ["std"] }
+rust-argon2 = { version = "^2.1.0", default-features = false }
+rustls = { version = "^0.23", default-features = false, features = ["std"] }
+serde = { version = "^1.0.118", features = ["derive", "rc"] }
+serde_json = { version = "^1" }
+serde_with = { version = "^3", features = ["hashbrown_0_17"] }
+sha2 = { version = "^0.11" }
+slab = { version = "^0.4.2" }
+specs = { version = "^0.20", features = ["nightly", "serde", "storage-event-control", "derive"] }
+strum = { version = "^0.28", features = ["derive"] }
+tokio = { version = "=1.52.3", default-features = false, features = ["rt", "rt-multi-thread"] }
+tokio-parallel = { package = "veloren-tokio-parallel", path = "common/tokio-parallel" }
+tracing = { version = "^0.1" }
+treeculler = { version = "^0.4" }
+trueos = { path = "../TRUEOS-Blueprints/api", features = ["ui4-scene", "tokio-net-probe"] }
+trueos-wgpu = { path = "../TRUEOS-Blueprints/crates/trueos-wgpu" }
+vek = { version = "^0.17.0", features = ["serde", "mint"] }
+wgpu = { path = "../wgpu/wgpu", version = "=30.0.0", default-features = false, features = ["std", "custom", "wgsl", "spirv"] }
+wgpu-profiler = { version = "^0.28" }
+winit = { path = "../TRUEOS-Blueprints/vendor/winit/winit", default-features = false, features = ["serde"] }
+iced = { package = "iced_native", git = "https://github.com/Imberflur/iced", tag = "veloren-winit-0.28" }
+
+[lib]
+name = "veloren_voxygen"
+path = "src/lib.rs"
+test = false
+doctest = false
+bench = false
+
+[[bin]]
+name = "voxy"
+path = "src/main.rs"
+test = false
+bench = false
+
+[profile.dev]
+opt-level = 0
+debug = 0
+strip = "symbols"
+
+[profile.release]
+opt-level = 2
+debug = 0
+strip = "symbols"
+
+[patch.crates-io]
+# Shared vendored sources: Blueprint patches take precedence over kernel duplicates.
+alsa = { path = "../TRUEOS/vendor/alsa-0.11.0" }
+base64 = { path = "../TRUEOS-Blueprints/vendor/base64-0.22.1" }
+bincode = { path = "../TRUEOS/vendor/bincode-1.3.3" }
+bytes = { path = "../TRUEOS-Blueprints/vendor/bytes-1.11.1" }
+crc32fast = { path = "../TRUEOS/vendor/crc32fast-1.5.0" }
+crossbeam-deque = { path = "../TRUEOS-Blueprints/vendor/crossbeam-deque-0.8.6" }
+crossbeam-epoch = { path = "vendor/crossbeam-epoch-0.9.18" }
+crossbeam-queue = { path = "vendor/crossbeam-queue-0.3.12" }
+crossbeam-utils = { path = "../TRUEOS-Blueprints/vendor/crossbeam-utils-0.8.21" }
+fdeflate = { path = "../TRUEOS/vendor/fdeflate-0.3.7" }
+futures-util = { path = "../TRUEOS/vendor/futures-util-0.3.32" }
+getrandom = { path = "../TRUEOS-Blueprints/vendor/getrandom-0.2.17" }
+getrandom_03 = { package = "getrandom", path = "../TRUEOS-Blueprints/vendor/getrandom-0.3.4" }
+getrandom_04 = { package = "getrandom", path = "../TRUEOS-Blueprints/vendor/getrandom-0.4.2" }
+hickory-proto = { path = "../TRUEOS-Blueprints/vendor/hickory-proto-0.25.2" }
+hickory-resolver = { path = "../TRUEOS-Blueprints/vendor/hickory-resolver-0.25.2" }
+http = { path = "../TRUEOS-Blueprints/vendor/http-1.4.0" }
+http-body = { path = "../TRUEOS-Blueprints/vendor/http-body-1.0.1" }
+http-body-util = { path = "../TRUEOS-Blueprints/vendor/http-body-util-0.1.3" }
+hyper = { path = "../TRUEOS-Blueprints/vendor/hyper-1.10.0" }
+hyper-rustls = { path = "../TRUEOS-Blueprints/vendor/hyper-rustls-0.27.9" }
+hyper-util = { path = "../TRUEOS-Blueprints/vendor/hyper-util-0.1.20" }
+lazy_static = { path = "../TRUEOS/vendor/lazy_static-1.5.0" }
+libc = { path = "../TRUEOS-Blueprints/vendor/libc-0.2.186" }
+libloading = { path = "../TRUEOS-Blueprints/vendor/libloading-0.8.9" }
+mio = { path = "../TRUEOS-Blueprints/vendor/mio-1.2.0" }
+open = { path = "../TRUEOS/vendor/open-5.3.5" }
+raw-window-handle = { path = "../TRUEOS-Blueprints/vendor/raw-window-handle" }
+rayon = { path = "../TRUEOS-Blueprints/vendor/rayon" }
+rayon-core = { path = "../TRUEOS-Blueprints/vendor/rayon/rayon-core" }
+ring = { path = "../TRUEOS-Blueprints/vendor/ring-0.17.14" }
+rustix = { path = "../TRUEOS-Blueprints/vendor/rustix-1.1.4-trueos" }
+simd-adler32 = { path = "../TRUEOS/vendor/simd-adler32-0.3.8" }
+socket2 = { path = "../TRUEOS-Blueprints/vendor/socket2-0.6.3" }
+symphonia-core = { path = "../TRUEOS/vendor/symphonia-core-0.5.5-trueos" }
+tokio = { path = "../TRUEOS-Blueprints/vendor/tokio-1.52.3" }
+tokio-macros = { path = "../TRUEOS-Blueprints/vendor/tokio-macros-2.7.0" }
+tokio-rustls = { path = "../TRUEOS-Blueprints/vendor/tokio-rustls-0.26.4" }
+tower-service = { path = "../TRUEOS-Blueprints/vendor/tower-service-0.3.3" }
+want = { path = "../TRUEOS-Blueprints/vendor/want-0.3.1" }
+zune-core = { path = "../TRUEOS/vendor/zune-core-0.5.1" }
+zune-jpeg = { path = "../TRUEOS/vendor/zune-jpeg-0.5.15" }
+quinn = { path = "../TRUEOS-Blueprints/vendor/quinn-0.11.9" }
+quinn-proto = { path = "../TRUEOS-Blueprints/vendor/quinn-proto-0.11.14" }
+quinn-udp = { path = "../TRUEOS-Blueprints/vendor/quinn-udp-0.5.14" }
+wgpu = { path = "../wgpu/wgpu" }
+rusttype = { path = "vendor/rusttype-0.8.3" }
+tynm = { path = "vendor/tynm-0.1.10" }
+wavefront = { path = "vendor/wavefront-0.2.3" }
+lz-fear = { path = "vendor/lz-fear-0.2.0" }
+png = { path = "vendor/png-0.18.1" }
+hashbrown_015 = { package = "hashbrown", path = "vendor/hashbrown-0.15.5" }
+rust-argon2 = { path = "vendor/rust-argon2-2.1.0" }
+specs = { path = "vendor/specs" }
+shred = { path = "vendor/shred" }
+hibitset = { path = "vendor/hibitset" }
+hashbrown = { path = "vendor/hashbrown" }
+indexmap = { path = "vendor/indexmap" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("trueos"))'] }
