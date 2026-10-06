@@ -2,7 +2,10 @@
 //! The broker coordinates plane placement and paired resize epochs. Neither
 //! producer gates the other on SURFLIVE: a paired resize needs both publications
 //! before either replacement can become display-live.
-use super::bcs::{FramePlan, LayerPlan};
+use super::{
+    activity::{ProducerActivity, ProducerCounters, micros},
+    bcs::{FramePlan, LayerPlan},
+};
 use std::{
     collections::{HashSet, VecDeque},
     sync::{
@@ -13,7 +16,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use trueos::ui4_solara_text::{Damage, Error, SceneTarget, SpriteCommand};
+use trueos::ui4_solara_text::{Damage, Error, SceneTarget, SpriteBackend, SpriteCommand};
 use vek::Vec2;
 
 struct Job {
@@ -26,10 +29,15 @@ struct Mailbox {
     latest: Mutex<Option<Job>>,
     wake: Condvar,
     stopped: AtomicBool,
+    counters: ProducerCounters,
 }
 impl Mailbox {
     fn submit(&self, job: Job) {
-        *self.latest.lock().unwrap() = Some(job);
+        if self.latest.lock().unwrap().replace(job).is_some() {
+            self.counters
+                .queued_replacements
+                .fetch_add(1, Ordering::Relaxed);
+        }
         self.wake.notify_one();
     }
     fn wait(&self) {
@@ -88,6 +96,12 @@ impl LayeredPresenter {
             plan: plan.foreground,
         });
     }
+    pub(crate) fn take_activity(&self) -> (ProducerActivity, ProducerActivity) {
+        (
+            self.scene.mailbox.counters.take(),
+            self.foreground.mailbox.counters.take(),
+        )
+    }
     pub fn check(&self) -> Result<(), String> {
         match self.errors.try_recv() {
             Ok(error) => Err(error),
@@ -123,6 +137,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     let mut receipts = VecDeque::new();
     let mut first = true;
     while !mailbox.stopped.load(Ordering::Acquire) {
+        mailbox.counters.iterations.fetch_add(1, Ordering::Relaxed);
         // Receipts can be superseded during resize and are never admission
         // tokens. Only begin/publish may apply producer backpressure.
         if first {
@@ -143,6 +158,12 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         }
         if phase <= 1 {
             if let Some(latest) = mailbox.latest.lock().unwrap().take() {
+                if job.is_some() {
+                    mailbox
+                        .counters
+                        .queued_replacements
+                        .fetch_add(1, Ordering::Relaxed);
+                }
                 job = Some(latest);
                 phase = 0;
             }
@@ -156,6 +177,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 *size == current.size && *commands == current.plan.commands
             })
         {
+            mailbox.counters.unchanged.fetch_add(1, Ordering::Relaxed);
             job = None;
             continue;
         }
@@ -169,39 +191,92 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     if uploaded.contains(&upload.id) {
                         continue;
                     }
+                    let call_started = std::time::Instant::now();
                     result = target.upload_sprite_rgba8(
                         upload.id,
                         upload.image.width(),
                         upload.image.height(),
                         upload.image.as_raw(),
                     );
+                    mailbox
+                        .counters
+                        .upload_call_us
+                        .fetch_add(micros(call_started.elapsed()), Ordering::Relaxed);
                     if result.is_err() {
                         break;
                     }
                     uploaded.insert(upload.id);
+                    mailbox.counters.uploads.fetch_add(1, Ordering::Relaxed);
+                    mailbox
+                        .counters
+                        .upload_bytes
+                        .fetch_add(upload.image.as_raw().len() as u64, Ordering::Relaxed);
                 }
                 result
             }
-            1 => target.begin_gpu_frame(),
-            2 => target.draw_sprite_commands(&current.plan.commands),
-            3 => match target.publish_tracked(Damage::full(current.size.x, current.size.y)) {
-                Ok(serial) => {
-                    tracing::trace!(
-                        producer = name,
-                        revision = current.revision,
-                        serial,
-                        "Native layer published"
-                    );
-                    if first {
-                        receipts.push_back(serial);
-                        if receipts.len() > 16 {
-                            receipts.pop_front();
-                        }
-                    }
-                    Ok(())
+            1 => {
+                let result = target.begin_gpu_frame();
+                if result.is_ok() {
+                    mailbox.counters.begins.fetch_add(1, Ordering::Relaxed);
                 }
-                Err(error) => Err(error),
-            },
+                result
+            }
+            2 => {
+                let call_started = std::time::Instant::now();
+                let result = target.draw_sprite_commands(&current.plan.commands);
+                mailbox
+                    .counters
+                    .draw_call_us
+                    .fetch_add(micros(call_started.elapsed()), Ordering::Relaxed);
+                if result.is_ok() {
+                    mailbox.counters.draws.fetch_add(1, Ordering::Relaxed);
+                    let bcs = current
+                        .plan
+                        .commands
+                        .iter()
+                        .filter(|command| command.backend == SpriteBackend::Bcs0)
+                        .count() as u64;
+                    mailbox
+                        .counters
+                        .bcs_commands
+                        .fetch_add(bcs, Ordering::Relaxed);
+                    mailbox
+                        .counters
+                        .compositor_commands
+                        .fetch_add(current.plan.commands.len() as u64 - bcs, Ordering::Relaxed);
+                }
+                result
+            }
+            3 => {
+                let call_started = std::time::Instant::now();
+                let result = target.publish_tracked(Damage::full(current.size.x, current.size.y));
+                mailbox
+                    .counters
+                    .publish_call_us
+                    .fetch_add(micros(call_started.elapsed()), Ordering::Relaxed);
+                match result {
+                    Ok(serial) => {
+                        mailbox
+                            .counters
+                            .publications
+                            .fetch_add(1, Ordering::Relaxed);
+                        tracing::trace!(
+                            producer = name,
+                            revision = current.revision,
+                            serial,
+                            "Native layer published"
+                        );
+                        if first {
+                            receipts.push_back(serial);
+                            if receipts.len() > 16 {
+                                receipts.pop_front();
+                            }
+                        }
+                        Ok(())
+                    }
+                    Err(error) => Err(error),
+                }
+            }
             _ => {
                 previous = Some((current.size, current.plan.commands.clone()));
                 job = None;
@@ -211,6 +286,13 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         match result {
             Ok(()) => phase += 1,
             Err(Error::Busy) => {
+                let counter = match phase {
+                    0 => &mailbox.counters.busy_upload,
+                    1 => &mailbox.counters.busy_begin,
+                    2 => &mailbox.counters.busy_draw,
+                    _ => &mailbox.counters.busy_publish,
+                };
+                counter.fetch_add(1, Ordering::Relaxed);
                 // A rejected draw cancels its write lease. Begin a fresh frame;
                 // admission and publish Busy retain their own transaction state.
                 if phase == 2 {

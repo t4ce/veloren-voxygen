@@ -1,7 +1,7 @@
 //! Retained iced draw commands. CPU work is layout and small asset preparation;
 //! UI4 writes the destination through BCS0 copies/fills. The display engine
 //! blends the foreground alpha over the independent scene producer.
-use super::primitive::Primitive;
+use super::{activity::PreparationActivity, primitive::Primitive};
 use crate::ui::graphic;
 use alloc::{sync::Arc, vec::Vec};
 use trueos::ui4_solara_text::{SpriteBackend, SpriteCommand, SpriteCorner, SpriteQuad};
@@ -38,6 +38,7 @@ pub(super) struct Renderer {
     gradients: Vec<(u32, u32, u32, u32, u32, Arc<::image::RgbaImage>)>,
     next_graphic: u32,
     next_sprite: u32,
+    activity: PreparationActivity,
 }
 impl Renderer {
     pub(super) fn new(width: u32, height: u32) -> Self {
@@ -51,7 +52,11 @@ impl Renderer {
             gradients: Vec::new(),
             next_graphic: 0,
             next_sprite: 1,
+            activity: PreparationActivity::default(),
         }
+    }
+    pub(super) fn take_activity(&mut self) -> PreparationActivity {
+        std::mem::take(&mut self.activity)
     }
     fn sprite_id(&mut self) -> u32 {
         let id = self.next_sprite;
@@ -140,6 +145,8 @@ impl Renderer {
         );
         let image = Arc::new(image);
         let id = self.sprite_id();
+        self.activity.glyphs += 1;
+        self.activity.bytes += image.as_raw().len() as u64;
         self.glyphs.push((key, id, Arc::clone(&image)));
         (id, image)
     }
@@ -205,6 +212,8 @@ impl Renderer {
                         ::image::Rgba(premultiply(u32::from_le_bytes(c)).to_le_bytes())
                     }));
                     let id = self.sprite_id();
+                    self.activity.gradients += 1;
+                    self.activity.bytes += image.as_raw().len() as u64;
                     self.gradients
                         .push((w, h, top, bottom, id, Arc::clone(&image)));
                     (id, image)
@@ -308,6 +317,8 @@ impl Renderer {
                     ));
                     let id = self.sprite_id();
                     let partial = image.pixels().any(|p| p[3] > 0 && p[3] < 255);
+                    self.activity.images += 1;
+                    self.activity.bytes += image.as_raw().len() as u64;
                     self.prepared.push((key, id, Arc::clone(&image), partial));
                     (id, image, partial)
                 };
@@ -626,7 +637,15 @@ mod tests {
         )));
         let primitive = sprite(id, bounds(1., 1., 4., 4.));
         let first = renderer.prepare(&primitive).unwrap();
+        let initial = renderer.take_activity();
+        assert_eq!(initial.images, 1);
+        assert_eq!(initial.bytes, 4 * 4 * 4);
         let second = renderer.prepare(&primitive).unwrap();
+        let reused = renderer.take_activity();
+        assert_eq!(
+            (reused.images, reused.glyphs, reused.gradients, reused.bytes),
+            (0, 0, 0, 0)
+        );
         assert_eq!(
             first.foreground.uploads[0].id,
             second.foreground.uploads[0].id

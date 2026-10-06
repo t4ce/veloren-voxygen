@@ -1,4 +1,6 @@
 #[cfg(target_os = "trueos")]
+pub(crate) mod activity;
+#[cfg(target_os = "trueos")]
 pub(crate) mod bcs;
 mod defaults;
 #[cfg(target_os = "trueos")]
@@ -305,6 +307,14 @@ impl IcedRenderer {
             .as_mut()
             .expect("native renderer state")
             .mark_scene_image(id);
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn take_native_preparation_activity(&mut self) -> activity::PreparationActivity {
+        self.native
+            .as_mut()
+            .expect("native renderer state")
+            .take_activity()
     }
 
     pub(super) fn is_native(&self) -> bool {

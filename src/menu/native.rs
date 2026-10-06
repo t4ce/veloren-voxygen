@@ -6,7 +6,7 @@ use super::main::{
     ui::{Event, MainMenuUi},
 };
 use crate::client::addr::ConnectionArgs;
-use crate::ui::ice::renderer::presenter::LayeredPresenter;
+use crate::ui::ice::renderer::{activity::micros, presenter::LayeredPresenter};
 use crate::{
     cli,
     settings::Settings,
@@ -80,10 +80,47 @@ struct State {
     modifiers: ModifiersState,
     input_logged: u8,
     revision: u64,
+    activity: LoopActivity,
+    activity_since: Instant,
+}
+
+/// Window events are counted without retaining key/text contents.
+#[derive(Default, Debug)]
+struct LoopActivity {
+    ticks: u64,
+    pointer_moves: u64,
+    pointer_buttons: u64,
+    keys: u64,
+    wheels: u64,
+    resize_events: u64,
+    redraw_requests: u64,
+    other_window_events: u64,
+    maintain_call_us: u64,
+    max_maintain_call_us: u64,
+}
+impl State {
+    fn report_activity(&mut self, force: bool) {
+        let elapsed = self.activity_since.elapsed();
+        if !force && elapsed < Duration::from_secs(5) {
+            return;
+        }
+        let screen = self.ui.native_activity_screen();
+        let (ui, preparation) = self.ui.take_native_activity();
+        let (scene, foreground) = self.presenter.take_activity();
+        let window = std::mem::take(&mut self.activity);
+        tracing::info!(target:"voxy_ui_activity", interval_ms=elapsed.as_millis() as u64,
+            screen, revision=self.revision, ?window, ?ui, ?preparation, "Native menu activity");
+        tracing::info!(target:"voxy_ui_activity", producer="scene", ?scene, "Native producer activity");
+        tracing::info!(target:"voxy_ui_activity", producer="foreground", ?foreground, "Native producer activity");
+        self.activity_since = Instant::now();
+    }
 }
 
 impl App {
     fn fail(&mut self, event_loop: &dyn ActiveEventLoop, error: String) {
+        if let Some(state) = self.state.as_mut() {
+            state.report_activity(true);
+        }
         tracing::error!(%error, "Native iced menu stopped");
         *self.error.lock().unwrap() = Some(error);
         event_loop.exit();
@@ -94,6 +131,7 @@ impl App {
         self.last_tick = now;
         let state = self.state.as_mut().unwrap();
         state.presenter.check()?;
+        state.activity.ticks += 1;
         {
             let size = state.window.surface_size();
             let size = Vec2::new(size.width, size.height);
@@ -119,6 +157,7 @@ impl App {
                     None => {}
                 }
             }
+            let maintain_started = Instant::now();
             let (events, plan) = state.ui.maintain_native(
                 &self.settings,
                 &self.runtime,
@@ -126,9 +165,13 @@ impl App {
                 size,
                 dt,
             )?;
+            let elapsed = micros(maintain_started.elapsed());
+            state.activity.maintain_call_us += elapsed;
+            state.activity.max_maintain_call_us = state.activity.max_maintain_call_us.max(elapsed);
             for event in events {
                 match event {
                     Event::Quit => {
+                        state.report_activity(true);
                         tracing::info!("Native menu exit requested by Quit control");
                         event_loop.exit();
                     }
@@ -220,6 +263,7 @@ impl App {
                 state.presenter.submit(state.revision, size, plan);
             }
         }
+        state.report_activity(false);
         Ok(())
     }
 }
@@ -276,6 +320,8 @@ impl ApplicationHandler for App {
                 modifiers: ModifiersState::empty(),
                 input_logged: 0,
                 revision: 0,
+                activity: LoopActivity::default(),
+                activity_since: Instant::now(),
             })
         })();
         match result {
@@ -290,7 +336,19 @@ impl ApplicationHandler for App {
         if state.window.id() != id {
             return;
         }
+        match &event {
+            WindowEvent::PointerMoved { .. } => state.activity.pointer_moves += 1,
+            WindowEvent::PointerButton { .. } => state.activity.pointer_buttons += 1,
+            WindowEvent::KeyboardInput { .. } => state.activity.keys += 1,
+            WindowEvent::MouseWheel { .. } => state.activity.wheels += 1,
+            WindowEvent::SurfaceResized { .. } | WindowEvent::ScaleFactorChanged { .. } => {
+                state.activity.resize_events += 1
+            }
+            WindowEvent::RedrawRequested => state.activity.redraw_requests += 1,
+            _ => state.activity.other_window_events += 1,
+        }
         if matches!(event, WindowEvent::CloseRequested) {
+            state.report_activity(true);
             tracing::info!("Native menu received window CloseRequested");
             event_loop.exit();
             return;

@@ -687,6 +687,30 @@ impl MainMenuUi {
         Ok((events, plan))
     }
 
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn native_activity_screen(&self) -> &'static str {
+        match &self.controls.screen {
+            Screen::Login { .. } => match self.controls.show {
+                Showing::Login => "login",
+                Showing::Languages => "languages",
+                Showing::Account => "account",
+            },
+            Screen::Connecting { .. } => "connecting",
+            Screen::Servers { .. } => "servers",
+            Screen::Credits { .. } => "credits",
+        }
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn take_native_activity(
+        &mut self,
+    ) -> (
+        ui::ice::renderer::activity::UiActivity,
+        ui::ice::renderer::activity::PreparationActivity,
+    ) {
+        self.ui.take_native_activity()
+    }
+
     /// Exercise the shipped loading screen without creating a client/world.
     #[cfg(target_os = "trueos")]
     pub fn show_loading_proof(&mut self) {

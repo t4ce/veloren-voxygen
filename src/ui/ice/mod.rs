@@ -37,6 +37,8 @@ pub struct IcedUi {
     scale_changed: bool,
     #[cfg(target_os = "trueos")]
     last_native_primitive: Option<renderer::primitive::Primitive>,
+    #[cfg(target_os = "trueos")]
+    native_activity: renderer::activity::UiActivity,
 }
 impl IcedUi {
     pub fn new(
@@ -67,6 +69,8 @@ impl IcedUi {
             scale_changed: false,
             #[cfg(target_os = "trueos")]
             last_native_primitive: None,
+            #[cfg(target_os = "trueos")]
+            native_activity: renderer::activity::UiActivity::default(),
         })
     }
 
@@ -82,6 +86,8 @@ impl IcedUi {
             scale_changed: false,
             #[cfg(target_os = "trueos")]
             last_native_primitive: None,
+            #[cfg(target_os = "trueos")]
+            native_activity: renderer::activity::UiActivity::default(),
         }
     }
 
@@ -93,19 +99,39 @@ impl IcedUi {
         clipboard: &mut Clipboard,
     ) -> Result<(Vec<M>, Option<renderer::bcs::FramePlan>), String> {
         if self.scale.surface_resized(resolution) || self.scale_changed {
+            self.native_activity.resize_invalidations += 1;
             self.scale_changed = false;
             self.renderer.resize_native(resolution);
             self.last_native_primitive = None;
         }
+        use renderer::activity::micros;
+        let input_events = self.events.len() as u64;
+        self.native_activity.updates += 1;
+        self.native_activity.input_events += input_events;
+        let layout_started = std::time::Instant::now();
         let (messages, primitive, _) = self.update_interface(root, clipboard);
+        self.native_activity.layout_us += micros(layout_started.elapsed());
+        self.native_activity.messages += messages.len() as u64;
         // Iced events/layout continue every tick. Only changed draw output
         // needs a new retained command plan.
-        if self.last_native_primitive.as_ref() == Some(&primitive) {
+        let compare_started = std::time::Instant::now();
+        let unchanged = self.last_native_primitive.as_ref() == Some(&primitive);
+        self.native_activity.compare_us += micros(compare_started.elapsed());
+        if unchanged {
+            self.native_activity.unchanged += 1;
             return Ok((messages, None));
+        }
+        if self.last_native_primitive.is_none() {
+            self.native_activity.uncached_plans += 1;
+        } else if input_events != 0 {
+            self.native_activity.input_plans += 1;
+        } else {
+            self.native_activity.no_input_plans += 1;
         }
         let started = std::time::Instant::now();
         let plan = self.renderer.draw_native(&primitive)?;
         let elapsed = started.elapsed();
+        self.native_activity.prepare_us += micros(elapsed);
         if elapsed >= std::time::Duration::from_millis(100) {
             tracing::warn!(
                 elapsed_ms = elapsed.as_millis(),
@@ -114,6 +140,19 @@ impl IcedUi {
         }
         self.last_native_primitive = Some(primitive);
         Ok((messages, Some(plan)))
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn take_native_activity(
+        &mut self,
+    ) -> (
+        renderer::activity::UiActivity,
+        renderer::activity::PreparationActivity,
+    ) {
+        (
+            std::mem::take(&mut self.native_activity),
+            self.renderer.take_native_preparation_activity(),
+        )
     }
 
     #[cfg(target_os = "trueos")]

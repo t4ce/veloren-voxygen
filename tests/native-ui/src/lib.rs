@@ -148,6 +148,7 @@ pub mod ui {
                     "/../../src/ui/ice/renderer/primitive.rs"
                 ));
             }
+            pub mod activity;
             pub mod bcs;
             pub mod presenter;
         }
@@ -277,6 +278,39 @@ mod scheduling {
         presenter.check().unwrap();
     }
     #[test]
+    fn unchanged_frames_report_zero_new_gpu_work_after_initial_publication() {
+        let (scene, _, _) = target(true);
+        let (foreground, state, _) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        presenter.submit(1, vek::Vec2::new(8, 8), plan(1.));
+        wait(|| state.lock().unwrap().publications == 1);
+        let mut initial_draws = 0;
+        let mut initial_bcs = 0;
+        let mut initial_compositor = 0;
+        let mut initial_publications = 0;
+        wait(|| {
+            let (_, activity) = presenter.take_activity();
+            initial_draws += activity.draws;
+            initial_bcs += activity.bcs_commands;
+            initial_compositor += activity.compositor_commands;
+            initial_publications += activity.publications;
+            initial_publications == 1
+        });
+        assert_eq!((initial_draws, initial_bcs, initial_compositor), (1, 1, 0));
+        presenter.submit(2, vek::Vec2::new(8, 8), plan(1.));
+        let mut unchanged = 0;
+        let mut actual_work = 0;
+        wait(|| {
+            let (_, activity) = presenter.take_activity();
+            unchanged += activity.unchanged;
+            actual_work +=
+                activity.draws + activity.begins + activity.publications + activity.uploads;
+            unchanged == 1
+        });
+        assert_eq!(actual_work, 0);
+        assert_eq!(state.lock().unwrap().publications, 1);
+    }
+    #[test]
     fn canceled_busy_draw_reacquires_a_fresh_lease() {
         let (scene, _, _) = target(true);
         let (foreground, ui_state, _) = target(true);
@@ -286,6 +320,10 @@ mod scheduling {
         wait(|| ui_state.lock().unwrap().publications == 1);
         assert_eq!(ui_state.lock().unwrap().begins, 2);
         assert_eq!(ui_state.lock().unwrap().draws, 1);
+        let (_, activity) = presenter.take_activity();
+        assert_eq!(activity.busy_draw, 1);
+        assert_eq!(activity.draws, 1);
+        assert_eq!(activity.begins, 2);
         presenter.check().unwrap();
     }
     #[test]
