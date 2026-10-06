@@ -1,4 +1,4 @@
-use super::{FILL_FRAC_ONE, Imgs, Message};
+use super::{FILL_FRAC_TWO, Imgs, Message, selection_panel};
 use crate::ui::{
     fonts::IcedFonts as Fonts,
     ice::{Element, component::neat_button, style},
@@ -42,8 +42,8 @@ impl Screen {
         let back_button = Container::new(
             Container::new(neat_button(
                 &mut self.back_button,
-                i18n.get_msg("common-back"),
-                FILL_FRAC_ONE,
+                "OK",
+                FILL_FRAC_TWO,
                 button_style,
                 Some(Message::Back),
             ))
@@ -56,7 +56,7 @@ impl Screen {
             Container::new(neat_button(
                 &mut self.delete_button,
                 "Delete",
-                FILL_FRAC_ONE,
+                FILL_FRAC_TWO,
                 button_style,
                 Some(Message::DeleteServer),
             ))
@@ -92,7 +92,8 @@ impl Screen {
                         Row::with_children(vec![
                             Space::new(Length::FillPortion(5), Length::Units(0)).into(),
                             Text::new(server.as_ref())
-                                .size(fonts.cyri.scale(30))
+                                .size(fonts.universal.scale(selection_panel::ROW_TEXT_SIZE))
+                                .font(fonts.universal.id)
                                 .width(Length::FillPortion(95))
                                 .vertical_alignment(iced::VerticalAlignment::Center)
                                 .into(),
@@ -103,9 +104,9 @@ impl Screen {
                         style::button::Style::new(imgs.selection)
                             .hover_image(imgs.selection_hover)
                             .press_image(imgs.selection_press)
-                            .image_color(vek::Rgba::new(color.0, color.1, color.2, 255)),
+                            .image_color(vek::Rgba::new(color.0, color.1, color.2, 192)),
                     )
-                    .min_height(100)
+                    .min_height(selection_panel::ROW_HEIGHT)
                     .on_press(Message::ServerChanged(i));
                     Row::with_children(vec![
                         Space::new(Length::FillPortion(3), Length::Units(0)).into(),
@@ -118,38 +119,17 @@ impl Screen {
             list = list.push(item);
         }
 
-        Container::new(
-            Column::with_children(vec![
-                crate::ui::ice::widget::ribbon::Ribbon::new(imgs.banner_top).into(),
-                Container::new(
-                    Column::with_children(vec![
-                        title.into(),
-                        list.into(),
-                        Row::with_children(vec![delete_button.into(), back_button.into()])
-                            .width(Length::Fill)
-                            .into(),
-                    ])
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .spacing(10)
-                    .padding(20),
-                )
-                .style(
-                    style::container::Style::color_with_double_cornerless_border(
-                        (22, 18, 16, 255).into(),
-                        (11, 11, 11, 255).into(),
-                        (54, 46, 38, 255).into(),
-                    ),
-                )
+        let content = Column::with_children(vec![
+            title.into(),
+            list.into(),
+            Row::with_children(vec![delete_button.into(), back_button.into()])
+                .width(Length::Fill)
                 .into(),
-            ])
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .max_width(500),
-        )
+        ])
         .width(Length::Fill)
-        .align_x(Align::Center)
-        .padding(80)
-        .into()
+        .height(Length::FillPortion(38))
+        .spacing(8)
+        .align_items(Align::Center);
+        selection_panel::panel(imgs, content.into())
     }
 }

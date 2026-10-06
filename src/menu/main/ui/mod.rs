@@ -5,7 +5,10 @@ mod credits;
 #[path = "IGAccCreate.rs"]
 mod ig_acc_create;
 mod login;
+mod login_focus;
 mod logo_glow;
+mod quit;
+mod selection_panel;
 mod servers;
 
 use crate::{
@@ -198,11 +201,15 @@ pub struct Controls {
 
     screen: Screen,
     dialog_chrome: login::Screen,
+    quit_dialog: quit::Screen,
+    confirming_quit: bool,
 }
 
 #[derive(Clone)]
 enum Message {
     Quit,
+    ConfirmQuit,
+    BackFromQuit,
     Back,
     ShowServers,
     ShowAccount,
@@ -290,6 +297,8 @@ impl Controls {
 
             screen,
             dialog_chrome: login::Screen::default(),
+            quit_dialog: quit::Screen::default(),
+            confirming_quit: false,
         }
     }
 
@@ -310,6 +319,31 @@ impl Controls {
         };
 
         let language_metadatas = i18n::list_localizations();
+
+        if self.confirming_quit {
+            let content = self
+                .quit_dialog
+                .view(&self.fonts, &self.i18n.read(), button_style);
+            let content = self.dialog_chrome.view(
+                &self.fonts,
+                &self.imgs,
+                &self.logo_glow,
+                self.server_field_locked,
+                &self.login_info,
+                None,
+                &self.i18n.read(),
+                &Showing::Login,
+                self.selected_language_index,
+                &language_metadatas,
+                button_style,
+                Some((6, content)),
+            );
+            return Container::new(content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(style::container::Style::image(bg_img))
+                .into();
+        }
 
         // TODO: make any large text blocks scrollable so that if the area is to
         // small they can still be read
@@ -412,6 +446,14 @@ impl Controls {
         ui: &mut Ui,
         runtime: &alloc::sync::Arc<tokio::runtime::Runtime>,
     ) {
+        if self.confirming_quit {
+            match message {
+                Message::ConfirmQuit => events.push(Event::Quit),
+                Message::BackFromQuit => self.confirming_quit = false,
+                _ => {}
+            }
+            return;
+        }
         if matches!(&self.screen, Screen::Connecting { .. })
             && !matches!(
                 &message,
@@ -427,7 +469,8 @@ impl Controls {
         let mut language_metadatas = i18n::list_localizations();
 
         match message {
-            Message::Quit => events.push(Event::Quit),
+            Message::Quit => self.request_quit(),
+            Message::ConfirmQuit | Message::BackFromQuit => {}
             Message::Back => {
                 self.show = Showing::Login;
                 self.screen = Screen::Login {
@@ -534,6 +577,7 @@ impl Controls {
             }
             Message::FocusPassword => {
                 if let Screen::Login { screen, .. } = &mut self.screen {
+                    screen.banner.multiplayer_focus.focus(false);
                     screen.banner.password = text_input::State::focused();
                     screen.banner.username = text_input::State::new();
                 }
@@ -630,34 +674,27 @@ impl Controls {
         }
     }
 
-    fn tab(&mut self) {
-        if let Screen::Login { screen, .. } = &mut self.screen {
-            if self.show == Showing::Account {
-                screen.account.tab();
+    fn tab(&mut self, backwards: bool) {
+        if self.confirming_quit {
+            self.quit_dialog.tab();
+            return;
+        }
+        if let Screen::Login { screen, error } = &mut self.screen {
+            if error.is_some() {
                 return;
             }
-            // TODO: add select all function in iced
-            if screen.banner.username.is_focused() {
-                screen.banner.username = text_input::State::new();
-                screen.banner.password = text_input::State::focused();
-                screen.banner.password.move_cursor_to_end();
-            } else if screen.banner.password.is_focused() {
-                screen.banner.password = text_input::State::new();
-                // Skip focusing server field if it isn't editable!
-                if self.server_field_locked {
-                    screen.banner.username = text_input::State::focused();
-                } else {
-                    screen.banner.server = text_input::State::focused();
-                }
-                screen.banner.server.move_cursor_to_end();
-            } else if screen.banner.server.is_focused() {
-                screen.banner.server = text_input::State::new();
-                screen.banner.username = text_input::State::focused();
-                screen.banner.username.move_cursor_to_end();
-            } else {
-                screen.banner.username = text_input::State::focused();
-                screen.banner.username.move_cursor_to_end();
+            if self.show == Showing::Account {
+                screen.account.tab();
+            } else if self.show == Showing::Login {
+                screen.banner.tab(backwards, self.server_field_locked);
             }
+        }
+    }
+
+    fn request_quit(&mut self) {
+        if !self.confirming_quit {
+            self.quit_dialog.open();
+            self.confirming_quit = true;
         }
     }
 }
@@ -758,6 +795,9 @@ impl MainMenuUi {
 
     #[cfg(target_os = "trueos")]
     pub(crate) fn native_activity_screen(&self) -> &'static str {
+        if self.controls.confirming_quit {
+            return "quit";
+        }
         match &self.controls.screen {
             Screen::Login { .. } => match self.controls.show {
                 Showing::Login => "login",
@@ -828,6 +868,10 @@ impl MainMenuUi {
         self.controls.exit_connect_screen();
     }
 
+    pub fn request_quit(&mut self) {
+        self.controls.request_quit();
+    }
+
     pub fn handle_event(&mut self, event: window::Event) -> bool {
         match event {
             // Pass events to ui.
@@ -844,16 +888,38 @@ impl MainMenuUi {
     }
 
     pub fn handle_ui_event(&mut self, event: ui::ice::Event) {
-        // Tab for input fields
         use iced::keyboard;
+        if self.controls.confirming_quit
+            && matches!(
+                &event,
+                iced::Event::Keyboard(keyboard::Event::KeyPressed {
+                    key_code: keyboard::KeyCode::Escape,
+                    ..
+                })
+            )
+        {
+            self.controls.confirming_quit = false;
+            return;
+        }
+        if let iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key_code: keyboard::KeyCode::Tab,
+            modifiers,
+        }) = &event
+        {
+            self.controls.tab(modifiers.shift);
+            return;
+        }
         if matches!(
             &event,
-            iced::Event::Keyboard(keyboard::Event::KeyPressed {
-                key_code: keyboard::KeyCode::Tab,
-                ..
-            })
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(_))
+                | iced::Event::Touch(iced::touch::Event::FingerPressed { .. })
         ) {
-            self.controls.tab();
+            if self.controls.confirming_quit {
+                self.controls.quit_dialog.clear_focus();
+            }
+            if let Screen::Login { screen, .. } = &mut self.controls.screen {
+                screen.banner.multiplayer_focus.focus(false);
+            }
         }
 
         self.ui.handle_event(event);

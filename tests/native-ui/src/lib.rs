@@ -3,6 +3,8 @@
 extern crate alloc;
 #[path = "../../../src/menu/connection_screen.rs"]
 mod connection_screen;
+#[path = "../../../src/menu/main/ui/login_focus.rs"]
+mod login_focus;
 extern crate self as iced;
 extern crate self as trueos;
 #[derive(Clone, Copy, Debug, PartialEq)]

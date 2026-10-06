@@ -915,6 +915,7 @@ pub struct Show {
     quest: bool,
     group_menu: bool,
     esc_menu: bool,
+    confirm_quit: bool,
     open_windows: Windows,
     map: bool,
     ingame: bool,
@@ -956,6 +957,7 @@ impl Show {
             quest: false,
             group_menu: false,
             esc_menu: false,
+            confirm_quit: false,
             open_windows: Windows::None,
             map: false,
             ingame: true,
@@ -1153,6 +1155,11 @@ impl Show {
     }
 
     fn toggle_windows(&mut self, global_state: &mut GlobalState) {
+        if self.esc_menu && self.confirm_quit {
+            self.confirm_quit = false;
+            return;
+        }
+        self.confirm_quit = false;
         if self.any_window_requires_cursor() {
             self.set_bag_state(false);
             self.trade = false;
@@ -1178,6 +1185,7 @@ impl Show {
     fn open_setting_tab(&mut self, tab: SettingsTab) {
         self.open_windows = Windows::Settings;
         self.esc_menu = false;
+        self.confirm_quit = false;
         self.settings_tab = tab;
         self.set_bag_state(false);
         self.want_grab = false;
@@ -4004,7 +4012,10 @@ impl Hud {
         }
 
         if self.show.esc_menu {
-            match EscMenu::new(&self.imgs, &self.fonts, i18n).set(self.ids.esc_menu, ui_widgets) {
+            match EscMenu::new(&self.imgs, &self.fonts, i18n)
+                .confirm_quit(self.show.confirm_quit)
+                .set(self.ids.esc_menu, ui_widgets)
+            {
                 Some(esc_menu::Event::OpenSettings(tab)) => {
                     self.show.open_setting_tab(tab);
                 },
@@ -4019,6 +4030,8 @@ impl Hud {
                     events.push(Event::Logout);
                 },
                 Some(esc_menu::Event::Quit) => events.push(Event::Quit),
+                Some(esc_menu::Event::RequestQuit) => self.show.confirm_quit = true,
+                Some(esc_menu::Event::BackFromQuit) => self.show.confirm_quit = false,
                 Some(esc_menu::Event::CharacterSelection) => {
 
                     events.push(Event::CharacterSelection)
@@ -4897,6 +4910,17 @@ impl Hud {
 
         let cursor_grabbed = global_state.window.is_cursor_grabbed();
         let handled = match event {
+            WinEvent::Close => {
+                self.ui.focus_widget(None);
+                self.force_chat = false;
+                self.show.toggle_windows(global_state);
+                self.show.ui = true;
+                self.show.esc_menu = true;
+                self.show.confirm_quit = true;
+                self.show.want_grab = false;
+                self.force_ungrab = true;
+                true
+            },
             WinEvent::Ui(event) => {
                 if (self.typing() && event.is_keyboard() && self.show.ui)
                     || !(cursor_grabbed && event.is_keyboard_or_mouse())

@@ -5,10 +5,7 @@ use crate::ui::{
         Element,
         component::neat_button,
         style,
-        widget::{
-            AspectRatioContainer, BackgroundContainer, Image, Padding,
-            compound_graphic::{CompoundGraphic, Graphic},
-        },
+        widget::{AspectRatioContainer, BackgroundContainer, Image, Padding},
     },
 };
 
@@ -120,11 +117,7 @@ impl Screen {
         .align_y(Align::End);
 
         let left_column = Column::with_children(vec![buttons.into()])
-            .width(if dialog.is_some() {
-                Length::Units(154)
-            } else {
-                Length::Fill
-            })
+            .width(Length::Fill)
             .height(Length::Fill)
             .padding(MENU_EDGE_MARGIN)
             .into();
@@ -207,12 +200,6 @@ impl Screen {
         } else {
             central_content
         };
-        let central_column = Container::new(central_content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x()
-            .center_y();
-
         let v_logo = logo_glow.view(imgs.v_logo, LOGO_WIDTH);
 
         let version_stage =
@@ -235,16 +222,37 @@ impl Screen {
         })
         .align_x(Align::End);
 
-        let columns = if external_dialog.is_some() {
-            vec![left_column, central_column.into()]
+        if dialog_id.is_some() {
+            let chrome = Row::with_children(vec![
+                left_column,
+                Space::new(Length::Fill, Length::Fill).into(),
+                right_column.into(),
+            ])
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .spacing(10);
+            crate::ui::ice::widget::Overlay::new(central_content, chrome)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y()
+                .into()
         } else {
-            vec![left_column, central_column.into(), right_column.into()]
-        };
-        Row::with_children(columns)
+            let central_column = Container::new(central_content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y();
+            Row::with_children(vec![
+                left_column,
+                central_column.into(),
+                right_column.into(),
+            ])
             .width(Length::Fill)
             .height(Length::Fill)
             .spacing(10)
             .into()
+        }
     }
 }
 
@@ -298,7 +306,7 @@ impl LanguageSelectBanner {
                         Text::new(lang.language_name.clone())
                             .width(Length::FillPortion(95))
                             .font(fonts.universal.id)
-                            .size(fonts.universal.scale(25))
+                            .size(fonts.universal.scale(super::selection_panel::ROW_TEXT_SIZE))
                             .vertical_alignment(iced::VerticalAlignment::Center)
                             .into(),
                     ])
@@ -310,7 +318,7 @@ impl LanguageSelectBanner {
                         .press_image(imgs.selection_press)
                         .image_color(Rgba::new(color.0, color.1, color.2, 192)),
                 )
-                .min_height(56)
+                .min_height(super::selection_panel::ROW_HEIGHT)
                 .on_press(Message::LanguageChanged(i));
                 Row::with_children(vec![
                     Space::new(Length::FillPortion(3), Length::Units(0)).into(),
@@ -339,21 +347,7 @@ impl LanguageSelectBanner {
             .height(Length::FillPortion(38))
             .align_items(Align::Center);
 
-        let selection_menu = BackgroundContainer::new(
-            CompoundGraphic::from_graphics(vec![
-                Graphic::image(imgs.banner_top, [138, 17], [0, 0]),
-                Graphic::rect(Rgba::new(0, 0, 0, 230), [130, 165], [4, 17]),
-                // TODO: use non image gradient
-                Graphic::gradient(Rgba::new(0, 0, 0, 230), Rgba::zero(), [130, 50], [4, 182]),
-            ])
-            .fix_aspect_ratio()
-            .height(Length::Fill),
-            content,
-        )
-        .padding(Padding::new().horizontal(5).top(15).bottom(50))
-        .max_width(350);
-
-        selection_menu.into()
+        super::selection_panel::panel(imgs, content.into())
     }
 }
 
@@ -364,11 +358,40 @@ pub struct LoginBanner {
     pub server: text_input::State,
 
     multiplayer_button: button::State,
+    pub(super) multiplayer_focus: crate::ui::ice::widget::keyboard_button::State,
 
     unlock_server_field_button: button::State,
 }
 
 impl LoginBanner {
+    pub(super) fn tab(&mut self, backwards: bool, server_locked: bool) {
+        use super::login_focus::{Focus, next};
+        let current = if self.username.is_focused() {
+            Some(Focus::Username)
+        } else if self.password.is_focused() {
+            Some(Focus::Password)
+        } else if self.server.is_focused() {
+            Some(Focus::Server)
+        } else if self.multiplayer_focus.focused {
+            Some(Focus::Multiplayer)
+        } else {
+            None
+        };
+        let selected = next(current, backwards, server_locked);
+        self.username = text_input::State::new();
+        self.password = text_input::State::new();
+        self.server = text_input::State::new();
+        self.multiplayer_focus.focus(selected == Focus::Multiplayer);
+        let field = match selected {
+            Focus::Username => &mut self.username,
+            Focus::Password => &mut self.password,
+            Focus::Server => &mut self.server,
+            Focus::Multiplayer => return,
+        };
+        *field = text_input::State::focused();
+        field.move_cursor_to_end();
+    }
+
     fn view(
         &mut self,
         fonts: &Fonts,
@@ -468,13 +491,20 @@ impl LoginBanner {
             .spacing(5)
             .into(),
             Space::new(Length::Fill, Length::Units(8)).into(),
-            Column::with_children(vec![neat_button(
-                &mut self.multiplayer_button,
-                i18n.get_msg("common-multiplayer"),
-                FILL_FRAC_TWO,
-                button_style,
-                Some(Message::Multiplayer),
-            )])
+            Column::with_children(vec![
+                crate::ui::ice::widget::keyboard_button::KeyboardButton::new(
+                    &mut self.multiplayer_focus,
+                    Message::Multiplayer,
+                    neat_button(
+                        &mut self.multiplayer_button,
+                        i18n.get_msg("common-multiplayer"),
+                        FILL_FRAC_TWO,
+                        button_style,
+                        Some(Message::Multiplayer),
+                    ),
+                )
+                .into(),
+            ])
             .max_width(170)
             .height(Length::Units(200))
             .spacing(8)

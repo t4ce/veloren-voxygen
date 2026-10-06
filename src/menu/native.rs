@@ -475,9 +475,7 @@ impl ApplicationHandler for App {
             _ => state.activity.other_window_events += 1,
         }
         if matches!(event, WindowEvent::CloseRequested) {
-            state.report_activity(true);
-            tracing::info!("Native menu received window CloseRequested");
-            event_loop.exit();
+            state.ui.request_quit();
             return;
         }
         if let WindowEvent::ModifiersChanged(modifiers) = &event {

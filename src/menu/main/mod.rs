@@ -100,9 +100,9 @@ impl PlayState for MainMenuState {
                 continue;
             }
 
-            // Shutdown on Close, ignore all other events.
+            // Window close uses the same confirmation as the Quit button.
             if matches!(event, Event::Close) {
-                return PlayStateResult::Shutdown;
+                self.main_menu_ui.request_quit();
             }
         }
 

@@ -4,6 +4,7 @@ pub mod compound_graphic;
 pub mod dialog;
 pub mod fill_text;
 pub mod image;
+pub mod keyboard_button;
 pub mod mouse_detector;
 pub mod overlay;
 pub mod panel_width;
