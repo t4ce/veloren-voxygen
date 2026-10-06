@@ -122,7 +122,6 @@ main-account-creating = Wird erstellt…
 main-account-change_password = Passwort ändern
 main-account-change_username = Namen ändern
 main-account-delete = Account löschen
-main-account-back = Hauptmenü
 main-account-invalid_username = Der Benutzername muss 3–32 Zeichen lang sein und darf Buchstaben, Zahlen, Unterstriche oder Bindestriche enthalten.
 main-account-empty_password = Bitte gib ein Passwort ein.
 main-account-password_mismatch = Die Passwörter stimmen nicht überein.

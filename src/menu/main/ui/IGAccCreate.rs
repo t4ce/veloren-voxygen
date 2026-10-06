@@ -106,23 +106,20 @@ impl IGAccCreate {
                 .into(),
             );
         }
-        links.push(
-            Container::new(neat_button(
-                back,
-                i18n.get_msg("main-account-back"),
-                FILL_FRAC_ONE,
-                button_style,
-                Some(Message::AccountBack),
-            ))
-            .width(Length::Units(100))
-            .height(Length::Units(25))
-            .into(),
-        );
+        let back = Container::new(neat_button(
+            back,
+            i18n.get_msg("common-back"),
+            FILL_FRAC_TWO,
+            button_style,
+            Some(Message::AccountBack),
+        ))
+        .width(Length::Units(170));
         Container::new(
             Column::with_children(vec![
                 Column::with_children(fields).spacing(5).into(),
                 Space::new(Length::Fill, Length::Units(8)).into(),
                 create.into(),
+                back.into(),
                 Column::with_children(links)
                     .spacing(5)
                     .align_items(Align::Center)

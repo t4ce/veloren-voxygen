@@ -3,6 +3,7 @@ mod connecting;
 //mod disclaimer;
 mod credits;
 mod login;
+mod logo_glow;
 #[path = "IGAccCreate.rs"]
 mod ig_acc_create;
 mod servers;
@@ -178,6 +179,7 @@ impl Showing {
 pub struct Controls {
     fonts: Fonts,
     imgs: Imgs,
+    logo_glow: logo_glow::LogoGlow,
     bg_img: widget::image::Handle,
     i18n: LocalizationHandle,
     credits: Credits,
@@ -235,6 +237,7 @@ impl Controls {
         i18n: LocalizationHandle,
         settings: &Settings,
         server: Option<String>,
+        logo_glow: logo_glow::LogoGlow,
     ) -> Self {
         let credits = Ron::<Credits>::load_expect_cloned("credits").into_inner();
 
@@ -270,6 +273,7 @@ impl Controls {
         Self {
             fonts,
             imgs,
+            logo_glow,
             bg_img,
             i18n,
             credits,
@@ -320,6 +324,7 @@ impl Controls {
             Screen::Login { screen, error } => screen.view(
                 &self.fonts,
                 &self.imgs,
+                &self.logo_glow,
                 self.server_field_locked,
                 &self.login_info,
                 error.as_deref(),
@@ -617,6 +622,7 @@ impl MainMenuUi {
         let bg_img_spec = rand_bg_image_spec();
 
         let bg_img = Image::load_expect(bg_img_spec).read().to_image();
+        let logo_glow = logo_glow::LogoGlow::new(&mut ui);
         let controls = Controls::new(
             fonts,
             Imgs::load(&mut ui).expect("Failed to load images"),
@@ -624,6 +630,7 @@ impl MainMenuUi {
             global_state.i18n,
             &global_state.settings,
             global_state.args.server.clone(),
+            logo_glow,
         );
 
         Self {

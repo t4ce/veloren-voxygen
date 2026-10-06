@@ -21,6 +21,9 @@ use vek::*;
 
 const INPUT_WIDTH: u16 = 230;
 const INPUT_TEXT_SIZE: u16 = 20;
+const MENU_EDGE_MARGIN: u16 = 27;
+// Previously 224 pixels inside a 230-pixel container; sqrt(1.2) gives ~245.
+const LOGO_WIDTH: u16 = 245;
 
 /// Login screen for the main menu
 #[derive(Default)]
@@ -46,6 +49,7 @@ impl Screen {
         &mut self,
         fonts: &Fonts,
         imgs: &Imgs,
+        logo_glow: &super::logo_glow::LogoGlow,
         server_field_locked: bool,
         login_info: &LoginInfo,
         error: Option<&str>,
@@ -117,7 +121,7 @@ impl Screen {
         let left_column = Column::with_children(vec![buttons.into()])
             .width(Length::Fill)
             .height(Length::Fill)
-            .padding(27)
+            .padding(MENU_EDGE_MARGIN)
             .into();
 
         let central_content = if let Some(error) = error {
@@ -181,9 +185,7 @@ impl Screen {
             .center_x()
             .center_y();
 
-        let v_logo = Container::new(Image::new(imgs.v_logo).fix_aspect_ratio())
-            .padding(3)
-            .width(Length::Units(230));
+        let v_logo = logo_glow.view(imgs.v_logo, LOGO_WIDTH);
 
         let version_stage =
             Text::new(common::util::VELOREN_VERSION_STAGE).size(fonts.cyri.scale(22));
@@ -197,6 +199,12 @@ impl Screen {
         )
         .width(Length::Fill)
         .height(Length::Fill)
+        .padding(iced::Padding {
+            top: MENU_EDGE_MARGIN * 2,
+            right: MENU_EDGE_MARGIN * 2,
+            bottom: 0,
+            left: 0,
+        })
         .align_x(Align::End);
 
         Row::with_children(vec![
