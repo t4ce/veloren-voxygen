@@ -262,7 +262,7 @@ impl Scene {
         };
         renderer.update_consts(&mut self.data.lights, lantern_light.as_slice());
 
-        renderer.update_consts(&mut self.data.globals, &[Globals::new(
+        let globals = Globals::new(
             view_mat,
             proj_mat,
             cam_pos,
@@ -290,7 +290,9 @@ impl Scene {
             250.0,
             0.0,
             1.0,
-        )]);
+        );
+        self.globals_bind_group.display_color = Some(globals.display_color());
+        renderer.update_consts(&mut self.data.globals, &[globals]);
         renderer.update_clouds_locals(CloudsLocals::new(proj_mat_inv, view_mat_inv));
         renderer.update_postprocess_locals(PostProcessLocals::new(proj_mat_inv, view_mat_inv));
 

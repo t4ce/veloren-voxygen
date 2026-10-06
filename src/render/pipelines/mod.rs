@@ -206,6 +206,16 @@ impl Globals {
     }
 }
 
+impl Globals {
+    pub(crate) fn display_color(&self) -> super::display_color::Inputs {
+        super::display_color::Inputs {
+            gamma: self.gamma_exposure[0],
+            fade: self.screen_fade,
+            underwater: self.medium[0] == 1,
+        }
+    }
+}
+
 impl Default for Globals {
     fn default() -> Self {
         Self::new(
@@ -305,6 +315,7 @@ pub struct GlobalModel {
 
 pub struct GlobalsBindGroup {
     pub(super) bind_group: wgpu::BindGroup,
+    pub(crate) display_color: Option<super::display_color::Inputs>,
 }
 
 pub struct ShadowTexturesBindGroup {
@@ -736,7 +747,10 @@ impl GlobalsLayouts {
             entries: &Self::bind_base_globals(global_model, lod_data, noise),
         });
 
-        GlobalsBindGroup { bind_group }
+        GlobalsBindGroup {
+            bind_group,
+            display_color: None,
+        }
     }
 
     pub fn bind_shadow_textures(

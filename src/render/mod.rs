@@ -1,6 +1,7 @@
 pub mod bound;
 mod buffer;
 pub mod consts;
+pub(crate) mod display_color;
 mod error;
 pub mod instances;
 pub mod mesh;

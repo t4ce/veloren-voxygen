@@ -64,6 +64,7 @@ impl Shared {
 }
 pub struct Job {
     shared: Arc<Shared>,
+    task: Option<tokio::task::AbortHandle>,
 }
 impl Job {
     pub fn start(host: String, runtime: &Arc<tokio::runtime::Runtime>) -> Self {
@@ -77,7 +78,7 @@ impl Job {
             wake: tokio::sync::Notify::new(),
         });
         let worker = Arc::clone(&shared);
-        runtime.spawn(async move {
+        let task = runtime.spawn(async move {
             let result = run(&host, &worker).await.map_err(|error| error.to_string());
             let result = if worker.phase.swap(FINISHED, Ordering::AcqRel) == CANCELED {
                 Err("Asset sync canceled".into())
@@ -88,7 +89,10 @@ impl Job {
             status.cancellable = false;
             status.result = Some(result);
         });
-        Self { shared }
+        Self {
+            shared,
+            task: Some(task.abort_handle()),
+        }
     }
     pub fn status(&self) -> Status {
         self.shared.status.lock().unwrap().clone()
@@ -103,8 +107,18 @@ impl Job {
             .compare_exchange(RUNNING, CANCELED, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
+            // The UI must not wait for a network task to be scheduled again to
+            // leave the loading screen. Winning the CAS also prevents any
+            // outstanding preparation task from starting a disk commit.
+            let mut status = self.shared.status.lock().unwrap();
+            status.message = "Asset sync canceled".into();
+            status.cancellable = false;
+            status.result = Some(Err("Asset sync canceled".into()));
+            drop(status);
             self.shared.wake.notify_one();
-            self.shared.status.lock().unwrap().message = "Canceling asset sync…".into();
+            if let Some(task) = &self.task {
+                task.abort();
+            }
             true
         } else {
             false
@@ -290,7 +304,10 @@ mod tests {
                 start.wait();
                 writer.begin_write().is_ok()
             });
-            let job = Job { shared: state };
+            let job = Job {
+                shared: state,
+                task: None,
+            };
             barrier.wait();
             let canceled = job.cancel();
             let writing = worker.join().unwrap();
@@ -300,6 +317,8 @@ mod tests {
                 assert!(!job.status().cancellable);
             } else {
                 assert!(job.shared.begin_write().is_err());
+                assert!(!job.status().cancellable);
+                assert_eq!(job.status().result, Some(Err("Asset sync canceled".into())));
             }
         }
     }
@@ -317,13 +336,95 @@ mod tests {
                 network(&worker, std::future::pending::<io::Result<()>>()).await
             });
             tokio::task::yield_now().await;
-            let job = Job { shared: state };
+            let job = Job {
+                shared: state,
+                task: None,
+            };
             assert!(job.cancel());
             assert_eq!(
                 pending.await.unwrap().unwrap_err().kind(),
                 io::ErrorKind::Interrupted
             );
         });
+    }
+
+    #[test]
+    fn cancel_finishes_for_the_ui_even_when_the_worker_cannot_run() {
+        let runtime = Arc::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        );
+        // This runtime is deliberately not driven until after cancellation:
+        // the network worker cannot resolve a host or report completion.
+        let job = Job::start("127.0.0.1".into(), &runtime);
+        assert!(job.status().result.is_none());
+        assert!(job.cancel());
+        assert_eq!(job.status().result, Some(Err("Asset sync canceled".into())));
+        assert!(!job.status().cancellable);
+        assert!(!job.writing());
+        assert!(job.shared.begin_write().is_err());
+        runtime.block_on(tokio::task::yield_now());
+        assert_eq!(job.status().result, Some(Err("Asset sync canceled".into())));
+    }
+
+    #[test]
+    fn cancel_drops_the_pending_worker_future() {
+        struct Dropped(Arc<std::sync::atomic::AtomicBool>);
+        impl Drop for Dropped {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Release);
+            }
+        }
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let guard = Dropped(Arc::clone(&dropped));
+        runtime.block_on(async {
+            let task = tokio::spawn(async move {
+                let _guard = guard;
+                std::future::pending::<()>().await;
+            });
+            tokio::task::yield_now().await;
+            let job = Job {
+                shared: shared(),
+                task: Some(task.abort_handle()),
+            };
+            assert!(job.cancel());
+            assert!(task.await.unwrap_err().is_cancelled());
+            assert!(dropped.load(Ordering::Acquire));
+        });
+    }
+
+    #[test]
+    fn offline_asset_server_reports_unreachable() {
+        // Reserve then release the same loopback port used by the worker.
+        let listener = std::net::TcpListener::bind(("127.0.0.1", sync::PORT)).unwrap();
+        drop(listener);
+        let runtime = Arc::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        );
+        let job = Job::start("127.0.0.1".into(), &runtime);
+        let result = runtime.block_on(async {
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    if let Some(result) = job.status().result {
+                        return result;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("offline connection must finish")
+        });
+        assert!(result.unwrap_err().contains("not reachable"));
+        assert!(!job.status().cancellable);
     }
 
     fn fixture(value: &[u8], extra: &str) -> sync::AssetDb {

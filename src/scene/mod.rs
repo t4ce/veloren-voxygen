@@ -984,7 +984,7 @@ impl Scene {
             };
 
         // Update global constants.
-        renderer.update_consts(&mut self.data.globals, &[Globals::new(
+        let globals = Globals::new(
             view_mat,
             proj_mat,
             cam_pos,
@@ -1020,7 +1020,9 @@ impl Scene {
             scene_data.sprite_render_distance - 20.0,
             player_mmap_ori,
             self.screen_fade,
-        )]);
+        );
+        self.globals_bind_group.display_color = Some(globals.display_color());
+        renderer.update_consts(&mut self.data.globals, &[globals]);
         renderer.update_clouds_locals(CloudsLocals::new(proj_mat_inv, view_mat_inv));
         renderer.update_postprocess_locals(PostProcessLocals::new(proj_mat_inv, view_mat_inv));
 

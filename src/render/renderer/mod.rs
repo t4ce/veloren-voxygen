@@ -136,6 +136,8 @@ enum State {
 /// GPU, along with pipeline state objects (PSOs) needed to renderer different
 /// kinds of models to the screen.
 pub struct Renderer {
+    #[cfg(target_os = "trueos")]
+    display_color: super::display_color::DisplayColor,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
@@ -607,7 +609,14 @@ impl Renderer {
             .filter_map(|present_mode| PresentMode::try_from(present_mode).ok())
             .collect();
 
+        #[cfg(target_os = "trueos")]
+        let display_color = {
+            use winit::platform::trueos::WindowExtTrueOS;
+            super::display_color::DisplayColor::new(window.trueos_window_id())
+        };
         Ok(Self {
+            #[cfg(target_os = "trueos")]
+            display_color,
             device,
             queue,
             surface,
@@ -1101,6 +1110,30 @@ impl Renderer {
 
         if self.is_minimized {
             return Ok(None);
+        }
+
+        #[cfg(target_os = "trueos")]
+        {
+            let cinematic = self
+                .pipeline_modes
+                .experimental_shaders
+                .contains(&super::ExperimentalShader::Cinematic);
+            let (exponent, gain) = if let Some(inputs) = globals.display_color {
+                let water =
+                    inputs.underwater && matches!(self.pipeline_modes.fluid, super::FluidMode::Low);
+                let tint = if water { [0.2, 0.2, 0.8] } else { [1.0; 3] };
+                (
+                    inputs.gamma + if cinematic { 0.5 } else { 0.3 },
+                    tint.map(|v| v * inputs.fade),
+                )
+            } else {
+                (1.0, [1.0; 3])
+            };
+            self.display_color.apply(super::display_color::Curve {
+                exponent,
+                gain,
+                srgb: self.surface_config.format.has_srgb_suffix(),
+            })?;
         }
 
         // Try to get the latest profiling results

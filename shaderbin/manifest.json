@@ -76,6 +76,9 @@
     "-std=430core",
     "-O"
   ],
+  "overrides": {
+    "postprocess-frag.glsl": "e7d8b5c8dc48c2f1519d08dbd14ca92f0da86eff7ed44495ae37263157eb255e"
+  },
   "profiles": [
     "minimal",
     "default-map",
@@ -368,7 +371,16 @@
       "name": "postprocess-frag",
       "profile": "default-map",
       "sha256": "7299d6f489d9f1c4686ed8326beb967482f8eadb54ceae923f2d00fba104acac",
-      "source_sha256": "e3ecbe22512ced279365d0e1a131d45d4dbc7dcbbf9b5e925096ccea6a47cae7",
+      "source_sha256": "e6603d9226dff6267cf6d5377ad1f91b72b9892f45880f20ad463b4ce3200d9a",
+      "stage": "frag"
+    },
+    {
+      "bytes": 7280,
+      "file": "postprocess-frag.map.display.spv",
+      "name": "postprocess-frag",
+      "profile": "default-map",
+      "sha256": "85d5b36830e97de48641f78361474ed6016ade1c3e186cd3091d0c4d166137df",
+      "source_sha256": "856091368f552e3ed88c1924b1f26f7ce3cc91cdaba603852ecbed2f85785bfb",
       "stage": "frag"
     },
     {
@@ -737,7 +749,16 @@
       "name": "postprocess-frag",
       "profile": "default-cheap",
       "sha256": "7299d6f489d9f1c4686ed8326beb967482f8eadb54ceae923f2d00fba104acac",
-      "source_sha256": "786f8f855514135a70e1704e92d9fb6e8d0761a94ef18fd78d5a6457e615e01a",
+      "source_sha256": "16dd4bcce63a2fd6125e1cd93daeb52c36b1473b87c656a44774537ca0575f78",
+      "stage": "frag"
+    },
+    {
+      "bytes": 7280,
+      "file": "postprocess-frag.cheap.display.spv",
+      "name": "postprocess-frag",
+      "profile": "default-cheap",
+      "sha256": "85d5b36830e97de48641f78361474ed6016ade1c3e186cd3091d0c4d166137df",
+      "source_sha256": "11147bf5af59b75b6904c7e847690c010a414e425d43abea9adaf6e7f8d46fc6",
       "stage": "frag"
     },
     {
@@ -1106,7 +1127,16 @@
       "name": "postprocess-frag",
       "profile": "minimal",
       "sha256": "0e6ded5bdb5036b7e7d84d3afc606ed94c7345a0d5ba2ef2c486f9e034b05467",
-      "source_sha256": "6a9fc8b9ea93cabba8b3c8cb117f36cbcc64346bc6e1df62a0a8b55889ff139f",
+      "source_sha256": "1b71345ae5ce4579b758adc92a3512fa94e71f3f5b55a5afb2de3fac3cb4b8f2",
+      "stage": "frag"
+    },
+    {
+      "bytes": 9056,
+      "file": "postprocess-frag.minimal.display.spv",
+      "name": "postprocess-frag",
+      "profile": "minimal",
+      "sha256": "692a082cb727e41b573ff286c1b755b61c8a6e6f7fc93a77c3f89d22ba4b4fa7",
+      "source_sha256": "2b59deace06f265b5a2618538b9287a7b505d0de5284503ef593ca91352148ab",
       "stage": "frag"
     },
     {

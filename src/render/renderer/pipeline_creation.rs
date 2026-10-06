@@ -312,10 +312,14 @@ impl ShaderModules {
 
         let mut create_shader = move |name, stage| {
             tracing::info!("Loading precompiled shader {name}");
-            let glsl = &shaders
-                .get(name)
-                .unwrap_or_else(|| panic!("Can't retrieve shader: {}", name))
-                .0;
+            let glsl = if name == "postprocess-frag" {
+                include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/shaderbin/postprocess-frag.glsl"
+                ))
+            } else {
+                &shaders.get(name).unwrap_or_else(|| panic!("Can't retrieve shader: {}", name)).0
+            };
             compiler.create_shader_module(device, glsl, stage, name)
         };
 

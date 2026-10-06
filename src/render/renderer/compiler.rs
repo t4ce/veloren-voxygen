@@ -39,6 +39,13 @@ impl PrecompiledCompiler {
                 .collect()
         };
         let mut source = source.to_owned();
+        if cfg!(target_os = "trueos") && name == "postprocess-frag" {
+            source = source.replacen(
+                "#version 440 core",
+                "#version 440 core\n#define TRUEOS_DISPLAY_COLOR",
+                1,
+            );
+        }
         for _ in 0..64 {
             let mut failure = None;
             let expanded = self
