@@ -4,10 +4,10 @@ use common::{comp, terrain::TerrainGrid, vol::ReadVol};
 use specs::{Join, WorldExt};
 use std::{
     collections::HashMap,
-    sync::mpsc,
+    sync::{Arc, mpsc},
     time::{Duration, Instant},
 };
-use vek::{Rgb, Vec3, Vec4};
+use vek::{Rgb, Vec2, Vec3, Vec4};
 
 pub(super) fn placement(display_width: u32, display_height: u32) -> (i32, i32, u32, u32) {
     let units = (display_width / 32).min(display_height / 18).clamp(1, 80);
@@ -98,6 +98,47 @@ pub(super) struct Scene {
     next_mesh: Instant,
     revision: u64,
     next_missing_log: Instant,
+    mesh_source: Option<MeshSource>,
+}
+
+struct MeshSource {
+    // Retain the exact worker snapshot: live chunk edits must copy on write,
+    // so pointer identity changes even after the worker has finished.
+    terrain: Arc<TerrainGrid>,
+    center: Vec3<i32>,
+}
+
+impl MeshSource {
+    fn matches(&self, terrain: &TerrainGrid, center: Vec3<i32>) -> bool {
+        if self.center != center {
+            return false;
+        }
+        let min = Vec2::new(center.x - RADIUS, center.y - RADIUS);
+        let max = Vec2::new(center.x + RADIUS - 1, center.y + RADIUS - 1);
+        let first = TerrainGrid::chunk_key(min - 1);
+        let last = TerrainGrid::chunk_key(max + 1);
+        let size = TerrainGrid::chunk_size().map(|value| value as i32);
+        for y in first.y..=last.y {
+            for x in first.x..=last.x {
+                let key = Vec2::new(x, y);
+                let chunk_min = TerrainGrid::key_chunk(key);
+                let chunk_max = chunk_min + size - 1;
+                // Face culling reads one neighbor along a single axis; corner
+                // chunks that touch only the diagonal halo are never sampled.
+                let overlaps_x = chunk_min.x <= max.x && chunk_max.x >= min.x;
+                let overlaps_y = chunk_min.y <= max.y && chunk_max.y >= min.y;
+                if !overlaps_x && !overlaps_y {
+                    continue;
+                }
+                match (self.terrain.get_key_arc(key), terrain.get_key_arc(key)) {
+                    (Some(old), Some(current)) if Arc::ptr_eq(old, current) => {}
+                    (None, None) => {}
+                    _ => return false,
+                }
+            }
+        }
+        true
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -128,7 +169,17 @@ impl Scene {
             next_mesh: Instant::now(),
             revision: 0,
             next_missing_log: Instant::now() + Duration::from_secs(5),
+            mesh_source: None,
         }
+    }
+
+    fn needs_mesh(&self, terrain: &TerrainGrid, center: Vec3<i32>, now: Instant) -> bool {
+        self.pending_mesh.is_none()
+            && now >= self.next_mesh
+            && self
+                .mesh_source
+                .as_ref()
+                .is_none_or(|source| !source.matches(terrain, center))
     }
 
     pub(super) fn prepare(
@@ -147,6 +198,7 @@ impl Scene {
             }
             // Discard pending work from the previous session after disconnect.
             self.pending_mesh = None;
+            self.mesh_source = None;
             self.next_mesh = Instant::now();
             self.next_missing_log = Instant::now() + Duration::from_secs(5);
         }
@@ -181,10 +233,15 @@ impl Scene {
                     self.pending_mesh.is_some(),
                 ));
             }
-            if self.pending_mesh.is_none() && Instant::now() >= self.next_mesh {
+            let center = position.map(|v| v.floor() as i32);
+            let current_terrain = client.state().terrain();
+            if self.needs_mesh(&current_terrain, center, Instant::now()) {
                 // Arc-backed chunk snapshot: meshing never blocks input or the network tick.
-                let terrain = (*client.state().terrain()).clone();
-                let center = position.map(|v| v.floor() as i32);
+                let terrain = Arc::new((*current_terrain).clone());
+                self.mesh_source = Some(MeshSource {
+                    terrain: Arc::clone(&terrain),
+                    center,
+                });
                 let (sender, receiver) = mpsc::channel();
                 self.pending_mesh = Some(receiver);
                 self.next_mesh = Instant::now() + MESH_INTERVAL;
@@ -337,6 +394,105 @@ fn voxel_mesh(center: Vec3<i32>, voxel_color: impl Fn(Vec3<i32>) -> Option<Rgb<u
 mod tests {
     use super::*;
 
+    fn empty_terrain() -> TerrainGrid {
+        use common::terrain::{Block, MapSizeLg, SpriteKind, TerrainChunk, TerrainChunkMeta};
+        let air = Block::air(SpriteKind::Empty);
+        TerrainGrid::new(
+            MapSizeLg::new(Vec2::new(5, 5)).unwrap(),
+            Arc::new(TerrainChunk::new(0, air, air, TerrainChunkMeta::void())),
+        )
+        .unwrap()
+    }
+
+    fn source_for(terrain: &TerrainGrid, center: Vec3<i32>) -> MeshSource {
+        MeshSource {
+            terrain: Arc::new(terrain.clone()),
+            center,
+        }
+    }
+
+    #[test]
+    fn dirty_source_stationary_skips_and_integer_movement_invalidates() {
+        let terrain = empty_terrain();
+        let center = Vec3::new(320, 320, 16);
+        let mut scene = Scene::new();
+        scene.mesh_source = Some(source_for(&terrain, center));
+        let due = scene.next_mesh;
+        assert!(!scene.needs_mesh(&terrain, center, due + MESH_INTERVAL));
+        assert!(scene.needs_mesh(&terrain, center + Vec3::unit_x(), due));
+        assert!(scene.needs_mesh(&terrain, center + Vec3::unit_z(), due));
+        assert!(!scene.needs_mesh(&terrain, center + Vec3::unit_x(), due - MESH_INTERVAL));
+        let (_sender, receiver) = mpsc::channel();
+        scene.pending_mesh = Some(receiver);
+        assert!(!scene.needs_mesh(&terrain, center + Vec3::unit_x(), due));
+    }
+
+    #[test]
+    fn dirty_source_detects_relevant_halo_add_remove_and_replacement() {
+        let mut terrain = empty_terrain();
+        let center = Vec3::new(24, 64, 16);
+        // The last meshed x is 63; x=64 is read only for face culling.
+        let key = Vec2::new(2, 2);
+        let chunk = Arc::clone(terrain.get_key_arc(Vec2::new(-1, -1)).unwrap());
+        let absent = source_for(&terrain, center);
+        terrain.insert(key, Arc::clone(&chunk));
+        assert!(!absent.matches(&terrain, center));
+        let loaded = source_for(&terrain, center);
+        terrain.remove(key);
+        assert!(!loaded.matches(&terrain, center));
+        terrain.insert(key, Arc::new((*chunk).clone()));
+        assert!(!loaded.matches(&terrain, center));
+    }
+
+    #[test]
+    fn dirty_source_retained_snapshot_detects_real_copy_on_write_edits() {
+        use common::{
+            terrain::{Block, BlockKind},
+            vol::WriteVol,
+        };
+        let mut terrain = empty_terrain();
+        let center = Vec3::new(320, 320, 16);
+        let key = TerrainGrid::chunk_key(center);
+        let chunk = Arc::clone(terrain.get_key_arc(Vec2::new(-1, -1)).unwrap());
+        terrain.insert(key, chunk);
+        let source = source_for(&terrain, center);
+        assert!(Arc::ptr_eq(
+            source.terrain.get_key_arc(key).unwrap(),
+            terrain.get_key_arc(key).unwrap()
+        ));
+        let color = Rgb::new(31, 140, 47);
+        terrain
+            .set(center, Block::new(BlockKind::Grass, color))
+            .unwrap();
+        assert!(!Arc::ptr_eq(
+            source.terrain.get_key_arc(key).unwrap(),
+            terrain.get_key_arc(key).unwrap()
+        ));
+        assert!(!source.matches(&terrain, center));
+        assert_eq!(source.terrain.get(center).unwrap().get_color(), None);
+        assert_eq!(terrain.get(center).unwrap().get_color(), Some(color));
+    }
+
+    #[test]
+    fn dirty_source_ignores_distant_chunks_and_diagonal_only_halo() {
+        let mut terrain = empty_terrain();
+        let center = Vec3::new(24, 24, 16);
+        let source = source_for(&terrain, center);
+        let chunk = Arc::clone(terrain.get_key_arc(Vec2::new(-1, -1)).unwrap());
+        let far = Vec2::new(16, 16);
+        terrain.insert(far, Arc::clone(&chunk));
+        assert!(source.matches(&terrain, center));
+        terrain.insert(far, Arc::new((*chunk).clone()));
+        assert!(source.matches(&terrain, center));
+        terrain.remove(far);
+        assert!(source.matches(&terrain, center));
+        // Both coordinates are 64: face-neighbor reads never reach this corner.
+        terrain.insert(Vec2::new(2, 2), Arc::clone(&chunk));
+        assert!(source.matches(&terrain, center));
+        terrain.insert(Vec2::new(2, 1), chunk);
+        assert!(!source.matches(&terrain, center));
+    }
+
     fn sampled_texel(mesh: &Mesh, vertex: &Vertex) -> [u8; 4] {
         let x = (vertex.atlas_uv[0] * ATLAS_SIZE as f32).floor() as usize;
         let y = (vertex.atlas_uv[1] * ATLAS_SIZE as f32).floor() as usize;
@@ -464,8 +620,10 @@ mod tests {
     fn missing_world_has_no_terrain_or_overlay_geometry() {
         assert!(voxel_mesh(Vec3::zero(), |_| None).vertices.is_empty());
         let mut scene = Scene::new();
+        scene.mesh_source = Some(source_for(&empty_terrain(), Vec3::zero()));
         let frame = scene.prepare(None, 0.0, 0.0, 640, 480);
         assert!(frame.terrain.is_empty());
         assert!(frame.overlay.is_empty());
+        assert!(scene.mesh_source.is_none());
     }
 }

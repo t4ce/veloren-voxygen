@@ -5,7 +5,7 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 
 [package.metadata.trueos-blueprint]
-profile = "dev"
+profile = "release"
 replicatable = false
 
 [package.metadata.trueos-blueprint.build-env-paths]

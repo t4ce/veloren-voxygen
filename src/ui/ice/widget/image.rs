@@ -1,6 +1,6 @@
 use super::super::graphic;
-use iced::{Element, Hasher, Layout, Length, Point, Rectangle, Widget, layout};
 use core::hash::Hash;
+use iced::{Element, Hasher, Layout, Length, Point, Rectangle, Widget, layout};
 use vek::Rgba;
 
 // TODO: consider iced's approach to images and caching image data
@@ -15,6 +15,7 @@ pub struct Image {
     height: Length,
     fix_aspect_ratio: bool,
     color: Rgba<u8>,
+    visible_height: f32,
 }
 
 impl Image {
@@ -27,6 +28,7 @@ impl Image {
             height,
             fix_aspect_ratio: false,
             color: Rgba::broadcast(255),
+            visible_height: 1.0,
         }
     }
 
@@ -48,6 +50,13 @@ impl Image {
         self
     }
 
+    /// Show only the top fraction without resizing the image or its layout.
+    #[must_use]
+    pub fn visible_height(mut self, fraction: f32) -> Self {
+        self.visible_height = fraction.clamp(0.0, 1.0);
+        self
+    }
+
     #[must_use]
     pub fn color(mut self, color: Rgba<u8>) -> Self {
         self.color = color;
@@ -59,9 +68,13 @@ impl<M, R> Widget<M, R> for Image
 where
     R: Renderer,
 {
-    fn width(&self) -> Length { self.width }
+    fn width(&self) -> Length {
+        self.width
+    }
 
-    fn height(&self) -> Length { self.height }
+    fn height(&self) -> Length {
+        self.height
+    }
 
     fn layout(&self, renderer: &R, limits: &layout::Limits) -> layout::Node {
         let mut size = limits.width(self.width).height(self.height).max();
@@ -92,7 +105,7 @@ where
         _cursor_position: Point,
         _viewport: &Rectangle,
     ) -> R::Output {
-        renderer.draw(self.handle, self.color, layout)
+        renderer.draw(self.handle, self.color, layout, self.visible_height)
     }
 
     fn hash_layout(&self, state: &mut Hasher) {
@@ -108,25 +121,39 @@ where
 
 pub trait Renderer: iced::Renderer {
     fn dimensions(&self, handle: Handle) -> (u32, u32);
-    fn draw(&mut self, handle: Handle, color: Rgba<u8>, layout: Layout<'_>) -> Self::Output;
+    fn draw(
+        &mut self,
+        handle: Handle,
+        color: Rgba<u8>,
+        layout: Layout<'_>,
+        visible_height: f32,
+    ) -> Self::Output;
 }
 
 impl<'a, M, R> From<Image> for Element<'a, M, R>
 where
     R: Renderer,
 {
-    fn from(image: Image) -> Element<'a, M, R> { Element::new(image) }
+    fn from(image: Image) -> Element<'a, M, R> {
+        Element::new(image)
+    }
 }
 
 impl<R> super::background_container::Background<R> for Image
 where
     R: Renderer,
 {
-    fn width(&self) -> Length { self.width }
+    fn width(&self) -> Length {
+        self.width
+    }
 
-    fn height(&self) -> Length { self.height }
+    fn height(&self) -> Length {
+        self.height
+    }
 
-    fn aspect_ratio_fixed(&self) -> bool { self.fix_aspect_ratio }
+    fn aspect_ratio_fixed(&self) -> bool {
+        self.fix_aspect_ratio
+    }
 
     fn pixel_dims(&self, renderer: &R) -> (u16, u16) {
         let (w, h) = renderer.dimensions(self.handle);
@@ -141,6 +168,6 @@ where
         _cursor_position: Point,
         _viewport: &Rectangle,
     ) -> R::Output {
-        renderer.draw(self.handle, self.color, layout)
+        renderer.draw(self.handle, self.color, layout, self.visible_height)
     }
 }

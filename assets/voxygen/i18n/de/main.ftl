@@ -115,3 +115,17 @@ main-login-banned_until =
     Du wurdest vorübergehend aus dem folgenden Grund gebannt: { $reason }
     Bis: { $end_date }
 main-singleplayer-map_large_extra_warning = Das würde ungefähr die gleichen Ressourcen beanspruchen wie die Generation von { $count } Welten mit Standardeinstellungen.
+
+main-account = Account
+main-account-confirm_password = Passwort bestätigen
+main-account-creating = Wird erstellt…
+main-account-change_password = Passwort ändern
+main-account-change_username = Namen ändern
+main-account-delete = Account löschen
+main-account-back = Hauptmenü
+main-account-invalid_username = Der Benutzername muss 3–32 Zeichen lang sein und darf Buchstaben, Zahlen, Unterstriche oder Bindestriche enthalten.
+main-account-empty_password = Bitte gib ein Passwort ein.
+main-account-password_mismatch = Die Passwörter stimmen nicht überein.
+main-account-created = Account erfolgreich erstellt. Du kannst dich jetzt anmelden und Veloren spielen!
+main-account-failed = Der Account konnte nicht erstellt werden.
+main-account-open_failed = Die Accountseite konnte nicht geöffnet werden

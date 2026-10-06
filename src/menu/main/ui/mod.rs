@@ -3,6 +3,8 @@ mod connecting;
 //mod disclaimer;
 mod credits;
 mod login;
+#[path = "IGAccCreate.rs"]
+mod ig_acc_create;
 mod servers;
 
 use crate::{
@@ -18,7 +20,7 @@ use crate::{
     window,
 };
 use i18n::{LanguageMetadata, LocalizationHandle};
-use iced::{Column, Container, HorizontalAlignment, Length, Row, Space, text_input};
+use iced::{Column, Container, Length, text_input};
 //ImageFrame, Tooltip,
 use crate::settings::Settings;
 use common::assets::{AssetExt, Image, Ron};
@@ -43,7 +45,6 @@ image_ids_ice! {
         v_logo: "voxygen.element.v_logo",
         bg: "voxygen.background.bg_main",
         banner_top: "voxygen.element.ui.generic.frames.banner_top",
-        banner_gradient_bottom: "voxygen.element.ui.generic.frames.banner_gradient_bottom",
         button: "voxygen.element.ui.generic.buttons.button",
         button_hover: "voxygen.element.ui.generic.buttons.button_hover",
         button_press: "voxygen.element.ui.generic.buttons.button_press",
@@ -161,6 +162,7 @@ enum Screen {
 enum Showing {
     Login,
     Languages,
+    Account,
 }
 
 impl Showing {
@@ -178,8 +180,6 @@ pub struct Controls {
     imgs: Imgs,
     bg_img: widget::image::Handle,
     i18n: LocalizationHandle,
-    // Voxygen version
-    version: String,
     credits: Credits,
 
     // If a server address was provided via cli argument we hide the server list button and replace
@@ -202,6 +202,12 @@ enum Message {
     Quit,
     Back,
     ShowServers,
+    ShowAccount,
+    AccountField(usize, String),
+    AccountFocus(usize),
+    CreateAccount,
+    AccountLink(&'static str),
+    AccountBack,
     ShowCredits,
     Multiplayer,
     UnlockServerField,
@@ -230,8 +236,6 @@ impl Controls {
         settings: &Settings,
         server: Option<String>,
     ) -> Self {
-        let version = format!("Veloren {}", *common::util::DISPLAY_VERSION);
-
         let credits = Ron::<Credits>::load_expect_cloned("credits").into_inner();
 
         // Note: Keeping in case we re-add the disclaimer
@@ -268,7 +272,6 @@ impl Controls {
             imgs,
             bg_img,
             i18n,
-            version,
             credits,
 
             server_field_locked,
@@ -297,19 +300,6 @@ impl Controls {
             .press_image(self.imgs.button_press)
             .text_color(TEXT_COLOR)
             .disabled_text_color(DISABLED_TEXT_COLOR);
-
-        let version = iced::Text::new(&self.version)
-            .size(self.fonts.cyri.scale(12))
-            .width(Length::Fill)
-            .horizontal_alignment(HorizontalAlignment::Center);
-
-        let top_text = Row::with_children(vec![
-            Space::new(Length::Fill, Length::Shrink).into(),
-            version.into(),
-            Space::new(Length::Fill, Length::Shrink).into(),
-        ])
-        .padding(3)
-        .width(Length::Fill);
 
         let bg_img = if matches!(&self.screen, Screen::Connecting { .. }) {
             self.bg_img
@@ -365,7 +355,7 @@ impl Controls {
         };
 
         Container::new(
-            Column::with_children(vec![top_text.into(), content])
+            Column::with_children(vec![content])
                 .spacing(3)
                 .width(Length::Fill)
                 .height(Length::Fill),
@@ -380,6 +370,7 @@ impl Controls {
         events: &mut Vec<Event>,
         settings: &Settings,
         ui: &mut Ui,
+        runtime: &alloc::sync::Arc<tokio::runtime::Runtime>,
     ) {
         let servers = &settings.networking.servers;
         let mut language_metadatas = i18n::list_localizations();
@@ -391,6 +382,40 @@ impl Controls {
                     screen: Box::default(),
                     error: None,
                 };
+            },
+            Message::ShowAccount => {
+                self.show = Showing::Account;
+                if let Screen::Login { screen, error } = &mut self.screen {
+                    *error = None;
+                    screen.account.focus(0);
+                }
+            },
+            Message::AccountBack => self.show = Showing::Login,
+            Message::AccountField(idx, value) => {
+                if self.show == Showing::Account {
+                    if let Screen::Login { screen, .. } = &mut self.screen {
+                        screen.account.field(idx, value);
+                    }
+                }
+            },
+            Message::AccountFocus(idx) => {
+                if let Screen::Login { screen, .. } = &mut self.screen {
+                    screen.account.focus(idx);
+                }
+            },
+            Message::CreateAccount => {
+                if self.show == Showing::Account {
+                    if let Screen::Login { screen, error } = &mut self.screen {
+                        *error = screen.account.submit(runtime, &self.i18n.read());
+                    }
+                }
+            },
+            Message::AccountLink(path) => {
+                if let Err(err) = open::that(format!("https://veloren.net/account/{path}/")) {
+                    if let Screen::Login { error, .. } = &mut self.screen {
+                        *error = Some(format!("{}: {err}", self.i18n.read().get_msg("main-account-open_failed")));
+                    }
+                }
             },
             Message::ShowServers => {
                 if matches!(&self.screen, Screen::Login { .. }) {
@@ -528,6 +553,10 @@ impl Controls {
 
     fn tab(&mut self) {
         if let Screen::Login { screen, .. } = &mut self.screen {
+            if self.show == Showing::Account {
+                screen.account.tab();
+                return;
+            }
             // TODO: add select all function in iced
             if screen.banner.username.is_focused() {
                 screen.banner.username = text_input::State::new();
@@ -665,6 +694,21 @@ impl MainMenuUi {
     pub fn maintain(&mut self, global_state: &mut GlobalState, dt: Duration) -> Vec<Event> {
         let mut events = Vec::new();
 
+        if let Screen::Login { screen, error } = &mut self.controls.screen {
+            if let Some(result) = screen.account.poll() {
+                let i18n = self.controls.i18n.read();
+                *error = Some(match result {
+                    Ok(username) => {
+                        self.controls.login_info.username = username;
+                        self.controls.login_info.password.clear();
+                        i18n.get_msg("main-account-created").into_owned()
+                    },
+                    Err(response) => format!("{}\n{}", i18n.get_msg("main-account-failed"), response),
+                });
+                self.controls.show = Showing::Account;
+            }
+        }
+
         let (messages, _) = self.ui.maintain(
             self.controls.view(
                 &global_state.settings,
@@ -677,7 +721,13 @@ impl MainMenuUi {
 
         messages.into_iter().for_each(|message| {
             self.controls
-                .update(message, &mut events, &global_state.settings, &mut self.ui)
+                .update(
+                    message,
+                    &mut events,
+                    &global_state.settings,
+                    &mut self.ui,
+                    &global_state.tokio_runtime,
+                )
         });
 
         events

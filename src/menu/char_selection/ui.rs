@@ -14,14 +14,14 @@ use crate::{
             style,
             widget::{
                 AspectRatioContainer, BackgroundContainer, Image, MouseDetector, Overlay, Padding,
-                TooltipManager, mouse_detector,
+                TooltipManager, mouse_detector, proximity_select::ProximitySelect,
             },
         },
         img_ids::ImageGraphic,
     },
     window,
 };
-use crate::client::{Client, ServerInfo};
+use crate::client::Client;
 use common::{
     LoadoutBuilder,
     character::{CharacterId, CharacterItem, MAX_CHARACTERS_PER_PLAYER, MAX_NAME_LENGTH},
@@ -197,13 +197,12 @@ enum Mode {
         create_button: button::State,
         rand_character_button: button::State,
         rand_name_button: button::State,
-        prev_starting_site_button: button::State,
-        next_starting_site_button: button::State,
         /// `character_id.is_some()` can be used to determine if we're in edit
         /// mode as opposed to create mode.
         // TODO: Something less janky? Express the problem domain better!
         character_id: Option<CharacterId>,
         start_site_idx: Option<usize>,
+        hovered_start_site: Option<usize>,
     },
 }
 
@@ -255,10 +254,9 @@ impl Mode {
             create_button: Default::default(),
             rand_character_button: Default::default(),
             rand_name_button: Default::default(),
-            prev_starting_site_button: Default::default(),
-            next_starting_site_button: Default::default(),
             character_id: None,
             start_site_idx: None,
+            hovered_start_site: None,
         }
     }
 
@@ -286,10 +284,9 @@ impl Mode {
             create_button: Default::default(),
             rand_character_button: Default::default(),
             rand_name_button: Default::default(),
-            prev_starting_site_button: Default::default(),
-            next_starting_site_button: Default::default(),
             character_id: Some(character_id),
             start_site_idx: None,
+            hovered_start_site: None,
         }
     }
 }
@@ -307,9 +304,6 @@ enum InfoContent {
 struct Controls {
     fonts: Fonts,
     imgs: Imgs,
-    // Voxygen version
-    version: String,
-    server_mismatched_version: Option<String>,
     tooltip_manager: TooltipManager,
     // Zone for rotating the character with the mouse
     mouse_detector: mouse_detector::State,
@@ -355,8 +349,7 @@ enum Message {
     Beard(u8),
     HeightScale(u8),
     StartingSite(usize),
-    PrevStartingSite,
-    NextStartingSite,
+    HoverStartingSite(Option<usize>),
     // Workaround for widgets that require a message but we don't want them to actually do
     // anything
     DoNothing,
@@ -368,24 +361,15 @@ impl Controls {
         imgs: Imgs,
         selected: Option<CharacterId>,
         default_name: String,
-        server_info: &ServerInfo,
         map_img: GraphicId,
         possible_starting_sites: Vec<Marker>,
         world_sz: Vec2<u32>,
         has_rules: bool,
     ) -> Self {
-        let version = format!("Veloren {}", *common::util::DISPLAY_VERSION);
-        let server_mismatched_version = (*common::util::GIT_HASH != server_info.git_hash
-            || *common::util::GIT_TIMESTAMP != server_info.git_timestamp)
-            .then(|| {
-                common::util::make_display_version(server_info.git_hash, server_info.git_timestamp)
-            });
 
         Self {
             fonts,
             imgs,
-            version,
-            server_mismatched_version,
             tooltip_manager: TooltipManager::new(TOOLTIP_HOVER_DUR, TOOLTIP_FADE_DUR),
             mouse_detector: Default::default(),
             mode: Mode::select(Some(InfoContent::LoadingCharacters)),
@@ -430,47 +414,6 @@ impl Controls {
             text_color: TEXT_COLOR,
             text_size: self.fonts.cyri.scale(17),
             padding: 10,
-        };
-
-        let version = Text::new(&self.version)
-            .size(self.fonts.cyri.scale(12))
-            .width(Length::Fill)
-            .horizontal_alignment(HorizontalAlignment::Center);
-
-        let top_text = Row::with_children(vec![
-            Space::new(Length::Fill, Length::Shrink).into(),
-            version.into(),
-            Space::new(Length::Fill, Length::Shrink).into(),
-        ])
-        .width(Length::Fill);
-
-        let mut warning_container = if let Some(mismatched_version) =
-            &self.server_mismatched_version
-        {
-            let warning = Text::<IcedRenderer>::new(format!(
-                "{}\n{}: {} {}: {}",
-                i18n.get_msg("char_selection-version_mismatch"),
-                i18n.get_msg("main-login-server_version"),
-                mismatched_version,
-                i18n.get_msg("main-login-client_version"),
-                *common::util::DISPLAY_VERSION
-            ))
-            .size(self.fonts.cyri.scale(18))
-            .color(iced::Color::from_rgb(1.0, 0.0, 0.0))
-            .width(Length::Fill)
-            .horizontal_alignment(HorizontalAlignment::Center);
-            Some(
-                Container::new(
-                    Container::new(Row::with_children(vec![warning.into()]).width(Length::Fill))
-                        .style(style::container::Style::color(Rgba::new(0, 0, 0, 217)))
-                        .padding(12)
-                        .width(Length::Fill)
-                        .center_x(),
-                )
-                .padding(16),
-            )
-        } else {
-            None
         };
 
         let content = match &mut self.mode {
@@ -967,10 +910,9 @@ impl Controls {
                 create_button,
                 rand_character_button,
                 rand_name_button,
-                prev_starting_site_button,
-                next_starting_site_button,
                 character_id,
                 start_site_idx,
+                hovered_start_site,
             } => {
                 let unselected_style = style::button::Style::new(imgs.icon_border)
                     .hover_image(imgs.icon_border_mo)
@@ -1199,31 +1141,6 @@ impl Controls {
                 // Height of interactable area
                 const SLIDER_HEIGHT: u16 = 30;
 
-                fn starter_slider<'a>(
-                    text: String,
-                    size: u16,
-                    state: &'a mut slider::State,
-                    max: u32,
-                    selected_val: u32,
-                    on_change: impl 'static + Fn(u32) -> Message,
-                    imgs: &Imgs,
-                ) -> Element<'a, Message> {
-                    Column::with_children(vec![
-                        Text::new(text).size(size).into(),
-                        Slider::new(state, 0..=max, selected_val, on_change)
-                            .height(SLIDER_HEIGHT)
-                            .style(style::slider::Style::images(
-                                imgs.slider_indicator,
-                                imgs.slider_range,
-                                SLIDER_BAR_PAD,
-                                SLIDER_CURSOR_SIZE,
-                                SLIDER_BAR_HEIGHT,
-                            ))
-                            .into(),
-                    ])
-                    .align_items(Align::Center)
-                    .into()
-                }
                 fn char_slider<'a>(
                     text: String,
                     state: &'a mut slider::State,
@@ -1412,112 +1329,78 @@ impl Controls {
 
                 let right_column_content = if character_id.is_none() {
                     let map_sz = Vec2::new(500, 500);
-                    let map_img = Image::new(self.map_img)
-                        .height(Length::Units(map_sz.x))
-                        .width(Length::Units(map_sz.y));
-                    /* .stroke(Stroke {
-                        color: Color::WHITE,
-                        width: 1.0,
-                    }) */
-                    //TODO: Add text-outline here whenever we updated iced to a version supporting
-                    // this
-
-                    let map = if let Some(info) = self
-                        .possible_starting_sites
-                        .get(start_site_idx.unwrap_or_default())
-                    {
-                        let site_name = Text::new(
-                            self.possible_starting_sites[start_site_idx.unwrap_or_default()]
-                                .label
-                                .as_ref()
-                                .map(|name| i18n.get_content(name))
-                                .unwrap_or_else(|| "Unknown".to_string()),
-                        )
-                        .horizontal_alignment(HorizontalAlignment::Left)
-                        .color(Color::from_rgb(131.0, 102.0, 0.0));
-                        let pos_frac = info
-                            .wpos
-                            .map2(self.world_sz * TerrainChunkSize::RECT_SIZE, |e, sz| {
-                                e / sz as f32
-                            });
-                        let point = Vec2::new(pos_frac.x, 1.0 - pos_frac.y)
-                            .map2(map_sz, |e, sz| e * sz as f32 - 12.0);
-                        let marker_img = Image::new(imgs.town_marker)
-                            .height(Length::Units(27))
-                            .width(Length::Units(16));
-                        let marker_content: Column<Message, IcedRenderer> = Column::new()
-                            .spacing(2)
-                            .push(site_name)
-                            .push(marker_img)
-                            .align_items(Align::Center);
-
-                        Overlay::new(
-                            Container::new(marker_content)
-                                .width(Length::Fill)
-                                .height(Length::Fill)
-                                .center_x()
-                                .center_y(),
-                            map_img,
-                        )
-                        .over_position(iced::Point::new(point.x, point.y - 34.0))
-                        .into()
+                    let selected = if self.possible_starting_sites.is_empty() {
+                        None
                     } else {
-                        map_img.into()
-                    };
-
-                    if self.possible_starting_sites.is_empty() {
-                        vec![map]
-                    } else {
-                        let selected = start_site_idx.get_or_insert_with(|| {
+                        Some(*start_site_idx.get_or_insert_with(|| {
                             rng().random_range(0..self.possible_starting_sites.len())
-                        });
-
-                        let site_slider = starter_slider(
-                            i18n.get_msg("char_selection-starting_site").into_owned(),
-                            30,
-                            &mut sliders.starting_site,
-                            self.possible_starting_sites.len() as u32 - 1,
-                            *selected as u32,
-                            |x| Message::StartingSite(x as usize),
-                            imgs,
-                        );
-                        let site_buttons = Row::with_children(vec![
-                            neat_button(
-                                prev_starting_site_button,
-                                i18n.get_msg("char_selection-starting_site_prev")
-                                    .into_owned(),
-                                FILL_FRAC_ONE,
-                                button_style,
-                                Some(Message::PrevStartingSite),
-                            ),
-                            neat_button(
-                                next_starting_site_button,
-                                i18n.get_msg("char_selection-starting_site_next")
-                                    .into_owned(),
-                                FILL_FRAC_ONE,
-                                button_style,
-                                Some(Message::NextStartingSite),
-                            ),
-                        ])
-                        .max_height(60)
-                        .padding(15)
+                        }))
+                    };
+                    let mut map: Element<'_, Message> = Image::new(self.map_img)
+                        .height(Length::Units(map_sz.y))
+                        .width(Length::Units(map_sz.x))
                         .into();
-                        // Todo: use this to change the site icon if we use different starting site
-                        // types
-                        /* let site_kind = Text::new(i18n
-                            .get_msg_ctx("char_selection-starting_site_kind", &i18n::fluent_args! {
-                                "kind" => match self.possible_starting_sites[*start_site_idx].kind {
-                                    SiteKind::Town => i18n.get_msg("hud-map-town").into_owned(),
-                                    SiteKind::Castle => i18n.get_msg("hud-map-castle").into_owned(),
-                                    SiteKind::Bridge => i18n.get_msg("hud-map-bridge").into_owned(),
-                                    _ => "Unknown".to_string(),
-                                },
-                            })
-                            .into_owned())
-                        .size(fonts.cyri.scale(SLIDER_TEXT_SIZE))
-                        .into(); */
-
-                        vec![site_slider, map, site_buttons]
+                    let mut targets = Vec::new();
+                    for (idx, info) in self.possible_starting_sites.iter().enumerate() {
+                        let pos_frac = info.wpos.map2(
+                            self.world_sz * TerrainChunkSize::RECT_SIZE,
+                            |e, sz| e / sz as f32,
+                        );
+                        let point = iced::Point::new(
+                            pos_frac.x * map_sz.x as f32,
+                            (1.0 - pos_frac.y) * map_sz.y as f32,
+                        );
+                        // Target the label as well as the town's map position.
+                        targets.push(iced::Point::new(point.x, point.y - 20.0));
+                        let name = info.label.as_ref()
+                            .map(|name| i18n.get_content(name))
+                            .unwrap_or_else(|| "Unknown".to_string());
+                        let active = selected == Some(idx);
+                        let color = if active {
+                            Color::from_rgb(1.0, 0.9, 0.0)
+                        } else {
+                            Color::from_rgb(0.6, 0.6, 0.6)
+                        };
+                        let label: Column<Message, IcedRenderer> = Column::new()
+                            .spacing(2)
+                            .align_items(Align::Center)
+                            .push(Text::new(name).color(color))
+                            .push(Image::new(imgs.town_marker)
+                                .height(Length::Units(27))
+                                .width(Length::Units(16))
+                                .visible_height(if *hovered_start_site == Some(idx) {
+                                    1.0
+                                } else {
+                                    18.0 / 27.0
+                                }));
+                        map = Overlay::new(
+                            Container::new(label)
+                                .width(Length::Units(160))
+                                .center_x(),
+                            map,
+                        )
+                        .over_position(iced::Point::new(
+                            (point.x - 80.0).clamp(0.0, map_sz.x as f32 - 160.0),
+                            (point.y - 46.0).max(0.0),
+                        ))
+                        .into();
+                    }
+                    let map = ProximitySelect::new(
+                        map, targets, Message::HoverStartingSite, Message::StartingSite,
+                    ).into();
+                    if let Some(selected) = selected {
+                        let name = self.possible_starting_sites[selected].label.as_ref()
+                            .map(|name| i18n.get_content(name))
+                            .unwrap_or_else(|| "Unknown".to_string());
+                        let heading = Text::new(i18n.get_msg_ctx(
+                            "char_selection-starting_site_selected",
+                            &i18n::fluent_args! { "name" => name },
+                        ).into_owned())
+                            .size(30)
+                            .horizontal_alignment(HorizontalAlignment::Center);
+                        vec![heading.into(), map]
+                    } else {
+                        vec![map]
                     }
                 } else {
                     // If we're editing an existing character, don't display the world column
@@ -1613,13 +1496,7 @@ impl Controls {
 
                 let top = Row::with_children(vec![
                     column_left(left_column_content, left_scroll).into(),
-                    Column::with_children(
-                        if let Some(warning_container) = warning_container.take() {
-                            vec![warning_container.into(), mouse_area.into()]
-                        } else {
-                            vec![mouse_area.into()]
-                        },
-                    )
+                    Column::with_children(vec![mouse_area.into()])
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .into(),
@@ -1737,11 +1614,7 @@ impl Controls {
             },
         };
 
-        let children = if let Some(warning_container) = warning_container {
-            vec![top_text.into(), warning_container.into(), content]
-        } else {
-            vec![top_text.into(), content]
-        };
+        let children = vec![content];
 
         Container::new(
             Column::with_children(children)
@@ -2019,27 +1892,9 @@ impl Controls {
                     *start_site_idx = Some(idx);
                 }
             },
-            Message::PrevStartingSite => {
-                if let Mode::CreateOrEdit { start_site_idx, .. } = &mut self.mode
-                    && !self.possible_starting_sites.is_empty()
-                {
-                    *start_site_idx = Some(
-                        (start_site_idx.unwrap_or_default() + self.possible_starting_sites.len()
-                            - 1)
-                            % self.possible_starting_sites.len(),
-                    );
-                }
-            },
-            Message::NextStartingSite => {
-                if let Mode::CreateOrEdit { start_site_idx, .. } = &mut self.mode
-                    && !self.possible_starting_sites.is_empty()
-                {
-                    *start_site_idx = Some(
-                        (start_site_idx.unwrap_or_default()
-                            + self.possible_starting_sites.len()
-                            + 1)
-                            % self.possible_starting_sites.len(),
-                    );
+            Message::HoverStartingSite(idx) => {
+                if let Mode::CreateOrEdit { hovered_start_site, .. } = &mut self.mode {
+                    *hovered_start_site = idx;
                 }
             },
         }
@@ -2098,7 +1953,6 @@ impl CharSelectionUi {
             Imgs::load(&mut ui).expect("Failed to load images"),
             selected_character,
             default_name,
-            client.server_info(),
             ui.add_graphic(Graphic::Image(
                 Arc::clone(client.world_data().topo_map_image()),
                 Some(default_water_color()),
@@ -2221,5 +2075,4 @@ struct Sliders {
     accessory: slider::State,
     beard: slider::State,
     height_scale: slider::State,
-    starting_site: slider::State,
 }

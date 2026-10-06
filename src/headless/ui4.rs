@@ -63,6 +63,39 @@ fn held(state: &KeyboardState, usage: u8) -> bool {
     }
 }
 
+#[derive(Default)]
+struct LoopTimings {
+    loops: u64,
+    display_retries: u64,
+    // Whole loop, publication, input, simulation, draw, and sleep wall time.
+    micros: [u128; 6],
+}
+
+impl LoopTimings {
+    fn record(&mut self, micros: [u128; 6], display_retry: bool) {
+        self.loops += 1;
+        self.display_retries += u64::from(display_retry);
+        for (total, sample) in self.micros.iter_mut().zip(micros) {
+            *total += sample;
+        }
+        if self.loops == 128 {
+            let averages = self.micros.map(|total| total / u128::from(self.loops));
+            super::connection_progress(format_args!(
+                "Voxygen loop timing: loops={} display_retries={} total_us={} publish_us={} input_us={} tick_us={} draw_us={} sleep_us={} sample=window-average",
+                self.loops,
+                self.display_retries,
+                averages[0],
+                averages[1],
+                averages[2],
+                averages[3],
+                averages[4],
+                averages[5],
+            ));
+            *self = Self::default();
+        }
+    }
+}
+
 pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
     let (display_width, display_height) = output_dimensions().map_err(ui_error)?;
     let (x, y, mut width, mut height) = super::scene::placement(display_width, display_height);
@@ -83,35 +116,52 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
         "Voxygen headless: automatic login from /apps/voxy/voxy.pw"
     ));
     app.login();
+    let mut timings = LoopTimings::default();
     loop {
         let started = Instant::now();
+        let mut micros = [0; 6];
         // Publication must retire before a resize or a fresh write lease.
-        match renderer.publish(
+        let publication = renderer.publish(
             app.window.as_mut().expect("UI4 frame"),
             width,
             height,
             app.world_joined,
-        ) {
+        );
+        micros[1] = started.elapsed().as_micros();
+        match publication {
             Ok(()) => {}
             Err(render_trueos::Error::Ui(Error::Busy)) => {
-                // Keep network/simulation polling while a publication waits
-                // for its display receipt; leave its frame lease untouched.
-                app.tick();
-                std::thread::sleep(FRAME);
+                // Poll the exact display receipt without adding a whole frame
+                // of latency; keep simulation at its normal tick cadence.
+                let tick_started = Instant::now();
+                if tick_started.duration_since(app.last_tick) >= FRAME {
+                    app.tick();
+                }
+                micros[3] = tick_started.elapsed().as_micros();
+                let sleep_started = Instant::now();
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                micros[5] = sleep_started.elapsed().as_micros();
+                micros[0] = started.elapsed().as_micros();
+                timings.record(micros, true);
                 continue;
             }
             Err(render_trueos::Error::Ui(Error::NotFound | Error::InvalidState)) => break,
             Err(error) => return Err(error.into()),
         }
         app.terrain_presented = renderer.terrain_presented();
+        let input_started = Instant::now();
         let result = pump(&mut app, &mut width, &mut height);
+        micros[2] = input_started.elapsed().as_micros();
         match result {
             Ok(()) | Err(Error::Busy) => {}
             // The broker revoked the frame after a user close or Blueprint stop.
             Err(Error::NotFound | Error::InvalidState) => break,
             Err(error) => return Err(ui_error(error).into()),
         }
+        let tick_started = Instant::now();
         app.tick();
+        micros[3] = tick_started.elapsed().as_micros();
+        let draw_started = Instant::now();
         let result = renderer.draw(
             app.window.as_mut().expect("UI4 frame"),
             width,
@@ -121,14 +171,19 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
             app.input.pitch,
             app.world_joined,
         );
+        micros[4] = draw_started.elapsed().as_micros();
         match result {
             Ok(()) | Err(render_trueos::Error::Ui(Error::Busy)) => {}
             Err(render_trueos::Error::Ui(Error::NotFound | Error::InvalidState)) => break,
             Err(error) => return Err(error.into()),
         }
         if let Some(remaining) = FRAME.checked_sub(started.elapsed()) {
+            let sleep_started = Instant::now();
             std::thread::sleep(remaining);
+            micros[5] = sleep_started.elapsed().as_micros();
         }
+        micros[0] = started.elapsed().as_micros();
+        timings.record(micros, false);
     }
     app.capture(false);
     Ok(())

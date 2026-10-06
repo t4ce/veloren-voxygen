@@ -24,3 +24,5 @@ char_selection-rules = Regeln
 char_selection-hardcore = Hardcore
 char_selection-hardcore_tooltip = Hardcore-Charaktere werden beim Tod gelöscht, sonst keine Änderungen in der Schwierigkeit
 char_selection-editing_character = Speichere Charakter...
+
+char_selection-starting_site_selected = Startbereich { $name }

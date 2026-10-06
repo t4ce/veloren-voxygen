@@ -55,7 +55,17 @@ pub struct ServerInfo {
     pub git_hash: u32,
     pub git_timestamp: i64,
     pub auth_provider: Option<String>,
+    pub game_version: u32,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameVersionMismatch {
+    pub client: u32,
+    pub server: u32,
+}
+
+/// Server admission decision sent before authentication begins.
+pub type GameVersionAnswer = Result<(), GameVersionMismatch>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ServerDescription {

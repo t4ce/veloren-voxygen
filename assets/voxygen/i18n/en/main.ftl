@@ -115,3 +115,17 @@ loading-tips =
     .a19 = Press '{ $gameinput-roll }' to roll. Rolling can be used to move faster and dodge enemy attacks.
     .a20 = Wondering what an item is used for? Search 'input:<item name>' in crafting to see what recipes it's used in.
     .a21 = You can take screenshots with '{ $gameinput-screenshot }'.
+
+main-account = Account
+main-account-confirm_password = Confirm password
+main-account-creating = Creating…
+main-account-change_password = Change password
+main-account-change_username = Change username
+main-account-delete = Delete account
+main-account-back = Main menu
+main-account-invalid_username = Username must be 3–32 characters, using letters, numbers, underscores or hyphens.
+main-account-empty_password = Please enter a password.
+main-account-password_mismatch = Passwords do not match.
+main-account-created = Account created successfully. You can now log in and play Veloren!
+main-account-failed = Account creation failed.
+main-account-open_failed = Could not open the account page

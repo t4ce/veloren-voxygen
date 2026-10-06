@@ -260,9 +260,6 @@ widget_ids! {
         overheads[],
         overitems[],
 
-        // Game Version
-        version,
-
         // Debug
         debug_bg,
         fps_counter,
@@ -1506,7 +1503,6 @@ impl Hud {
         self.pulse += dt.as_secs_f32();
         // FPS
         let fps = global_state.clock.stats().average_tps;
-        let version = format!("Veloren {}", *common::util::DISPLAY_VERSION);
         let i18n = &global_state.i18n.read();
 
         if self.show.ingame {
@@ -1600,14 +1596,6 @@ impl Hud {
                         .color(Some(Color::Rgba(1.0, 1.0, 1.0, hurt_fade)))
                         .set(self.ids.hurt_bg, ui_widgets);
                 }
-
-                // Version info
-                Text::new(&version)
-                    .font_id(self.fonts.cyri.conrod_id)
-                    .font_size(self.fonts.cyri.scale(11))
-                    .color(TEXT_COLOR)
-                    .mid_top_with_margin_on(ui_widgets.window, 2.0)
-                    .set(self.ids.version, ui_widgets);
 
                 // Death Frame
                 if health.is_dead {

@@ -28,12 +28,15 @@ pub struct Screen {
     quit_button: button::State,
     // settings_button: button::State,
     servers_button: button::State,
+    account_button: button::State,
     credits_button: button::State,
     language_select_button: button::State,
 
     error_okay_button: button::State,
+    error_scroll: scrollable::State,
 
     pub banner: LoginBanner,
+    pub account: super::ig_acc_create::IGAccCreate,
     language_selection: LanguageSelectBanner,
 }
 
@@ -51,7 +54,13 @@ impl Screen {
         language_metadatas: &[LanguageMetadata],
         button_style: style::button::Style,
     ) -> Element<'_, Message> {
-        let mut buttons = Vec::new();
+        let mut buttons = vec![neat_button(
+            &mut self.account_button,
+            i18n.get_msg("main-account"),
+            FILL_FRAC_ONE,
+            button_style,
+            Some(Message::ShowAccount),
+        )];
         // If the server field is locked, we don't want to show the server selection
         // list!
         if !server_field_locked {
@@ -104,24 +113,7 @@ impl Screen {
         .height(Length::Fill)
         .align_y(Align::End);
 
-        let intro_text = i18n.get_msg("main-login_process");
-
-        let info_window = BackgroundContainer::new(
-            CompoundGraphic::from_graphics(vec![
-                Graphic::rect(Rgba::new(0, 0, 0, 240), [500, 300], [0, 0]),
-                // Note: a way to tell it to keep the height of this one piece constant and
-                // unstreched would be nice, I suppose we could just break this out into a
-                // column and use Length::Units
-                Graphic::image(imgs.banner_gradient_bottom, [500, 50], [0, 300])
-                    .color(Rgba::new(0, 0, 0, 240)),
-            ])
-            .height(Length::Shrink),
-            Text::new(intro_text).size(fonts.cyri.scale(18)),
-        )
-        .max_width(360)
-        .padding(Padding::new().horizontal(20).top(10).bottom(60));
-
-        let left_column = Column::with_children(vec![info_window.into(), buttons.into()])
+        let left_column = Column::with_children(vec![buttons.into()])
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(27)
@@ -130,7 +122,10 @@ impl Screen {
         let central_content = if let Some(error) = error {
             Container::new(
                 Column::with_children(vec![
-                    Container::new(Text::new(error)).height(Length::Fill).into(),
+                    Scrollable::new(&mut self.error_scroll)
+                        .push(Text::new(error).size(fonts.cyri.scale(18)).width(Length::Fill))
+                        .height(Length::Fill)
+                        .into(),
                     Container::new(neat_button(
                         &mut self.error_okay_button,
                         i18n.get_msg("common-okay"),
@@ -167,6 +162,7 @@ impl Screen {
                     i18n,
                     button_style,
                 ),
+                Showing::Account => self.account.view(fonts, imgs, i18n, button_style),
                 Showing::Languages => self.language_selection.view(
                     fonts,
                     imgs,
@@ -191,8 +187,11 @@ impl Screen {
         let version_stage =
             Text::new(common::util::VELOREN_VERSION_STAGE).size(fonts.cyri.scale(22));
 
+        let version = Text::new(format!("Veloren {}", *common::util::DISPLAY_VERSION))
+            .size(fonts.cyri.scale(12));
+
         let right_column = Container::new(
-            Column::with_children(vec![v_logo.into(), version_stage.into()])
+            Column::with_children(vec![v_logo.into(), version_stage.into(), version.into()])
                 .align_items(Align::Center),
         )
         .width(Length::Fill)

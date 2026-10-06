@@ -5,6 +5,7 @@ pub mod fill_text;
 pub mod image;
 pub mod mouse_detector;
 pub mod overlay;
+pub mod proximity_select;
 pub mod stack;
 pub mod tooltip;
 

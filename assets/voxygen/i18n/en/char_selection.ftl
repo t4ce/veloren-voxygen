@@ -27,3 +27,5 @@ char_selection-starting_site_kind = Kind: { $kind }
 char_selection-create_info_name = Your character needs a name!
 char_selection-version_mismatch = WARNING! This server is running a different, possibly incompatible game version. Please update your game.
 char_selection-rules = Rules
+
+char_selection-starting_site_selected = Starting Area: { $name }
