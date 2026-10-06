@@ -216,7 +216,7 @@ pub enum LastInput {
 pub struct Window {
     renderer: Option<Renderer>,
     #[cfg(target_os = "trueos")]
-    scene_init: Option<std::thread::JoinHandle<Result<Renderer, crate::render::RenderError>>>,
+    scene_init: Option<std::sync::mpsc::Receiver<Result<Renderer, crate::render::RenderError>>>,
     #[cfg(target_os = "trueos")]
     display: winit::event_loop::OwnedDisplayHandle,
     #[cfg(target_os = "trueos")]
@@ -456,33 +456,41 @@ impl Window {
         let window = Arc::clone(&self.window);
         let display = self.display.clone();
         let runtime = Arc::clone(runtime);
-        self.scene_init = Some(
-            std::thread::Builder::new()
-                .name("voxy-scene-init".into())
-                .spawn(move || Renderer::new(window, display, mode, &runtime))
-                .map_err(|error| format!("Could not start graphics initialization: {error}"))?,
-        );
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        std::thread::Builder::new()
+            .name("voxy-scene-init".into())
+            .spawn(move || {
+                let result = Renderer::new(window, display, mode, &runtime);
+                // Publish completion before thread teardown; the UI never joins
+                // a worker or depends on platform is_finished bookkeeping.
+                let _ = sender.send(result);
+            })
+            .map_err(|error| format!("Could not start graphics initialization: {error}"))?;
+        self.scene_init = Some(receiver);
         Ok(())
     }
 
-    /// Poll without joining an unfinished worker or acquiring a scene frame.
+    /// Poll the result mailbox without joining a worker or acquiring a scene frame.
     #[cfg(target_os = "trueos")]
     pub fn poll_scene_renderer(&mut self) -> Result<Option<(usize, usize)>, String> {
-        if let Some(job) = &self.scene_init {
-            if !job.is_finished() {
-                return Ok(Some((0, 0)));
-            }
-            let renderer = self
-                .scene_init
-                .take()
-                .unwrap()
-                .join()
-                .map_err(|_| "Graphics initialization worker stopped unexpectedly".to_string())?
-                .map_err(|error| {
-                    tracing::error!(?error, "Game graphics initialization failed");
-                    "Could not start game graphics.\nThe main menu is still available. Details are in the log."
-                        .to_string()
-                })?;
+        if let Some(receiver) = &self.scene_init {
+            let result = match receiver.try_recv() {
+                Ok(result) => result,
+                Err(std::sync::mpsc::TryRecvError::Empty) => return Ok(Some((0, 0))),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.scene_init = None;
+                    return Err("Graphics initialization worker stopped unexpectedly".into());
+                }
+            };
+            self.scene_init = None;
+            let renderer = result.map_err(|error| {
+                tracing::error!(?error, "Game graphics initialization failed");
+                let reason = match error {
+                    crate::render::RenderError::CustomError(message) => message,
+                    other => format!("{other:?}"),
+                };
+                format!("Could not start game graphics: {reason}\nThe main menu is still available.")
+            })?;
             self.renderer = Some(renderer);
             self.resized = true;
         }

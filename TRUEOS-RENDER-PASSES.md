@@ -97,3 +97,20 @@ slice/index/base-vertex/binding offsets, quad perimeter order, mapped uploads,
 buffer-budget release, restricted adapter negotiation, and surface ownership.
 The direct line executor also compiles against the TRUEOS vAPI.
 The final deployed artifact is built with `cargo bp voxy`.
+
+## Scene startup failure reporting
+
+A `Creating render pipeline 0/0` display previously meant the entire scene-init
+worker was pending, not that shader compilation had started. The first rig
+run failed its intermediate-format descriptor check before pipeline creation.
+The host graph now admits RGBA8 intermediate descriptor copy/filter usages;
+this remains metadata support, not native sampled rendering. Unsupported
+intermediate formats and native line admission return startup errors to the
+menu instead of panicking in the worker.
+
+Scene-init completion uses a bounded result mailbox rather than joining or
+polling thread teardown. Named startup stages are shown and logged: bridge
+negotiation, format checks, line GPU admission, scene descriptors, pipeline
+handles, and remaining scene resources. Initial TRUEOS pipeline handles are
+created sequentially on the existing scene-init worker; no extra compilation
+pool is needed for excluded shaders.

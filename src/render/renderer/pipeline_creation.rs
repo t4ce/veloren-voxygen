@@ -476,6 +476,11 @@ impl<'a> ParallelTasks<'a> {
         TaskHandle { out }
     }
 
+    #[cfg(target_os = "trueos")]
+    fn run_inline(self, needs: PipelineNeeds) {
+        for task in self.tasks { task(&needs); }
+    }
+
     /// Run registered tasks.
     fn run(self, needs: PipelineNeeds, pool: &tokio_parallel::ThreadPool) {
         prof_span!(_guard, "ParallelTasks::run");
@@ -967,6 +972,23 @@ pub(super) fn initial_create_pipelines(
 
     // Process shaders into modules
     let shader_modules = ShaderModules::new(&device, &shaders, &pipeline_modes, has_shadow_views)?;
+
+    #[cfg(target_os = "trueos")]
+    {
+        // These are host descriptor handles, not shader compilation. The
+        // caller already runs on the scene-init worker.
+        let progress = Arc::new(Progress::new());
+        let mut tasks = ParallelTasks::new(&progress);
+        let interface = register_create_interface_pipelines(&mut tasks);
+        let ingame = register_create_ingame_and_shadow_pipelines(intermediate_format, &mut tasks);
+        tasks.run_inline(PipelineNeeds {
+            device: &device, layouts: &layouts, shaders: &shader_modules,
+            pipeline_modes: &pipeline_modes, surface_config: &surface_config,
+        });
+        let (send, recv) = crossbeam_channel::bounded(1);
+        send.send(ingame()).expect("fresh pipeline result mailbox");
+        return Ok((interface(), PipelineCreation { progress, recv }));
+    }
 
     let is_opengl = matches!(backend, wgpu::Backend::Gl);
     // Create threadpool for parallel portion

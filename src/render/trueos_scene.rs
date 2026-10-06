@@ -112,14 +112,25 @@ impl AdapterInterface for SceneAdapter {
     fn get_info(&self) -> wgpu::AdapterInfo {
         trueos_host::info()
     }
-    fn get_texture_format_features(&self, _: wgpu::TextureFormat) -> wgpu::TextureFormatFeatures {
-        // These are host descriptor capabilities for excluded passes, never
-        // native render-target or shader-format capabilities.
-        wgpu::TextureFormatFeatures {
-            allowed_usages: wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            flags: wgpu::TextureFormatFeatureFlags::empty(),
+    fn get_texture_format_features(
+        &self,
+        format: wgpu::TextureFormat,
+    ) -> wgpu::TextureFormatFeatures {
+        // The only intermediate host descriptor admitted for the excluded
+        // texture graph. This does not advertise native texture execution.
+        if format == wgpu::TextureFormat::Rgba8Unorm {
+            wgpu::TextureFormatFeatures {
+                allowed_usages: wgpu::TextureUsages::COPY_SRC
+                    | wgpu::TextureUsages::COPY_DST
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                flags: wgpu::TextureFormatFeatureFlags::FILTERABLE,
+            }
+        } else {
+            wgpu::TextureFormatFeatures {
+                allowed_usages: wgpu::TextureUsages::empty(),
+                flags: wgpu::TextureFormatFeatureFlags::empty(),
+            }
         }
     }
     fn get_presentation_timestamp(&self) -> wgpu::PresentationTimestamp {
@@ -267,4 +278,45 @@ pub(super) fn present(detail: &DispatchSurfaceOutputDetail, host: &Arc<Host>) {
     }
     host.recycle_lines(lines);
     state.acquired = false;
+}
+
+static STARTUP_STAGE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+pub(crate) fn startup_label() -> &'static str {
+    match STARTUP_STAGE.load(std::sync::atomic::Ordering::Relaxed) {
+        0 => "Starting graphics worker",
+        1 => "Negotiating terrain bridge",
+        2 => "Checking scene formats",
+        3 => "Admitting native line GPU",
+        4 => "Loading scene descriptors",
+        5 => "Preparing terrain pipeline handles",
+        _ => "Finishing scene resources",
+    }
+}
+pub(super) fn mark_stage(stage: u8) {
+    STARTUP_STAGE.store(stage, std::sync::atomic::Ordering::Relaxed);
+    #[cfg(target_os = "trueos")]
+    let _ = trueos::logl::log_record(
+        trueos::logl::level::IMPORTANT,
+        "apps::voxygen",
+        format_args!("Voxygen scene startup: {}", startup_label()),
+    );
+}
+pub(super) fn prepare_surface(
+    surface: &wgpu::Surface<'_>,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    let surface = surface
+        .as_custom::<SceneSurface>()
+        .ok_or("Foreign terrain surface")?;
+    let mut state = surface.state.lock().unwrap();
+    #[cfg(target_os = "trueos")]
+    if state.presenter.is_none() {
+        state.presenter = Some(super::trueos_lines::LinePresenter::new(
+            state.window,
+            width,
+            height,
+        )?);
+    }
+    Ok(())
 }

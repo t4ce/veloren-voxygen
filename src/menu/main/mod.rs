@@ -36,6 +36,8 @@ pub enum DetailedInitializationStage {
     StartingMultiplayer,
     Client(ClientInitStage),
     CreatingRenderPipeline(usize, usize),
+    #[cfg(target_os = "trueos")]
+    StartingGraphics(String),
 }
 
 enum InitState {
@@ -290,10 +292,12 @@ impl PlayState for MainMenuState {
         {
             scene_login::Status::Idle => {}
             scene_login::Status::Waiting(done, total) => {
-                self.main_menu_ui
-                    .update_stage(DetailedInitializationStage::CreatingRenderPipeline(
-                        done, total,
-                    ))
+                if done == 0 && total == 0 {
+                    self.main_menu_ui.update_stage(DetailedInitializationStage::StartingGraphics(
+                        crate::render::scene_startup_label().into()));
+                } else {
+                    self.main_menu_ui.update_stage(DetailedInitializationStage::CreatingRenderPipeline(done, total));
+                }
             }
             scene_login::Status::Ready(SceneLogin {
                 username,

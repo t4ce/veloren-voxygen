@@ -193,6 +193,10 @@ impl Screen {
                                 i18n.get_msg("hud-init-stage-client-starting-client")
                             }
                         },
+                        #[cfg(target_os = "trueos")]
+                        DetailedInitializationStage::StartingGraphics(label) => {
+                            std::borrow::Cow::Borrowed(label.as_str())
+                        }
                         DetailedInitializationStage::CreatingRenderPipeline(done, total) => i18n
                             .get_msg_ctx(
                                 "hud-init-stage-render-pipeline",

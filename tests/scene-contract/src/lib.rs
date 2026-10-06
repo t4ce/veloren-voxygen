@@ -26,6 +26,12 @@ mod tests {
         let adapter =
             ready(instance.request_adapter(&wgpu::RequestAdapterOptions::default())).unwrap();
         assert_eq!(adapter.get_info().device_type, wgpu::DeviceType::Cpu);
+        let metadata = adapter.get_texture_format_features(wgpu::TextureFormat::Rgba8Unorm);
+        assert!(metadata.allowed_usages.contains(wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING));
+        assert!(metadata.flags.contains(wgpu::TextureFormatFeatureFlags::FILTERABLE));
+        assert!(adapter.get_texture_format_features(wgpu::TextureFormat::Rgba16Float).allowed_usages.is_empty());
+
         assert!(
             !adapter
                 .features()

@@ -230,6 +230,8 @@ impl Renderer {
             .unwrap_or(wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY);
 
         #[cfg(target_os = "trueos")]
+        crate::render::trueos_scene::mark_stage(1);
+        #[cfg(target_os = "trueos")]
         let instance = crate::render::trueos_scene::instance();
         #[cfg(not(target_os = "trueos"))]
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -407,6 +409,8 @@ impl Renderer {
             view_formats: Vec::new(),
         };
 
+        #[cfg(target_os = "trueos")]
+        crate::render::trueos_scene::mark_stage(2);
         let supported_internal_formats = [wgpu::TextureFormat::Rgba16Float, format];
         let intermediate_format = supported_internal_formats
             .into_iter()
@@ -438,9 +442,16 @@ impl Renderer {
             })
             // This should be unreachable as the surface format should always support the
             // needed capabilities
-            .expect("No supported intermediate format");
+            .ok_or_else(|| RenderError::CustomError(
+                "No supported intermediate format for the scene descriptor contract".into()))?;
         info!("Using {:?} as the intermediate format", intermediate_format);
 
+        #[cfg(target_os = "trueos")]
+        {
+            crate::render::trueos_scene::mark_stage(3);
+            crate::render::trueos_scene::prepare_surface(&surface, dims.width, dims.height)
+                .map_err(RenderError::CustomError)?;
+        }
         surface.configure(&device, &surface_config);
 
         let shadow_views = Self::create_shadow_views(
@@ -452,6 +463,8 @@ impl Renderer {
         let rain_occlusion_view =
             Self::create_rain_view(&device, &pipeline_modes, max_texture_size);
 
+        #[cfg(target_os = "trueos")]
+        crate::render::trueos_scene::mark_stage(4);
         let shaders = Shaders::load_expect("");
         let shaders_watcher = shaders.reload_watcher();
 
@@ -498,6 +511,8 @@ impl Renderer {
             }
         };
 
+        #[cfg(target_os = "trueos")]
+        crate::render::trueos_scene::mark_stage(5);
         let (interface_pipelines, creating) = pipeline_creation::initial_create_pipelines(
             device.clone(),
             graphics_backend,
@@ -519,6 +534,8 @@ impl Renderer {
             creating,
         };
 
+        #[cfg(target_os = "trueos")]
+        crate::render::trueos_scene::mark_stage(6);
         let create_sampler = |filter| {
             device.create_sampler(&wgpu::SamplerDescriptor {
                 label: None,

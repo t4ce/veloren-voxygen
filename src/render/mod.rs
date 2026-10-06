@@ -1,4 +1,6 @@
 #[cfg(target_os = "trueos")]
+pub(crate) use trueos_scene::startup_label as scene_startup_label;
+#[cfg(target_os = "trueos")]
 mod trueos_scene;
 #[cfg(target_os = "trueos")]
 mod trueos_host;
