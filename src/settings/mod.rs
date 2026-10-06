@@ -54,22 +54,28 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let user_dirs = UserDirs::new().expect("System's $HOME directory path not found!");
-
-        // Chooses a path to store the screenshots by the following order:
-        //  - The VOXYGEN_SCREENSHOT environment variable
-        //  - The user's picture directory
-        //  - The executable's directory
-        // This only selects if there isn't already an entry in the settings file
+        // An explicit destination wins. TRUEOS uses the app's instance root;
+        // desktop platforms retain Pictures and executable-directory discovery.
         let screenshots_path = std::env::var_os("VOXYGEN_SCREENSHOT")
             .map(PathBuf::from)
-            .or_else(|| user_dirs.picture_dir().map(|dir| dir.join("veloren")))
+            .or_else(|| {
+                #[cfg(target_os = "trueos")]
+                {
+                    let root = std::env::var_os("TRUEOS_APP_FS_ROOT")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| PathBuf::from("apps/voxy"));
+                    Some(Path::new("/").join(root).join("screenshots"))
+                }
+                #[cfg(not(target_os = "trueos"))]
+                { None }
+            })
+            .or_else(|| UserDirs::new()?.picture_dir().map(|dir| dir.join("veloren")))
             .or_else(|| {
                 std::env::current_exe()
                     .ok()
                     .and_then(|dir| dir.parent().map(PathBuf::from))
             })
-            .expect("Couldn't choose a place to store the screenshots");
+            .unwrap_or_else(|| PathBuf::from("screenshots"));
 
         Settings {
             chat: ChatSettings::default(),
