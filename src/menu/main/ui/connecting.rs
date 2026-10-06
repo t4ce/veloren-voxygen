@@ -8,7 +8,15 @@ use crate::{
     ui::{
         Graphic,
         fonts::IcedFonts as Fonts,
-        ice::{Element, IcedUi as Ui, Id, component::neat_button, style, widget::Image},
+        ice::{
+            Element, IcedUi as Ui, Id,
+            component::neat_button,
+            style,
+            widget::{
+                Image,
+                compound_graphic::{CompoundGraphic, Graphic as PanelGraphic},
+            },
+        },
     },
 };
 use common::assets::{self, AssetExt, Ron};
@@ -157,18 +165,33 @@ impl Screen {
                     let tip = &i18n.get_variation_ctx("loading-tips", self.tip_number, &keys);
                     let tip = format!("{} {}", i18n.get_msg("main-tip"), tip);
 
-                    Container::new(
+                    let panel = Container::new(
                         Text::new(tip)
-                            .horizontal_alignment(iced::HorizontalAlignment::Center)
-                            .size(fonts.cyri.scale(25)),
+                            .width(Length::Fill)
+                            .size(fonts.cyri.scale(18)),
                     )
                     .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center_x()
-                    .align_y(Align::Center)
+                    .padding(20)
+                    .style(style::container::Style::color(vek::Rgba::new(0, 0, 0, 230)));
+                    let fade = CompoundGraphic::from_graphics(vec![PanelGraphic::gradient(
+                        vek::Rgba::new(0, 0, 0, 230),
+                        vek::Rgba::zero(),
+                        [360, 24],
+                        [0, 0],
+                    )])
+                    .width(Length::Fill)
+                    .height(Length::Units(24));
+                    Container::new(
+                        Column::with_children(vec![panel.into(), fade.into()])
+                            .width(Length::Fill)
+                            .max_width(360),
+                    )
+                    .width(Length::Fill)
+                    .padding(27)
+                    .align_x(Align::Start)
                     .into()
                 } else {
-                    Space::new(Length::Fill, Length::Fill).into()
+                    Space::new(Length::Fill, Length::Units(0)).into()
                 };
 
                 let stage = {
@@ -204,12 +227,19 @@ impl Screen {
                             ),
                     };
 
-                    Container::new(Text::new(stage_message).size(fonts.cyri.scale(20)))
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .padding(10)
-                        .align_x(Align::Start)
-                        .into()
+                    Container::new(
+                        Text::new(stage_message)
+                            .size(fonts.cyri.scale(20))
+                            .width(Length::Fill)
+                            .horizontal_alignment(iced::HorizontalAlignment::Center)
+                            .vertical_alignment(iced::VerticalAlignment::Center),
+                    )
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .padding(10)
+                    .center_x()
+                    .center_y()
+                    .into()
                 };
 
                 let cancel = Container::new(neat_button(
@@ -219,30 +249,23 @@ impl Screen {
                     button_style,
                     Some(Message::CancelConnect),
                 ))
-                .width(Length::Fill)
+                .width(Length::Units(130))
                 .height(Length::Units(fonts.cyri.scale(30)))
-                .center_x()
-                .padding(3);
-
-                let tip_cancel = Column::with_children(vec![tip, cancel.into()])
-                    .width(Length::FillPortion(2))
-                    .align_items(Align::Center)
-                    .spacing(5)
-                    .padding(5);
+                .center_x();
+                let cancel = Container::new(cancel).width(Length::Units(154)).center_x();
 
                 let gear = Container::new(
                     Image::new(frame_id)
                         .width(Length::Units(64))
                         .height(Length::Units(64)),
                 )
-                .width(Length::Fill)
+                .width(Length::Units(154))
                 .padding(10)
                 .align_x(Align::End);
 
-                let bottom_content =
-                    Row::with_children(vec![stage, tip_cancel.into(), gear.into()])
-                        .align_items(Align::Center)
-                        .width(Length::Fill);
+                let bottom_content = Row::with_children(vec![cancel.into(), stage, gear.into()])
+                    .align_items(Align::Center)
+                    .width(Length::Fill);
 
                 let left_art = Image::new(imgs.loading_art_l)
                     .width(Length::Units(12))
@@ -260,6 +283,7 @@ impl Screen {
                 .style(style::container::Style::image(imgs.loading_art));
 
                 vec![
+                    tip,
                     Space::new(Length::Fill, Length::Fill).into(),
                     bottom_bar.into(),
                 ]
