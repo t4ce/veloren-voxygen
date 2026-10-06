@@ -80,7 +80,7 @@ impl Clipboard {
         }
         #[cfg(not(target_os = "trueos"))]
         {
-            *LOCAL.lock().unwrap_or_else(|e| e.into_inner()) = Some((kind, text));
+            conrod_core::clipboard::write_typed(text, kind == Kind::Password);
             true
         }
     }
@@ -101,12 +101,7 @@ impl Clipboard {
         }
         #[cfg(not(target_os = "trueos"))]
         {
-            LOCAL
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .as_ref()
-                .filter(|(k, _)| *k == kind)
-                .map(|(_, text)| text.clone())
+            conrod_core::clipboard::read_typed(kind == Kind::Password)
         }
     }
 }
@@ -117,5 +112,3 @@ fn os_kind(kind: Kind) -> trueos::clipboard::Kind {
         Kind::Password => trueos::clipboard::Kind::Password,
     }
 }
-#[cfg(not(target_os = "trueos"))]
-static LOCAL: std::sync::Mutex<Option<(Kind, String)>> = std::sync::Mutex::new(None);
