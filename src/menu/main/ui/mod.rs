@@ -387,6 +387,7 @@ impl Controls {
                 self.show = Showing::Account;
                 if let Screen::Login { screen, error } = &mut self.screen {
                     *error = None;
+                    screen.account_created = false;
                     screen.account.focus(0);
                 }
             },
@@ -482,8 +483,14 @@ impl Controls {
                 }
             },
             Message::CloseError => {
-                if let Screen::Login { error, .. } = &mut self.screen {
+                if let Screen::Login { screen, error } = &mut self.screen {
                     *error = None;
+                    if core::mem::take(&mut screen.account_created) {
+                        self.show = Showing::Login;
+                        screen.banner.username = text_input::State::new();
+                        screen.banner.server = text_input::State::new();
+                        screen.banner.password = text_input::State::focused();
+                    }
                 }
             },
             Message::DeleteServer => {
@@ -697,6 +704,7 @@ impl MainMenuUi {
         if let Screen::Login { screen, error } = &mut self.controls.screen {
             if let Some(result) = screen.account.poll() {
                 let i18n = self.controls.i18n.read();
+                screen.account_created = result.is_ok();
                 *error = Some(match result {
                     Ok(username) => {
                         self.controls.login_info.username = username;

@@ -37,6 +37,7 @@ pub struct Screen {
 
     pub banner: LoginBanner,
     pub account: super::ig_acc_create::IGAccCreate,
+    pub account_created: bool,
     language_selection: LanguageSelectBanner,
 }
 
