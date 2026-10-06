@@ -15,7 +15,7 @@ use alloc::sync::Arc;
 use strum::{AsRefStr, EnumIter};
 use tracing::{error, warn};
 use vek::*;
-use winit::monitor::VideoModeHandle;
+use winit::monitor::VideoMode;
 
 /// Represents a key that the game menus recognise after input mapping
 #[derive(
@@ -122,7 +122,7 @@ pub enum Event {
 
 pub type MouseButton = winit::event::MouseButton;
 pub type PressState = winit::event::ElementState;
-pub type EventLoop = winit::event_loop::EventLoop<()>;
+pub type EventLoop = winit::event_loop::EventLoop;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum KeyMouse {
@@ -155,10 +155,7 @@ impl KeyMouse {
             Mouse(MouseButton::Middle) => String::from("Middle Click"),
             Mouse(MouseButton::Forward) => String::from("Mouse Forward"),
             Mouse(MouseButton::Back) => String::from("Mouse Back"),
-            Mouse(MouseButton::Other(button)) => {
-                // Additional mouse buttons after middle click start at 1
-                format!("Mouse {}", button + 3)
-            },
+            Mouse(button) => format!("Mouse {}", *button as u8 + 1),
         }
     }
 
@@ -171,10 +168,7 @@ impl KeyMouse {
             Mouse(MouseButton::Left) => "M1",
             Mouse(MouseButton::Right) => "M2",
             Mouse(MouseButton::Middle) => "M3",
-            Mouse(MouseButton::Other(button)) => {
-                // Additional mouse buttons after middle click start at 1
-                return Some(format!("M{}", button + 3));
-            },
+            Mouse(button) => return Some(format!("M{}", *button as u8 + 1)),
             _ => return None,
         };
 
@@ -219,7 +213,7 @@ pub enum LastInput {
 
 pub struct Window {
     renderer: Renderer,
-    window: Arc<winit::window::Window>,
+    window: Arc<dyn winit::window::Window>,
     cursor_grabbed: bool,
     pub pan_sensitivity: u32,
     pub zoom_sensitivity: u32,
@@ -260,19 +254,19 @@ impl Window {
     pub fn new(
         settings: &Settings,
         runtime: &tokio::runtime::Runtime,
-    ) -> Result<(Window, EventLoop), Error> {
-        let event_loop = EventLoop::new().unwrap();
+        event_loop: &dyn winit::event_loop::ActiveEventLoop,
+    ) -> Result<Window, Error> {
 
         let window = settings.graphics.window;
 
         #[allow(unused_mut)] //ensure no weird issues on different platforms
-        let mut attributes = winit::window::Window::default_attributes()
+        let mut attributes = winit::window::WindowAttributes::default()
             .with_title("Veloren")
             // Request Full HD in pixels, independently of desktop display scaling.
-            .with_inner_size(winit::dpi::PhysicalSize::new(window.size[0], window.size[1]))
+            .with_surface_size(winit::dpi::PhysicalSize::new(window.size[0], window.size[1]))
             .with_maximized(window.maximised);
 
-        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        #[cfg(all(unix, not(any(target_os = "windows", target_os = "macos", target_os = "trueos"))))]
         {
             use winit::platform::wayland::WindowAttributesExtWayland;
             attributes = attributes.with_name("net.veloren.veloren", "veloren");
@@ -285,8 +279,7 @@ impl Window {
             attributes, false,
         );
 
-        #[expect(deprecated)]
-        let window = Arc::new(event_loop.create_window(attributes).unwrap());
+        let window: Arc<dyn winit::window::Window> = Arc::from(event_loop.create_window(attributes).unwrap());
 
         let renderer = Renderer::new(
             Arc::clone(&window),
@@ -370,7 +363,7 @@ impl Window {
 
         this.set_fullscreen_mode(settings.graphics.fullscreen);
 
-        Ok((this, event_loop))
+        Ok(this)
     }
 
     pub fn renderer(&self) -> &Renderer { &self.renderer }
@@ -400,7 +393,7 @@ impl Window {
         // Refresh ui size (used when changing playstates)
         if self.needs_refresh_resize {
             let scale_factor = self.window.scale_factor();
-            let physical = self.window.inner_size();
+            let physical = self.window.surface_size();
 
             let logical_size =
                 Vec2::from(<(f64, f64)>::from(physical.to_logical::<f64>(scale_factor)));
@@ -422,7 +415,7 @@ impl Window {
             // We don't use the size provided by the event because more resize events could
             // have happened since, making the value outdated, so we must query directly
             // from the window to prevent errors
-            let physical = self.window.inner_size();
+            let physical = self.window.surface_size();
             let scale_factor = self.window.scale_factor();
             let is_maximized = self.window.is_maximized();
 
@@ -724,7 +717,7 @@ impl Window {
         };
 
         match event {
-            DeviceEvent::MouseMotion {
+            DeviceEvent::PointerMotion {
                 delta: (dx, dy), ..
             } if self.focused => {
                 // update last input to be Mouse if motion was made
@@ -756,7 +749,7 @@ impl Window {
 
         match event {
             WindowEvent::CloseRequested => self.events.push(Event::Close),
-            WindowEvent::Resized(_) => {
+            WindowEvent::SurfaceResized(_) => {
                 self.resized = true;
             },
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
@@ -768,7 +761,7 @@ impl Window {
                 self.events
                     .push(Event::Moved(Vec2::new(x as u32, y as u32)));
             },
-            WindowEvent::MouseInput { button, state, .. } => {
+            WindowEvent::PointerButton { button: winit::event::ButtonSource::Mouse(button), state, .. } => {
                 let map_input = Window::map_input(
                     KeyMouse::Mouse(button),
                     controls,
@@ -878,7 +871,7 @@ impl Window {
                 self.focused = state;
                 self.events.push(Event::Focused(state));
             },
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::PointerMoved { position, .. } => {
                 if self.cursor_grabbed {
                     self.reset_cursor_position();
                 } else {
@@ -896,6 +889,7 @@ impl Window {
                         // it's unlikely people would expect a configuration file to work
                         // across operating systems.
                         winit::event::MouseScrollDelta::PixelDelta(pos) => (pos.y / 16.0) as f32,
+                        _ => return,
                     };
                     y * (self.zoom_sensitivity as f32 / 100.0)
                         * if self.zoom_inversion { -1.0 } else { 1.0 }
@@ -914,7 +908,7 @@ impl Window {
                 .set_cursor_position(winit::dpi::LogicalPosition::new(
                     d.x as f64 + self.cursor_position.x,
                     d.y as f64 + self.cursor_position.y,
-                ))
+                ).into())
         {
             // Log this error once rather than every frame
             static SPAM_GUARD: std::sync::Once = std::sync::Once::new();
@@ -948,7 +942,7 @@ impl Window {
     /// This is used when handling the CursorMoved event to maintain the cursor
     /// position when it is grabbed
     fn reset_cursor_position(&self) {
-        if let Err(err) = self.window.set_cursor_position(self.cursor_position) {
+        if let Err(err) = self.window.set_cursor_position(self.cursor_position.into()) {
             // Log this error once rather than every frame
             static SPAM_GUARD: std::sync::Once = std::sync::Once::new();
             SPAM_GUARD.call_once(|| {
@@ -978,10 +972,10 @@ impl Window {
         resolution: [u16; 2],
         bit_depth: Option<u16>,
         refresh_rate_millihertz: Option<u32>,
-        correct_res: Option<Vec<VideoModeHandle>>,
-        correct_depth: Option<Option<VideoModeHandle>>,
-        correct_rate: Option<Option<VideoModeHandle>>,
-    ) -> Option<VideoModeHandle> {
+        correct_res: Option<Vec<VideoMode>>,
+        correct_depth: Option<Option<VideoMode>>,
+        correct_rate: Option<Option<VideoMode>>,
+    ) -> Option<VideoMode> {
         // if a previous iteration of this method filtered the available video modes for
         // the correct resolution already, load that value, otherwise filter it
         // in this iteration
@@ -1003,7 +997,7 @@ impl Window {
                 let correct_depth = correct_depth.unwrap_or_else(|| {
                     correct_res
                         .iter()
-                        .find(|mode| mode.bit_depth() == depth)
+                        .find(|mode| mode.bit_depth().map(|depth| depth.get()).unwrap_or(0) == depth)
                         .cloned()
                 });
 
@@ -1014,7 +1008,7 @@ impl Window {
                         let correct_rate = correct_rate.unwrap_or_else(|| {
                             correct_res
                                 .iter()
-                                .find(|mode| mode.refresh_rate_millihertz() == rate)
+                                .find(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0) == rate)
                                 .cloned()
                         });
 
@@ -1024,8 +1018,8 @@ impl Window {
                         // mode not to be found
                         correct_res
                             .iter()
-                            .filter(|mode| mode.bit_depth() == depth)
-                            .find(|mode| mode.refresh_rate_millihertz() == rate)
+                            .filter(|mode| mode.bit_depth().map(|depth| depth.get()).unwrap_or(0) == depth)
+                            .find(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0) == rate)
                             .cloned()
                             .or_else(|| {
                                 if correct_depth.is_none() && correct_rate.is_none() {
@@ -1077,7 +1071,7 @@ impl Window {
                     let correct_rate = correct_rate.unwrap_or_else(|| {
                         correct_res
                             .iter()
-                            .find(|mode| mode.refresh_rate_millihertz() == rate)
+                            .find(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0) == rate)
                             .cloned()
                     });
 
@@ -1108,8 +1102,8 @@ impl Window {
                 None => correct_res
                     .into_iter()
                     // Prefer bit depth over refresh rate
-                    .sorted_by_key(|mode| mode.bit_depth())
-                    .max_by_key(|mode| mode.refresh_rate_millihertz()),
+                    .sorted_by_key(|mode| mode.bit_depth().map(|depth| depth.get()).unwrap_or(0))
+                    .max_by_key(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0)),
             },
         }
     }
@@ -1119,7 +1113,7 @@ impl Window {
         resolution: [u16; 2],
         bit_depth: Option<u16>,
         refresh_rate_millihertz: Option<u32>,
-    ) -> Option<VideoModeHandle> {
+    ) -> Option<VideoMode> {
         // (resolution, bit depth, refresh rate) represents a video mode
         // spec: as specified
         // max: maximum value available
@@ -1149,8 +1143,8 @@ impl Window {
                     let mode = monitor
                         .video_modes()
                         // Prefer bit depth over refresh rate
-                        .sorted_by_key(|mode| mode.refresh_rate_millihertz())
-                        .sorted_by_key(|mode| mode.bit_depth())
+                        .sorted_by_key(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0))
+                        .sorted_by_key(|mode| mode.bit_depth().map(|depth| depth.get()).unwrap_or(0))
                         .max_by_key(|mode| mode.size().width);
 
                     if mode.is_none() {
@@ -1176,18 +1170,22 @@ impl Window {
                     fullscreen.bit_depth,
                     fullscreen.refresh_rate_millihertz,
                 ) {
-                    winit::window::Fullscreen::Exclusive(video_mode)
+                    if let Some(monitor) = window.current_monitor() {
+                        winit::monitor::Fullscreen::Exclusive(monitor, video_mode)
+                    } else {
+                        winit::monitor::Fullscreen::Borderless(None)
+                    }
                 } else {
                     warn!(
                         "Failed to select a video mode for exclusive fullscreen. Falling back to \
                          borderless fullscreen."
                     );
-                    winit::window::Fullscreen::Borderless(None)
+                    winit::monitor::Fullscreen::Borderless(None)
                 }
             },
             FullscreenMode::Borderless => {
                 // None here will fullscreen on the current monitor
-                winit::window::Fullscreen::Borderless(None)
+                winit::monitor::Fullscreen::Borderless(None)
             },
         }));
     }
@@ -1196,10 +1194,10 @@ impl Window {
 
     pub fn set_size(&mut self, new_size: Vec2<u32>) {
         self.window
-            .set_min_inner_size(Some(winit::dpi::LogicalSize::new(
+            .set_min_surface_size(Some(winit::dpi::LogicalSize::new(
                 new_size.x as f64,
                 new_size.y as f64,
-            )));
+            ).into()));
     }
 
     pub fn send_event(&mut self, event: Event) { self.events.push(event) }
@@ -1427,7 +1425,7 @@ impl Window {
 
     pub fn reset_mapping_mode(&mut self) { self.remapping_mode = RemappingMode::None; }
 
-    pub fn window(&self) -> &winit::window::Window { &self.window }
+    pub fn window(&self) -> &dyn winit::window::Window { self.window.as_ref() }
 
     pub fn modifiers(&self) -> winit::keyboard::ModifiersState { self.modifiers }
 

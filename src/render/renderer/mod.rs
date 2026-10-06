@@ -140,7 +140,7 @@ pub struct Renderer {
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     instance: wgpu::Instance,
-    window: Arc<winit::window::Window>,
+    window: Arc<dyn winit::window::Window>,
     surface_config: wgpu::SurfaceConfiguration,
 
     sampler: wgpu::Sampler,
@@ -199,7 +199,7 @@ impl Renderer {
     /// Create a new `Renderer` from a variety of backend-specific components
     /// and the window targets.
     pub fn new(
-        window: Arc<winit::window::Window>,
+        window: Arc<dyn winit::window::Window>,
         display: winit::event_loop::OwnedDisplayHandle,
         mode: RenderMode,
         runtime: &tokio::runtime::Runtime,
@@ -236,7 +236,7 @@ impl Renderer {
             memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
         });
 
-        let dims = window.inner_size();
+        let dims = window.surface_size();
 
         let surface = instance
             .create_surface(Arc::clone(&window))

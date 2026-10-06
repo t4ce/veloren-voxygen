@@ -51,7 +51,6 @@ fn conrod_convert_key(key: &winit::keyboard::Key) -> input::Key {
             winit::keyboard::NamedKey::ArrowDown => input::keyboard::Key::Down,
             winit::keyboard::NamedKey::Backspace => input::keyboard::Key::Backspace,
             winit::keyboard::NamedKey::Enter => input::keyboard::Key::Return,
-            winit::keyboard::NamedKey::Space => input::keyboard::Key::Space,
             winit::keyboard::NamedKey::AudioVolumeMute => input::keyboard::Key::AudioMute,
             winit::keyboard::NamedKey::MediaTrackNext => input::keyboard::Key::AudioNext,
             winit::keyboard::NamedKey::Power => input::keyboard::Key::Power,
@@ -112,7 +111,7 @@ fn conrod_convert_key(key: &winit::keyboard::Key) -> input::Key {
         },
         winit::keyboard::Key::Unidentified(_) | winit::keyboard::Key::Dead(_) => {
             input::keyboard::Key::Unknown
-        },
+        }
     }
 }
 
@@ -121,30 +120,30 @@ fn conrod_convert_mouse_button(button: &event::MouseButton) -> input::Button {
         event::MouseButton::Left => input::MouseButton::Left,
         event::MouseButton::Right => input::MouseButton::Right,
         event::MouseButton::Middle => input::MouseButton::Middle,
-        event::MouseButton::Other(0) => input::MouseButton::X1,
-        event::MouseButton::Other(1) => input::MouseButton::X2,
-        event::MouseButton::Other(2) => input::MouseButton::Button6,
-        event::MouseButton::Other(3) => input::MouseButton::Button7,
-        event::MouseButton::Other(4) => input::MouseButton::Button8,
+        event::MouseButton::Back => input::MouseButton::X1,
+        event::MouseButton::Forward => input::MouseButton::X2,
+        event::MouseButton::Button6 => input::MouseButton::Button6,
+        event::MouseButton::Button7 => input::MouseButton::Button7,
+        event::MouseButton::Button8 => input::MouseButton::Button8,
         _ => input::MouseButton::Unknown,
     })
 }
 
 fn conrod_convert_event(
     event: &WindowEvent,
-    window: &winit::window::Window,
+    window: &dyn winit::window::Window,
     modifiers: winit::keyboard::ModifiersState,
 ) -> Option<Input> {
     let hidpi = window.scale_factor();
-    let winit::dpi::LogicalSize { width, height } = window.inner_size().to_logical::<f64>(hidpi);
+    let winit::dpi::LogicalSize { width, height } = window.surface_size().to_logical::<f64>(hidpi);
     let tx = |x: f64| x - width / 2.0;
     let ty = |y: f64| -(y - height / 2.0);
 
     Some(match event {
-        WindowEvent::Resized(physical_size) => {
+        WindowEvent::SurfaceResized(physical_size) => {
             let winit::dpi::LogicalSize { width, height } = physical_size.to_logical::<f64>(hidpi);
             Input::Resize(width as _, height as _)
-        },
+        }
         WindowEvent::Focused(focused) => Input::Focus(*focused),
         WindowEvent::KeyboardInput { event, .. } => {
             // `conrod` expects different events for text input and pressed keys.
@@ -155,7 +154,7 @@ fn conrod_convert_event(
                 && !c.is_control()
                 && !modifiers.alt_key()
                 && !modifiers.control_key()
-                && !modifiers.super_key()
+                && !modifiers.meta_key()
             {
                 return event.state.is_pressed().then(|| Input::Text(c.to_string()));
             }
@@ -166,32 +165,53 @@ fn conrod_convert_event(
                 event::ElementState::Pressed => Input::Press(key),
                 event::ElementState::Released => Input::Release(key),
             }
-        },
-        WindowEvent::Touch(event::Touch {
-            phase,
-            location,
-            id,
+        }
+        WindowEvent::PointerEntered {
+            kind: event::PointerKind::Touch(_),
             ..
-        }) => {
-            let winit::dpi::LogicalPosition { x, y } = location.to_logical::<f64>(hidpi);
-            let phase = match phase {
-                event::TouchPhase::Started => input::touch::Phase::Start,
-                event::TouchPhase::Moved => input::touch::Phase::Move,
-                event::TouchPhase::Cancelled => input::touch::Phase::Cancel,
-                event::TouchPhase::Ended => input::touch::Phase::End,
+        } => return None,
+        WindowEvent::PointerMoved {
+            position,
+            source: event::PointerSource::Touch { finger_id, .. },
+            ..
+        } => {
+            let winit::dpi::LogicalPosition { x, y } = position.to_logical::<f64>(hidpi);
+            Input::Touch(input::Touch {
+                phase: input::touch::Phase::Move,
+                id: input::touch::Id::new(finger_id.into_raw() as u64),
+                xy: [tx(x), ty(y)],
+            })
+        }
+        // PointerLeft also follows a normal touch release in winit 0.31, so use button
+        // transitions to avoid sending duplicate end/cancel events.
+        WindowEvent::PointerLeft {
+            kind: event::PointerKind::Touch(_),
+            ..
+        } => return None,
+        WindowEvent::PointerButton {
+            state,
+            position,
+            button: event::ButtonSource::Touch { finger_id, .. },
+            ..
+        } => {
+            let winit::dpi::LogicalPosition { x, y } = position.to_logical::<f64>(hidpi);
+            let phase = match state {
+                event::ElementState::Pressed => input::touch::Phase::Start,
+                event::ElementState::Released => input::touch::Phase::End,
             };
-            let xy = [tx(x), ty(y)];
-            let id = input::touch::Id::new(*id);
-            let touch = input::Touch { phase, id, xy };
-            Input::Touch(touch)
-        },
-        WindowEvent::CursorMoved { position, .. } => {
+            Input::Touch(input::Touch {
+                phase,
+                id: input::touch::Id::new(finger_id.into_raw() as u64),
+                xy: [tx(x), ty(y)],
+            })
+        }
+        WindowEvent::PointerMoved { position, .. } => {
             let winit::dpi::LogicalPosition { x, y } = position.to_logical::<f64>(hidpi);
             let x = tx(x);
             let y = ty(y);
             let motion = input::Motion::MouseCursor { x, y };
             Input::Motion(motion)
-        },
+        }
         WindowEvent::MouseWheel { delta, .. } => match delta {
             event::MouseScrollDelta::PixelDelta(physical_position) => {
                 let winit::dpi::LogicalPosition { x, y } =
@@ -200,21 +220,26 @@ fn conrod_convert_event(
                 let y = -y as conrod_core::Scalar;
                 let motion = input::Motion::Scroll { x, y };
                 Input::Motion(motion)
-            },
+            }
             event::MouseScrollDelta::LineDelta(x, y) => {
                 const ARBITRARY_POINTS_PER_LINE_FACTOR: conrod_core::Scalar = 10.0;
                 let x = ARBITRARY_POINTS_PER_LINE_FACTOR * *x as conrod_core::Scalar;
                 let y = ARBITRARY_POINTS_PER_LINE_FACTOR * -y as conrod_core::Scalar;
                 Input::Motion(input::Motion::Scroll { x, y })
-            },
+            }
+            _ => return None,
         },
-        WindowEvent::MouseInput { state, button, .. } => {
+        WindowEvent::PointerButton {
+            state,
+            button: winit::event::ButtonSource::Mouse(button),
+            ..
+        } => {
             let button = conrod_convert_mouse_button(button);
             match state {
                 event::ElementState::Pressed => Input::Press(button),
                 event::ElementState::Released => Input::Release(button),
             }
-        },
+        }
         WindowEvent::RedrawRequested => Input::Redraw,
         _ => return None,
     })
@@ -225,16 +250,11 @@ pub struct Event(pub Input);
 
 impl Event {
     pub fn try_from(
-        event: &event::Event<()>,
-        window: &winit::window::Window,
+        event: &WindowEvent,
+        window: &dyn winit::window::Window,
         modifiers: winit::keyboard::ModifiersState,
     ) -> Option<Self> {
-        match event {
-            event::Event::WindowEvent { event, .. } => {
-                conrod_convert_event(event, window, modifiers).map(Self)
-            },
-            _ => None,
-        }
+        conrod_convert_event(event, window, modifiers).map(Self)
     }
 
     pub fn is_keyboard_or_mouse(&self) -> bool {
@@ -257,5 +277,7 @@ impl Event {
         )
     }
 
-    pub fn new_resize(dims: Vec2<f64>) -> Self { Self(Input::Resize(dims.x, dims.y)) }
+    pub fn new_resize(dims: Vec2<f64>) -> Self {
+        Self(Input::Resize(dims.x, dims.y))
+    }
 }

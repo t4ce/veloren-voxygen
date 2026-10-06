@@ -27,7 +27,7 @@ use i18n::Localization;
 use itertools::Itertools;
 use core::iter::once;
 use alloc::rc::Rc;
-use winit::monitor::VideoModeHandle;
+use winit::monitor::VideoMode;
 
 widget_ids! {
     struct Ids {
@@ -174,7 +174,7 @@ impl<'a> Video<'a> {
 pub struct State {
     ids: Ids,
     // Resolution, Bit Depth and Refresh Rate
-    video_modes: Vec<VideoModeHandle>,
+    video_modes: Vec<VideoMode>,
 }
 const FPS_CHOICES: [Fps; 17] = [
     Fps::Max(15),
@@ -1600,7 +1600,7 @@ impl Widget for Video<'_> {
         }
 
         // Bit Depth and Refresh Rate
-        let correct_res: Vec<&VideoModeHandle> = state
+        let correct_res: Vec<&VideoMode> = state
             .video_modes
             .iter()
             .filter(|mode| {
@@ -1618,13 +1618,13 @@ impl Widget for Video<'_> {
             .iter()
             .filter(
                 |mode| match self.global_state.settings.graphics.fullscreen.refresh_rate_millihertz {
-                    Some(refresh_rate) => mode.refresh_rate_millihertz() == refresh_rate,
+                    Some(refresh_rate) => mode.refresh_rate_millihertz().map(|rate| rate.get()).unwrap_or(0) == refresh_rate,
                     None => true,
                 },
             )
             // TODO: why do we sort by this and then map to it?
-            .sorted_by_key(|mode| mode.bit_depth())
-            .map(|mode| mode.bit_depth())
+            .sorted_by_key(|mode| mode.bit_depth().map(|depth| depth.get()).unwrap_or(0))
+            .filter_map(|mode| mode.bit_depth().map(|depth| depth.get()))
             .rev()
             .dedup()
             .collect();
@@ -1675,11 +1675,11 @@ impl Widget for Video<'_> {
             .into_iter()
             .filter(
                 |mode| match self.global_state.settings.graphics.fullscreen.bit_depth {
-                    Some(bit_depth) => mode.bit_depth() == bit_depth,
+                    Some(bit_depth) => mode.bit_depth().map(|depth| depth.get()).unwrap_or(0) == bit_depth,
                     None => true,
                 },
             )
-            .map(|mode| mode.refresh_rate_millihertz())
+            .filter_map(|mode| mode.refresh_rate_millihertz().map(|rate| rate.get()))
             .sorted()
             .rev()
             .dedup()

@@ -9,7 +9,7 @@ pub use cache::{Font, FontId, RawFont, load_font};
 pub use graphic::{Id, Rotation};
 pub use iced::Event;
 pub use renderer::{IcedRenderer, style};
-pub use winit::{Clipboard, window_event};
+pub use winit::{Clipboard, FileDropAdapter, window_event};
 
 use super::{
     graphic::{self, Graphic},
@@ -67,19 +67,27 @@ impl IcedUi {
     }
 
     /// Add a new font that is referncable via the returned Id
-    pub fn add_font(&mut self, font: RawFont) -> FontId { self.renderer.add_font(font) }
+    pub fn add_font(&mut self, font: RawFont) -> FontId {
+        self.renderer.add_font(font)
+    }
 
     /// Allows clearing out the fonts when switching languages
-    pub fn clear_fonts(&mut self, default_font: Font) { self.renderer.clear_fonts(default_font); }
+    pub fn clear_fonts(&mut self, default_font: Font) {
+        self.renderer.clear_fonts(default_font);
+    }
 
     /// Add a new graphic that is referencable via the returned Id
-    pub fn add_graphic(&mut self, graphic: Graphic) -> Id { self.renderer.add_graphic(graphic) }
+    pub fn add_graphic(&mut self, graphic: Graphic) -> Id {
+        self.renderer.add_graphic(graphic)
+    }
 
     pub fn replace_graphic(&mut self, id: Id, graphic: Graphic) {
         self.renderer.replace_graphic(id, graphic);
     }
 
-    pub fn scale(&self) -> Scale { self.scale }
+    pub fn scale(&self) -> Scale {
+        self.scale
+    }
 
     pub fn set_scaling_mode(&mut self, mode: ScaleMode) {
         // Signal that change needs to be handled
@@ -98,7 +106,7 @@ impl IcedUi {
             // Intercept resizing events
             // We check if the resolution of the renderer has changed to determine if a resize has
             // occured
-            Event::Window(window::Event::Resized { .. }) => {},
+            Event::Window(window::Event::Resized { .. }) => {}
             // Scale cursor movement events
             // Note: in some cases the scaling could be off if a resized event occured in the same
             // frame, in practice this shouldn't be an issue
@@ -114,7 +122,7 @@ impl IcedUi {
                 self.events.push(Event::Mouse(mouse::Event::CursorMoved {
                     position: iced::Point::new(x, y),
                 }));
-            },
+            }
             // Scale pixel scrolling events
             Event::Mouse(mouse::Event::WheelScrolled {
                 delta: mouse::ScrollDelta::Pixels { x, y },
@@ -127,7 +135,7 @@ impl IcedUi {
                         y: y / scale,
                     },
                 }));
-            },
+            }
             event => self.events.push(event),
         }
     }
@@ -189,7 +197,11 @@ impl IcedUi {
             span!(_guard, "update user_interface");
             let mut messages = Vec::new();
             for event in &self.events {
-                if matches!(event, Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) | Event::Touch(iced::touch::Event::FingerPressed { .. })) {
+                if matches!(
+                    event,
+                    Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+                        | Event::Touch(iced::touch::Event::FingerPressed { .. })
+                ) {
                     clipboard.blur();
                 }
                 let _event_status_list = user_interface.update(
@@ -217,5 +229,7 @@ impl IcedUi {
         (messages, mouse_interaction)
     }
 
-    pub fn render<'a>(&'a self, drawer: &mut UiDrawer<'_, 'a>) { self.renderer.render(drawer); }
+    pub fn render<'a>(&'a self, drawer: &mut UiDrawer<'_, 'a>) {
+        self.renderer.render(drawer);
+    }
 }

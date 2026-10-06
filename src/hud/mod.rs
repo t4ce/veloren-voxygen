@@ -2002,7 +2002,9 @@ impl Hud {
             }
 
             // Pop speech bubbles
-            let now = Instant::now();
+            // SpeechBubble is owned by common and uses the standard-library clock.
+            use std::time::Instant as SpeechBubbleInstant;
+            let now = SpeechBubbleInstant::now();
             self.speech_bubbles
                 .retain(|_uid, bubble| bubble.timeout > now);
             self.content_bubbles

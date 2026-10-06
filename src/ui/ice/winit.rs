@@ -2,21 +2,310 @@
 // Original version at https://github.com/Imberflur/iced/tree/veloren-winit-0.28/winit
 
 use iced::{Event, Point, keyboard, mouse, touch, window};
+use std::{collections::HashMap, sync::Arc};
 use winit::{event::WindowEvent, keyboard::NamedKey};
 
 pub use crate::clipboard::Clipboard;
 impl Clipboard {
-    pub fn connect(_window: &winit::window::Window) -> Self { Self::default() }
+    pub fn connect(_window: &dyn winit::window::Window) -> Self {
+        Self::default()
+    }
 }
+
+#[derive(Clone, Copy)]
+enum FileRequestKind {
+    Hover,
+    Drop,
+}
+
+enum PendingFileTransfer {
+    Requested(winit::data_transfer::DataTransferId, FileRequestKind),
+    Deferred(
+        winit::data_transfer::DataTransferId,
+        FileRequestKind,
+        Arc<dyn winit::data_transfer::TypedData>,
+    ),
+}
+
+/// Bridges winit 0.31's asynchronous URI data transfer events to iced's file events.
+#[derive(Default)]
+pub struct FileDropAdapter {
+    hover: Option<winit::data_transfer::DataTransferId>,
+    pending: HashMap<winit::event_loop::AsyncRequestSerial, PendingFileTransfer>,
+}
+
+impl FileDropAdapter {
+    /// Processes drag-and-drop events and returns any corresponding iced file events.
+    pub fn handle(
+        &mut self,
+        event: &WindowEvent,
+        event_loop: &dyn winit::event_loop::ActiveEventLoop,
+    ) -> Vec<Event> {
+        use winit::{
+            data_transfer::TypeHint, event::WindowEvent as WinitEvent, event_loop::DndAction,
+        };
+
+        match event {
+            WinitEvent::DragEntered { id, .. } => {
+                let left = self.hover.is_some_and(|hover| hover != *id);
+                self.cancel_hover_requests();
+                self.hover = Some(*id);
+                self.request_uris(*id, FileRequestKind::Hover, event_loop, &TypeHint::UriList);
+                if left {
+                    vec![Event::Window(window::Event::FilesHoveredLeft)]
+                } else {
+                    Vec::new()
+                }
+            }
+            WinitEvent::DragDropped { id, .. } => {
+                self.cancel_hover_for(*id);
+                if self.hover == Some(*id) {
+                    self.hover = None;
+                }
+                let events = vec![Event::Window(window::Event::FilesHoveredLeft)];
+                if let Ok(transfer) = event_loop.data_transfer(*id)
+                    && transfer.has_type(&TypeHint::UriList)
+                {
+                    let _ = event_loop.set_valid_dnd_actions(*id, &[DndAction::Copy]);
+                    if let Ok(serial) = event_loop.fetch_data_transfer(*id, &TypeHint::UriList) {
+                        self.pending.insert(
+                            serial,
+                            PendingFileTransfer::Requested(*id, FileRequestKind::Drop),
+                        );
+                    }
+                }
+                events
+            }
+            WinitEvent::DragLeft { id } => {
+                if self.hover == Some(*id) {
+                    self.hover = None;
+                    self.cancel_hover_for(*id);
+                    vec![Event::Window(window::Event::FilesHoveredLeft)]
+                } else {
+                    Vec::new()
+                }
+            }
+            WinitEvent::DataTransferReceived { id, serial, value } => {
+                self.receive(*id, *serial, Arc::clone(value))
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Retries data reads deferred because the platform had not finished streaming them.
+    pub fn poll(&mut self) -> Vec<Event> {
+        let deferred = self
+            .pending
+            .iter()
+            .filter_map(|(serial, request)| match request {
+                PendingFileTransfer::Deferred(id, kind, value) => {
+                    Some((*serial, *id, *kind, Arc::clone(value)))
+                }
+                PendingFileTransfer::Requested(..) => None,
+            })
+            .collect::<Vec<_>>();
+
+        let mut events = Vec::new();
+        for (serial, id, kind, value) in deferred {
+            events.extend(self.try_complete(serial, id, kind, value));
+        }
+        events
+    }
+
+    fn receive(
+        &mut self,
+        id: winit::data_transfer::DataTransferId,
+        serial: winit::event_loop::AsyncRequestSerial,
+        value: Arc<dyn winit::data_transfer::TypedData>,
+    ) -> Vec<Event> {
+        let Some(request) = self.pending.get(&serial) else {
+            return Vec::new();
+        };
+        let (pending_id, kind) = match request {
+            PendingFileTransfer::Requested(pending_id, kind)
+            | PendingFileTransfer::Deferred(pending_id, kind, _) => (*pending_id, *kind),
+        };
+        if pending_id != id || (matches!(kind, FileRequestKind::Hover) && self.hover != Some(id)) {
+            self.pending.remove(&serial);
+            return Vec::new();
+        }
+        self.try_complete(serial, id, kind, value)
+    }
+
+    fn try_complete(
+        &mut self,
+        serial: winit::event_loop::AsyncRequestSerial,
+        id: winit::data_transfer::DataTransferId,
+        kind: FileRequestKind,
+        value: Arc<dyn winit::data_transfer::TypedData>,
+    ) -> Vec<Event> {
+        if matches!(kind, FileRequestKind::Hover) && self.hover != Some(id) {
+            self.pending.remove(&serial);
+            return Vec::new();
+        }
+        match value.try_as_file_paths() {
+            Ok(paths) => {
+                self.pending.remove(&serial);
+                paths
+                    .into_iter()
+                    .map(|path| {
+                        Event::Window(match kind {
+                            FileRequestKind::Hover => window::Event::FileHovered(path),
+                            FileRequestKind::Drop => window::Event::FileDropped(path),
+                        })
+                    })
+                    .collect()
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                self.pending
+                    .insert(serial, PendingFileTransfer::Deferred(id, kind, value));
+                Vec::new()
+            }
+            Err(_) => {
+                self.pending.remove(&serial);
+                Vec::new()
+            }
+        }
+    }
+
+    fn cancel_hover_for(&mut self, id: winit::data_transfer::DataTransferId) {
+        self.pending.retain(|_, request| match request {
+            PendingFileTransfer::Requested(pending_id, FileRequestKind::Hover)
+            | PendingFileTransfer::Deferred(pending_id, FileRequestKind::Hover, _) => {
+                *pending_id != id
+            }
+            _ => true,
+        });
+    }
+
+    fn cancel_hover_requests(&mut self) {
+        self.pending.retain(|_, request| match request {
+            PendingFileTransfer::Requested(_, FileRequestKind::Hover)
+            | PendingFileTransfer::Deferred(_, FileRequestKind::Hover, _) => false,
+            _ => true,
+        });
+    }
+
+    fn request_uris(
+        &mut self,
+        id: winit::data_transfer::DataTransferId,
+        kind: FileRequestKind,
+        event_loop: &dyn winit::event_loop::ActiveEventLoop,
+        type_hint: &dyn winit::data_transfer::TransferType,
+    ) {
+        if self.pending.values().any(|request| {
+            matches!(request, PendingFileTransfer::Requested(pending_id, FileRequestKind::Hover) | PendingFileTransfer::Deferred(pending_id, FileRequestKind::Hover, _) if *pending_id == id)
+        }) {
+            return;
+        }
+        if let Ok(transfer) = event_loop.data_transfer(id)
+            && transfer.has_type(type_hint)
+        {
+            let _ = event_loop.set_valid_dnd_actions(id, &[winit::event_loop::DndAction::Copy]);
+            if let Ok(serial) = event_loop.fetch_data_transfer(id, type_hint) {
+                self.pending
+                    .insert(serial, PendingFileTransfer::Requested(id, kind));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod file_drop_tests {
+    use super::*;
+    use std::{
+        io::{self, BufRead, ErrorKind},
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    static URI_LIST: winit::data_transfer::TypeHint = winit::data_transfer::TypeHint::UriList;
+
+    #[derive(Debug)]
+    struct UriData {
+        reads: AtomicUsize,
+    }
+
+    impl winit::data_transfer::TypedData for UriData {
+        fn type_(&self) -> &dyn winit::data_transfer::TransferType {
+            &URI_LIST
+        }
+
+        fn try_read(&self) -> Option<Box<dyn BufRead>> {
+            None
+        }
+
+        fn try_as_uris(&self) -> io::Result<Vec<String>> {
+            if self.reads.fetch_add(1, Ordering::Relaxed) == 0 {
+                Err(io::Error::new(ErrorKind::WouldBlock, "still streaming"))
+            } else {
+                Ok(vec!["file:///tmp/voxy-test.txt".to_owned()])
+            }
+        }
+
+        fn try_as_string(&self) -> io::Result<String> {
+            Err(io::Error::new(ErrorKind::InvalidData, "not plain text"))
+        }
+    }
+
+    fn pending_drop(
+        adapter: &mut FileDropAdapter,
+    ) -> (
+        winit::data_transfer::DataTransferId,
+        winit::event_loop::AsyncRequestSerial,
+        Arc<UriData>,
+    ) {
+        let id = winit::data_transfer::DataTransferId::from_raw(7);
+        let serial = winit::event_loop::AsyncRequestSerial::get();
+        let value = Arc::new(UriData {
+            reads: AtomicUsize::new(0),
+        });
+        adapter.pending.insert(
+            serial,
+            PendingFileTransfer::Requested(id, FileRequestKind::Drop),
+        );
+        (id, serial, value)
+    }
+
+    #[test]
+    fn retries_would_block_data_and_emits_drop_once() {
+        let mut adapter = FileDropAdapter::default();
+        let (id, serial, value) = pending_drop(&mut adapter);
+
+        assert!(adapter.receive(id, serial, value.clone()).is_empty());
+        let events = adapter.poll();
+        assert!(matches!(
+            events.as_slice(),
+            [Event::Window(window::Event::FileDropped(path))]
+                if path == &std::path::PathBuf::from("/tmp/voxy-test.txt")
+        ));
+        assert!(adapter.receive(id, serial, value).is_empty());
+        assert!(adapter.poll().is_empty());
+    }
+
+    #[test]
+    fn stale_hover_result_is_discarded_after_drag_left() {
+        let mut adapter = FileDropAdapter::default();
+        let (id, serial, value) = pending_drop(&mut adapter);
+        adapter.pending.insert(
+            serial,
+            PendingFileTransfer::Requested(id, FileRequestKind::Hover),
+        );
+        adapter.hover = Some(id);
+        adapter.cancel_hover_for(id);
+        adapter.hover = None;
+
+        assert!(adapter.receive(id, serial, value).is_empty());
+        assert!(adapter.pending.is_empty());
+    }
+}
+
 impl iced::Clipboard for Clipboard {
-    fn read(&self) -> Option<String> { self.paste(crate::clipboard::Kind::Text) }
-    fn write(&mut self, contents: String) { self.copy(crate::clipboard::Kind::Text, contents); }
-    fn focus(&mut self, secure: bool) { Clipboard::focus(self, field_kind(secure)); }
-    fn read_typed(&self, secure: bool) -> Option<String> { self.paste(field_kind(secure)) }
-    fn write_typed(&mut self, contents: String, secure: bool) -> bool { self.copy(field_kind(secure), contents) }
-}
-fn field_kind(secure: bool) -> crate::clipboard::Kind {
-    if secure { crate::clipboard::Kind::Password } else { crate::clipboard::Kind::Text }
+    fn read(&self) -> Option<String> {
+        self.paste(crate::clipboard::Kind::Text)
+    }
+    fn write(&mut self, contents: String) {
+        self.copy(crate::clipboard::Kind::Text, contents);
+    }
 }
 
 /// Converts a winit window event into an iced event.
@@ -26,32 +315,83 @@ pub fn window_event(
     modifiers: winit::keyboard::ModifiersState,
 ) -> Option<Event> {
     match event {
-        WindowEvent::Resized(new_size) => {
+        WindowEvent::SurfaceResized(new_size) => {
             let logical_size = new_size.to_logical(scale_factor);
 
             Some(Event::Window(window::Event::Resized {
                 width: logical_size.width,
                 height: logical_size.height,
             }))
-        },
+        }
         WindowEvent::CloseRequested => Some(Event::Window(window::Event::CloseRequested)),
-        WindowEvent::CursorMoved { position, .. } => {
+        WindowEvent::PointerMoved {
+            position,
+            source: winit::event::PointerSource::Touch { finger_id, .. },
+            ..
+        } => {
+            let position = position.to_logical::<f64>(scale_factor);
+            Some(Event::Touch(touch::Event::FingerMoved {
+                id: touch::Finger(finger_id.into_raw() as u64),
+                position: Point::new(position.x as f32, position.y as f32),
+            }))
+        }
+        WindowEvent::PointerMoved { position, .. } => {
             let position = position.to_logical::<f64>(scale_factor);
 
             Some(Event::Mouse(mouse::Event::CursorMoved {
                 position: Point::new(position.x as f32, position.y as f32),
             }))
-        },
-        WindowEvent::CursorEntered { .. } => Some(Event::Mouse(mouse::Event::CursorEntered)),
-        WindowEvent::CursorLeft { .. } => Some(Event::Mouse(mouse::Event::CursorLeft)),
-        WindowEvent::MouseInput { button, state, .. } => {
+        }
+        WindowEvent::PointerEntered {
+            kind: winit::event::PointerKind::Touch(_),
+            ..
+        } => None,
+        WindowEvent::PointerEntered {
+            kind: winit::event::PointerKind::Mouse,
+            ..
+        } => Some(Event::Mouse(mouse::Event::CursorEntered)),
+        WindowEvent::PointerEntered { .. } => None,
+        // A normal touch release is followed by PointerLeft too; translating both would
+        // produce duplicate lift events. Touch cancellation is not distinguishable here.
+        WindowEvent::PointerLeft {
+            kind: winit::event::PointerKind::Touch(_),
+            ..
+        } => None,
+        WindowEvent::PointerLeft {
+            kind: winit::event::PointerKind::Mouse,
+            ..
+        } => Some(Event::Mouse(mouse::Event::CursorLeft)),
+        WindowEvent::PointerLeft { .. } => None,
+        WindowEvent::PointerButton {
+            button: winit::event::ButtonSource::Touch { finger_id, .. },
+            state,
+            position,
+            ..
+        } => {
+            let position = position.to_logical::<f64>(scale_factor);
+            let id = touch::Finger(finger_id.into_raw() as u64);
+            let position = Point::new(position.x as f32, position.y as f32);
+            match state {
+                winit::event::ElementState::Pressed => {
+                    Some(Event::Touch(touch::Event::FingerPressed { id, position }))
+                }
+                winit::event::ElementState::Released => {
+                    Some(Event::Touch(touch::Event::FingerLifted { id, position }))
+                }
+            }
+        }
+        WindowEvent::PointerButton {
+            button: winit::event::ButtonSource::Mouse(button),
+            state,
+            ..
+        } => {
             let button = mouse_button(*button)?;
 
             Some(Event::Mouse(match state {
                 winit::event::ElementState::Pressed => mouse::Event::ButtonPressed(button),
                 winit::event::ElementState::Released => mouse::Event::ButtonReleased(button),
             }))
-        },
+        }
         WindowEvent::MouseWheel { delta, .. } => match delta {
             winit::event::MouseScrollDelta::LineDelta(delta_x, delta_y) => {
                 Some(Event::Mouse(mouse::Event::WheelScrolled {
@@ -60,7 +400,7 @@ pub fn window_event(
                         y: *delta_y,
                     },
                 }))
-            },
+            }
             winit::event::MouseScrollDelta::PixelDelta(position) => {
                 Some(Event::Mouse(mouse::Event::WheelScrolled {
                     delta: mouse::ScrollDelta::Pixels {
@@ -68,7 +408,8 @@ pub fn window_event(
                         y: position.y as f32,
                     },
                 }))
-            },
+            }
+            _ => None,
         },
         WindowEvent::KeyboardInput { event, .. } => Some(Event::Keyboard({
             let modifiers = self::modifiers(modifiers);
@@ -109,14 +450,8 @@ pub fn window_event(
         } else {
             window::Event::Unfocused
         })),
-        WindowEvent::HoveredFile(path) => {
-            Some(Event::Window(window::Event::FileHovered(path.clone())))
-        },
-        WindowEvent::DroppedFile(path) => {
-            Some(Event::Window(window::Event::FileDropped(path.clone())))
-        },
-        WindowEvent::HoveredFileCancelled => Some(Event::Window(window::Event::FilesHoveredLeft)),
-        WindowEvent::Touch(touch) => Some(Event::Touch(touch_event(*touch, scale_factor))),
+        // Winit 0.31 exposes drag data through DataTransferId and asynchronous fetch requests;
+        // it no longer sends paths in the drag-enter/drop window event itself.
         _ => None,
     }
 }
@@ -127,8 +462,7 @@ pub fn mouse_button(mouse_button: winit::event::MouseButton) -> Option<mouse::Bu
         winit::event::MouseButton::Left => mouse::Button::Left,
         winit::event::MouseButton::Right => mouse::Button::Right,
         winit::event::MouseButton::Middle => mouse::Button::Middle,
-        winit::event::MouseButton::Other(other) => mouse::Button::Other(other as u8),
-        winit::event::MouseButton::Back | winit::event::MouseButton::Forward => return None,
+        button => mouse::Button::Other(button as u8),
     })
 }
 
@@ -139,24 +473,7 @@ pub fn modifiers(modifiers: winit::keyboard::ModifiersState) -> keyboard::Modifi
         shift: modifiers.shift_key(),
         control: modifiers.control_key(),
         alt: modifiers.alt_key(),
-        logo: modifiers.super_key(),
-    }
-}
-
-/// Converts a `Touch` from [`winit`] to an [`iced`] touch event.
-pub fn touch_event(touch: winit::event::Touch, scale_factor: f64) -> touch::Event {
-    let id = touch::Finger(touch.id);
-    let position = {
-        let location = touch.location.to_logical::<f64>(scale_factor);
-
-        Point::new(location.x as f32, location.y as f32)
-    };
-
-    match touch.phase {
-        winit::event::TouchPhase::Started => touch::Event::FingerPressed { id, position },
-        winit::event::TouchPhase::Moved => touch::Event::FingerMoved { id, position },
-        winit::event::TouchPhase::Ended => touch::Event::FingerLifted { id, position },
-        winit::event::TouchPhase::Cancelled => touch::Event::FingerLost { id, position },
+        logo: modifiers.meta_key(),
     }
 }
 
@@ -205,7 +522,6 @@ pub fn key_code(key: &winit::keyboard::Key) -> Option<keyboard::KeyCode> {
             NamedKey::ArrowDown => KeyCode::Down,
             NamedKey::Backspace => KeyCode::Backspace,
             NamedKey::Enter => KeyCode::Enter,
-            NamedKey::Space => KeyCode::Space,
             NamedKey::Compose => KeyCode::Compose,
             NamedKey::NumLock => KeyCode::Numlock,
             NamedKey::Convert => KeyCode::Convert,

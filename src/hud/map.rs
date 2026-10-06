@@ -216,11 +216,11 @@ impl From<&KeyMouse> for ConrodMouseButton {
             KeyMouse::Mouse(MouseButton::Left) => ConrodMouseButton::Left,
             KeyMouse::Mouse(MouseButton::Right) => ConrodMouseButton::Right,
             KeyMouse::Mouse(MouseButton::Middle) => ConrodMouseButton::Middle,
-            KeyMouse::Mouse(MouseButton::Other(0)) => ConrodMouseButton::X1,
-            KeyMouse::Mouse(MouseButton::Other(1)) => ConrodMouseButton::X2,
-            KeyMouse::Mouse(MouseButton::Other(2)) => ConrodMouseButton::Button6,
-            KeyMouse::Mouse(MouseButton::Other(3)) => ConrodMouseButton::Button7,
-            KeyMouse::Mouse(MouseButton::Other(4)) => ConrodMouseButton::Button8,
+            KeyMouse::Mouse(MouseButton::Back) => ConrodMouseButton::X1,
+            KeyMouse::Mouse(MouseButton::Forward) => ConrodMouseButton::X2,
+            KeyMouse::Mouse(MouseButton::Button6) => ConrodMouseButton::Button6,
+            KeyMouse::Mouse(MouseButton::Button7) => ConrodMouseButton::Button7,
+            KeyMouse::Mouse(MouseButton::Button8) => ConrodMouseButton::Button8,
             _ => conrod_core::input::MouseButton::Unknown,
         }
     }

@@ -17,7 +17,7 @@ type Error = Box<dyn std::error::Error>;
 
 pub(crate) struct Renderer {
     instance: wgpu::Instance,
-    window: Arc<Window>,
+    window: Arc<dyn Window>,
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -27,7 +27,7 @@ pub(crate) struct Renderer {
 
 impl Renderer {
     pub(crate) fn new(
-        window: Arc<Window>,
+        window: Arc<dyn Window>,
         display: OwnedDisplayHandle,
         runtime: &tokio::runtime::Runtime,
     ) -> Result<Self, Error> {
@@ -49,7 +49,7 @@ impl Renderer {
             }))?;
         tracing::info!(adapter = ?adapter.get_info(),
             "Minimal wgpu: no optional device features, 1 pipeline, 1 uniform, no sampled textures");
-        let size = window.inner_size();
+        let size = window.surface_size();
         let mut config = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))
             .ok_or("No compatible surface configuration")?;
@@ -79,7 +79,7 @@ impl Renderer {
         yaw: f32,
         pitch: f32,
     ) -> Result<(), Error> {
-        let size = self.window.inner_size();
+        let size = self.window.surface_size();
         if size.width == 0 || size.height == 0 {
             return Ok(());
         }

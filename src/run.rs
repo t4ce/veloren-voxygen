@@ -1,3 +1,5 @@
+mod touch;
+
 use crate::{
     Direction, GlobalState, PlayState, PlayStateResult,
     menu::main::MainMenuState,
@@ -5,116 +7,145 @@ use crate::{
     ui,
     window::{Event, EventLoop},
 };
-use common_base::{prof_span, span};
+use common_base::span;
 use core::{mem, time::Duration};
 use tracing::debug;
-use winit::event_loop::ActiveEventLoop;
+use winit::{
+    application::ApplicationHandler,
+    event::{DeviceEvent, DeviceId, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow},
+    window::WindowId,
+};
 
-pub fn run(
-    mut global_state: GlobalState,
-    event_loop: EventLoop,
-) -> Result<(), winit::error::EventLoopError> {
-    // Set up the initial play state.
-    let mut states: Vec<Box<dyn PlayState>> = vec![Box::new(MainMenuState::new(&mut global_state))];
-    states.last_mut().map(|current_state| {
-        current_state.enter(&mut global_state, Direction::Forwards);
-        let current_state = current_state.name();
-        debug!(?current_state, "Started game with state");
-    });
+/// Construct GPU resources only once Winit permits surface creation.
+pub fn run<F>(event_loop: EventLoop, initialize: F) -> Result<(), winit::error::EventLoopError>
+where
+    F: FnOnce(&dyn ActiveEventLoop) -> GlobalState + 'static,
+{
+    event_loop.run_app(App {
+        initialize: Some(initialize),
+        global_state: None,
+        states: Vec::new(),
+        file_drop: ui::ice::FileDropAdapter::default(),
+        touches: touch::TouchTracker::default(),
+    })
+}
 
-    // Used to ignore every other `MainEventsCleared`
-    // This is a workaround for a bug on macos in which mouse motion events are only
-    // reported every other cycle of the event loop
-    // See: https://github.com/rust-windowing/winit/issues/1418
-    let mut polled_twice = false;
+struct App<F> {
+    initialize: Option<F>,
+    global_state: Option<GlobalState>,
+    states: Vec<Box<dyn PlayState>>,
+    file_drop: ui::ice::FileDropAdapter,
+    touches: touch::TouchTracker,
+}
 
-    let mut poll_span = None;
-    let mut event_span = None;
+impl<F: FnOnce(&dyn ActiveEventLoop) -> GlobalState> ApplicationHandler for App<F> {
+    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
+        let Some(initialize) = self.initialize.take() else {
+            return;
+        };
+        let mut global_state = initialize(event_loop);
+        let mut state = Box::new(MainMenuState::new(&mut global_state));
+        state.enter(&mut global_state, Direction::Forwards);
+        debug!(current_state = state.name(), "Started game with state");
+        self.states.push(state);
+        self.global_state = Some(global_state);
+        // Voxy applies its own FPS cap in the game tick.
+        event_loop.set_control_flow(ControlFlow::Poll);
+    }
 
-    #[expect(deprecated)]
-    event_loop.run(move |event, event_loop| {
-        // Continuously run loop since we handle sleeping
-        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-
-        // Don't pass resize events to the ui, `Window` is responsible for:
-        // - deduplicating them
-        // - generating resize events for the ui
-        // - ensuring consistent sizes are passed to the ui and to the renderer
-        if !matches!(&event, winit::event::Event::WindowEvent {
-            event: winit::event::WindowEvent::Resized(_),
-            ..
-        }) {
-            let window = &mut global_state.window;
-            // Get events for the ui.
+    fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        span!(_guard, "Handle WindowEvent");
+        let Some(global_state) = self.global_state.as_mut() else {
+            return;
+        };
+        let window = &mut global_state.window;
+        if id != window.window().id() {
+            return;
+        }
+        for (finger, position) in self.touches.handle(&event) {
+            let scale = window.scale_factor();
+            let logical = position.to_logical::<f64>(scale);
+            let size = window.window().surface_size().to_logical::<f64>(scale);
+            window.send_event(Event::Ui(ui::Event(conrod_core::event::Input::Touch(
+                conrod_core::input::Touch {
+                    phase: conrod_core::input::touch::Phase::Cancel,
+                    id: conrod_core::input::touch::Id::new(finger.into_raw() as u64),
+                    xy: [
+                        logical.x - size.width / 2.0,
+                        -(logical.y - size.height / 2.0),
+                    ],
+                },
+            ))));
+            window.send_event(Event::IcedUi(iced::Event::Touch(
+                iced::touch::Event::FingerLost {
+                    id: iced::touch::Finger(finger.into_raw() as u64),
+                    position: iced::Point::new(logical.x as f32, logical.y as f32),
+                },
+            )));
+        }
+        for event in self.file_drop.handle(&event, event_loop) {
+            window.send_event(Event::IcedUi(event));
+        }
+        // The window deduplicates resizes and emits the final UI dimensions.
+        if !matches!(event, WindowEvent::SurfaceResized(_)) {
             if let Some(event) = ui::Event::try_from(&event, window.window(), window.modifiers()) {
                 window.send_event(Event::Ui(event));
             }
-            // iced ui events
-            if let winit::event::Event::WindowEvent { event, .. } = &event
-                && let Some(event) =
-                    ui::ice::window_event(event, window.scale_factor(), window.modifiers())
+            if let Some(event) =
+                ui::ice::window_event(&event, window.scale_factor(), window.modifiers())
             {
                 window.send_event(Event::IcedUi(event));
             }
         }
-
-        match event {
-            winit::event::Event::NewEvents(_) => {
-                event_span.take();
-                prof_span!(span, "Process Events");
-                event_span = Some(span);
-            },
-            winit::event::Event::AboutToWait => {
-                event_span.take();
-                poll_span.take();
-                if polled_twice {
-                    handle_main_events_cleared(&mut states, event_loop, &mut global_state);
-                }
-                prof_span!(span, "Poll Winit");
-                poll_span = Some(span);
-                polled_twice = !polled_twice;
-            },
-            winit::event::Event::WindowEvent { event, .. } => {
-                span!(_guard, "Handle WindowEvent");
-
-                if let winit::event::WindowEvent::Focused(focused) = event {
-                    global_state.audio.set_master_volume(if focused {
-                        global_state.settings.audio.master_volume.get_checked()
-                    } else {
-                        global_state
-                            .settings
-                            .audio
-                            .inactive_master_volume_perc
-                            .get_checked()
-                            * global_state.settings.audio.master_volume.get_checked()
-                    });
-                }
-
-                global_state
-                    .window
-                    .handle_window_event(event, &mut global_state.settings)
-            },
-            winit::event::Event::DeviceEvent { event, .. } => {
-                span!(_guard, "Handle DeviceEvent");
-                global_state.window.handle_device_event(event)
-            },
-            winit::event::Event::LoopExiting => {
-                // Save any unsaved changes to settings and profile
+        if let WindowEvent::Focused(focused) = event {
+            global_state.audio.set_master_volume(if focused {
+                global_state.settings.audio.master_volume.get_checked()
+            } else {
                 global_state
                     .settings
-                    .save_to_file_warn(&global_state.config_dir);
-                global_state
-                    .profile
-                    .save_to_file_warn(&global_state.config_dir);
-            },
-            _ => {},
+                    .audio
+                    .inactive_master_volume_perc
+                    .get_checked()
+                    * global_state.settings.audio.master_volume.get_checked()
+            });
         }
-    })
+        window.handle_window_event(event, &mut global_state.settings);
+    }
+
+    fn device_event(&mut self, _: &dyn ActiveEventLoop, _: Option<DeviceId>, event: DeviceEvent) {
+        span!(_guard, "Handle DeviceEvent");
+        if let Some(global_state) = self.global_state.as_mut() {
+            global_state.window.handle_device_event(event);
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
+        if let Some(global_state) = self.global_state.as_mut() {
+            for event in self.file_drop.poll() {
+                global_state.window.send_event(Event::IcedUi(event));
+            }
+            handle_main_events_cleared(&mut self.states, event_loop, global_state);
+        }
+    }
+}
+
+impl<F> Drop for App<F> {
+    fn drop(&mut self) {
+        if let Some(global_state) = self.global_state.as_mut() {
+            global_state
+                .settings
+                .save_to_file_warn(&global_state.config_dir);
+            global_state
+                .profile
+                .save_to_file_warn(&global_state.config_dir);
+        }
+    }
 }
 
 fn handle_main_events_cleared(
     states: &mut Vec<Box<dyn PlayState>>,
-    event_loop: &ActiveEventLoop,
+    event_loop: &dyn ActiveEventLoop,
     global_state: &mut GlobalState,
 ) {
     span!(guard, "Handle MainEventsCleared");
@@ -143,7 +174,7 @@ fn handle_main_events_cleared(
             PlayStateResult::Continue => {
                 exit = false;
                 break;
-            },
+            }
             PlayStateResult::Shutdown => {
                 debug!("Shutting down all states...");
                 while states.last().is_some() {
@@ -152,7 +183,7 @@ fn handle_main_events_cleared(
                         global_state.on_play_state_changed();
                     });
                 }
-            },
+            }
             PlayStateResult::Pop => {
                 states.pop().map(|old_state| {
                     debug!("Popped state '{}'.", old_state.name());
@@ -161,13 +192,13 @@ fn handle_main_events_cleared(
                 states.last_mut().map(|new_state| {
                     new_state.enter(global_state, Direction::Backwards);
                 });
-            },
+            }
             PlayStateResult::Push(mut new_state) => {
                 new_state.enter(global_state, Direction::Forwards);
                 debug!("Pushed state '{}'.", new_state.name());
                 states.push(new_state);
                 global_state.on_play_state_changed();
-            },
+            }
             PlayStateResult::Switch(mut new_state) => {
                 new_state.enter(global_state, Direction::Forwards);
                 states.last_mut().map(|old_state| {
@@ -179,7 +210,7 @@ fn handle_main_events_cleared(
                     mem::swap(old_state, &mut new_state);
                     global_state.on_play_state_changed();
                 });
-            },
+            }
         }
     }
 
@@ -191,14 +222,10 @@ fn handle_main_events_cleared(
 
     drop(guard);
 
-    
-
     if let Some(last) = states.last_mut() {
         capped_fps = last.capped_fps();
 
         span!(guard, "Render");
-
-        
 
         // Render the screen using the global renderer
         if let Some(mut drawer) = global_state
@@ -212,11 +239,7 @@ fn handle_main_events_cleared(
             }
 
             last.render(&mut drawer, &global_state.settings);
-
-            
         };
-
-        
 
         if global_state.clear_shadows_next_frame {
             global_state.clear_shadows_next_frame = false;

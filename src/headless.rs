@@ -228,9 +228,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     ));
     #[cfg(not(target_os = "trueos"))]
     {
-        let event_loop = EventLoop::new()?;
+        use winit::event_loop::run_on_demand::EventLoopExtRunOnDemand;
+        let mut event_loop = EventLoop::new()?;
         let mut app = app;
-        event_loop.run_app(&mut app)?;
+        event_loop.run_app_on_demand(&mut app)?;
         if let Some(error) = app.render_error {
             return Err(error.into());
         }
@@ -248,7 +249,7 @@ struct App {
     #[cfg(not(target_os = "trueos"))]
     render_error: Option<String>,
     #[cfg(not(target_os = "trueos"))]
-    window: Option<Arc<Window>>,
+    window: Option<Arc<dyn Window>>,
     #[cfg(target_os = "trueos")]
     window: Option<trueos::ui4_scene::Frame>,
     password: String,
@@ -693,12 +694,12 @@ impl App {
 
 #[cfg(not(target_os = "trueos"))]
 impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
         if self.window.is_none() {
             match event_loop.create_window(
-                Window::default_attributes()
+                winit::window::WindowAttributes::default()
                     .with_title("Voxygen headless — password input")
-                    .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720)),
+                    .with_surface_size(winit::dpi::PhysicalSize::new(1280, 720)),
             ) {
                 Ok(window) => {
                     if let Some(monitor) = window.current_monitor() {
@@ -706,13 +707,13 @@ impl ApplicationHandler for App {
                         let (x, y, width, height) = scene::placement(size.width, size.height);
                         let origin = monitor.position();
                         let _ =
-                            window.request_inner_size(winit::dpi::PhysicalSize::new(width, height));
+                            window.request_surface_size(winit::dpi::PhysicalSize::new(width, height).into());
                         window.set_outer_position(winit::dpi::PhysicalPosition::new(
                             origin.x + x,
                             origin.y + y,
-                        ));
+                        ).into());
                     }
-                    let window = Arc::new(window);
+                    let window: Arc<dyn Window> = Arc::from(window);
                     match render::Renderer::new(
                         Arc::clone(&window),
                         event_loop.owned_display_handle(),
@@ -740,7 +741,7 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, id: WindowId, event: WindowEvent) {
         if self.window.as_ref().is_none_or(|window| window.id() != id) {
             return;
         }
@@ -756,7 +757,7 @@ impl ApplicationHandler for App {
                     }
                 }
             }
-            WindowEvent::Resized(_) => {
+            WindowEvent::SurfaceResized(_) => {
                 self.window.as_ref().expect("input window").request_redraw();
             }
             WindowEvent::CloseRequested => event_loop.exit(),
@@ -791,7 +792,7 @@ impl ApplicationHandler for App {
                     self.key(key, pressed, event.repeat);
                 }
             }
-            WindowEvent::MouseInput { state, button, .. } if self.world_joined => {
+            WindowEvent::PointerButton { state, button: winit::event::ButtonSource::Mouse(button), .. } if self.world_joined => {
                 let pressed = state == ElementState::Pressed;
                 if !self.captured && pressed {
                     self.capture(true);
@@ -814,15 +815,15 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn device_event(&mut self, _: &ActiveEventLoop, _: winit::event::DeviceId, event: DeviceEvent) {
+    fn device_event(&mut self, _: &dyn ActiveEventLoop, _: Option<winit::event::DeviceId>, event: DeviceEvent) {
         if self.captured
-            && let DeviceEvent::MouseMotion { delta } = event
+            && let DeviceEvent::PointerMotion { delta } = event
         {
             self.input.mouse(delta.0, delta.1);
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
         let now = Instant::now();
         if now >= self.next_tick {
             self.tick();

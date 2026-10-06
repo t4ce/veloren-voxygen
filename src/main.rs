@@ -182,55 +182,59 @@ fn main() {
 
     // Create window
     use veloren_voxygen::{error::Error, render::RenderError};
-    let (mut window, event_loop) = match Window::new(&settings, &tokio_runtime) {
-        Ok(ok) => ok,
-        // Custom panic message when a graphics backend could not be found
-        Err(Error::RenderError(RenderError::CouldNotFindAdapter)) => {
-            #[cfg(target_os = "windows")]
-            const POTENTIAL_FIX: &str =
-                " Updating the graphics drivers on this system may resolve this issue.";
-            #[cfg(target_os = "macos")]
-            const POTENTIAL_FIX: &str = "";
-            #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-            const POTENTIAL_FIX: &str =
-                " Installing or updating vulkan drivers may resolve this issue.";
+    let event_loop = veloren_voxygen::window::EventLoop::new().unwrap();
+    run::run(event_loop, move |event_loop| {
+        let mut window = match Window::new(&settings, &tokio_runtime, event_loop) {
+            Ok(ok) => ok,
+            // Custom panic message when a graphics backend could not be found
+            Err(Error::RenderError(RenderError::CouldNotFindAdapter)) => {
+                #[cfg(target_os = "windows")]
+                const POTENTIAL_FIX: &str =
+                    " Updating the graphics drivers on this system may resolve this issue.";
+                #[cfg(target_os = "macos")]
+                const POTENTIAL_FIX: &str = "";
+                #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+                const POTENTIAL_FIX: &str =
+                    " Installing or updating vulkan drivers may resolve this issue.";
 
-            panic!(
-                "Failed to select a rendering backend! No compatible backends were found. We \
-                 currently support vulkan, metal, dx12, and opengl.{} If the issue persists, \
-                 please include the operating system and GPU details in your bug report to help \
-                 us identify the cause.",
-                POTENTIAL_FIX
-            );
-        },
-        Err(error) => panic!("Failed to create window!: {:?}", error),
-    };
+                panic!(
+                    "Failed to select a rendering backend! No compatible backends were found. We \
+                     currently support vulkan, metal, dx12, and opengl.{} If the issue persists, \
+                     please include the operating system and GPU details in your bug report to help \
+                     us identify the cause.",
+                    POTENTIAL_FIX
+                );
+            },
+            Err(error) => panic!("Failed to create window!: {:?}", error),
+        };
 
-    let clipboard = veloren_voxygen::ui::ice::Clipboard::connect(window.window());
+        let clipboard = veloren_voxygen::ui::ice::Clipboard::connect(window.window());
 
-    let lazy_init = SpriteRenderContext::new(window.renderer_mut());
+        let lazy_init = SpriteRenderContext::new(window.renderer_mut());
 
-    let global_state = GlobalState {
-        userdata_dir,
-        config_dir,
-        audio,
-        profile,
-        window,
-        tokio_runtime,
+        let global_state = GlobalState {
+            userdata_dir,
+            config_dir,
+            audio,
+            profile,
+            window,
+            tokio_runtime,
 
-        lazy_init,
-        clock: Clock::new(core::time::Duration::from_secs_f64(
-            1.0 / get_fps(settings.graphics.max_fps) as f64,
-        )),
-        settings,
-        info_message: None,
-        i18n,
-        clipboard,
-        clear_shadows_next_frame: false,
-        args: args.clone(),
-    };
+            lazy_init,
+            clock: Clock::new(core::time::Duration::from_secs_f64(
+                1.0 / get_fps(settings.graphics.max_fps) as f64,
+            )),
+            settings,
+            info_message: None,
+            i18n,
+            clipboard,
+            clear_shadows_next_frame: false,
+            args: args.clone(),
+        };
 
-    run::run(global_state, event_loop).unwrap();
+        global_state
+    })
+    .unwrap();
 }
 
 #[cfg(feature = "headless")]
