@@ -98,6 +98,9 @@ impl ServerInfoState {
         // TODO: don't add default font twice
         let font = load_font(&i18n.fonts().get("cyri").unwrap().asset_key);
 
+        #[cfg(target_os = "trueos")]
+        let mut ui = Ui::new_native(global_state.window.size(), global_state.window.scale_factor());
+        #[cfg(not(target_os = "trueos"))]
         let mut ui = Ui::new(
             &mut global_state.window,
             font,
@@ -190,6 +193,25 @@ impl PlayState for ServerInfoState {
 
         // Maintain the UI.
         let view = self.controls.view();
+        #[cfg(target_os = "trueos")]
+        let messages = {
+            let size = global_state.window.size();
+            match self.ui.maintain_native(view, size, &mut global_state.clipboard) {
+                Ok((messages, plan)) => {
+                    if let Some(plan) = plan {
+                        if let Err(error) = global_state.window.present_menu(size, plan) {
+                            tracing::error!(%error, "Server rules presentation failed");
+                        }
+                    }
+                    messages
+                }
+                Err(error) => {
+                    tracing::error!(%error, "Server rules layout failed");
+                    Vec::new()
+                }
+            }
+        };
+        #[cfg(not(target_os = "trueos"))]
         let (messages, _) = self.ui.maintain(
             view,
             global_state.window.renderer_mut(),
@@ -223,6 +245,8 @@ impl PlayState for ServerInfoState {
     fn name(&self) -> &'static str { "Server Info" }
 
     fn capped_fps(&self) -> bool { true }
+
+    fn uses_native_ui(&self) -> bool { cfg!(target_os = "trueos") }
 
     fn globals_bind_group(&self) -> &GlobalsBindGroup { self.scene.global_bind_group() }
 

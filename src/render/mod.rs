@@ -1,5 +1,9 @@
 #[cfg(target_os = "trueos")]
 mod trueos_scene;
+#[cfg(target_os = "trueos")]
+mod trueos_host;
+#[cfg(target_os = "trueos")]
+mod trueos_lines;
 pub mod bound;
 mod buffer;
 pub mod consts;
