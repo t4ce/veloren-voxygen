@@ -743,6 +743,8 @@ impl Client {
         };
 
         init_stage_update(ClientInitStage::StartingClient);
+        #[cfg(target_os = "trueos")]
+        let client_cpu_runtime = Arc::clone(&runtime);
         // Spawn in a blocking thread (leaving the network thread free).  This is mostly
         // useful for bots.
         let mut task = tokio::task::spawn_blocking(move || {
@@ -756,7 +758,12 @@ impl Client {
             let sea_level = world_map.default_chunk.get_min_z() as f32;
 
             // Initialize `State`
+            #[cfg(not(target_os = "trueos"))]
             let pools = State::pools(GameMode::Client);
+            // Reuse the client's live runtime instead of creating another
+            // CPU worker pool during preparation. Client owns that runtime.
+            #[cfg(target_os = "trueos")]
+            let pools = State::pools_on(client_cpu_runtime);
             let mut state = State::client(
                 pools,
                 map_size_lg,

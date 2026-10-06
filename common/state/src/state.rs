@@ -126,6 +126,8 @@ pub struct State {
     // Avoid lifetime annotation by storing a thread pool instead of the whole dispatcher
     thread_pool: Arc<ThreadPool>,
     dispatcher: SendDispatcher<'static>,
+    #[cfg(target_os = "trueos")]
+    client_bringup_dispatch: bool,
 }
 
 pub type Pools = Arc<ThreadPool>;
@@ -202,6 +204,8 @@ impl State {
             ),
             thread_pool: pools,
             dispatcher,
+            #[cfg(target_os = "trueos")]
+            client_bringup_dispatch: matches!(game_mode, GameMode::Client),
         }
     }
 
@@ -798,11 +802,24 @@ impl State {
             (dt.as_secs_f32() * time_scale as f32).min(MAX_DELTA_TIME);
 
         section_span!(guard, "run systems");
-        // This dispatches all the systems in parallel.
+        // TRUEOS client bringup keeps every system and dependency stage, but
+        // avoids concurrent system groups on the application's carriers.
+        // Install the pool so a system's own parallel work still uses it.
         #[cfg(target_os = "trueos")]
         if trace_first_tick {
             eprintln!("velosrv: first-tick stage=ecs-dispatch-enter");
         }
+        #[cfg(target_os = "trueos")]
+        if self.client_bringup_dispatch {
+            if trace_first_tick {
+                eprintln!("voxy: first-tick dispatch=sequential-client");
+            }
+            self.thread_pool
+                .install(|| self.dispatcher.dispatch_seq(&self.ecs));
+        } else {
+            self.dispatcher.dispatch(&self.ecs);
+        }
+        #[cfg(not(target_os = "trueos"))]
         self.dispatcher.dispatch(&self.ecs);
         #[cfg(target_os = "trueos")]
         if trace_first_tick {

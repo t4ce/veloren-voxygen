@@ -58,18 +58,11 @@ impl InitState {
     }
 }
 
-#[cfg(target_os = "trueos")]
-struct SceneLogin {
-    username: String,
-    password: String,
-    connection_args: ConnectionArgs,
-}
-
 pub struct MainMenuState {
     main_menu_ui: MainMenuUi,
     init: InitState,
     #[cfg(target_os = "trueos")]
-    pending_login: scene_login::DeferredLogin<SceneLogin>,
+    pending_scene: scene_login::DeferredScene<()>,
     scene: Option<Scene>,
 }
 
@@ -80,7 +73,7 @@ impl MainMenuState {
             main_menu_ui: MainMenuUi::new(global_state),
             init: InitState::None,
             #[cfg(target_os = "trueos")]
-            pending_login: scene_login::DeferredLogin::default(),
+            pending_scene: scene_login::DeferredScene::default(),
             #[cfg(target_os = "trueos")]
             scene: None,
             #[cfg(not(target_os = "trueos"))]
@@ -185,27 +178,10 @@ impl PlayState for MainMenuState {
                             self.main_menu_ui.cancel_connection();
                             continue;
                         }
-                        if matches!(self.init, InitState::None) && !self.pending_login.is_pending()
-                        {
-                            match global_state.window.start_scene_renderer(
-                                &global_state.tokio_runtime,
-                                global_state.settings.graphics.render_mode.clone(),
-                            ) {
-                                Ok(()) => {
-                                    self.pending_login.begin(SceneLogin {
-                                        username,
-                                        password,
-                                        connection_args,
-                                    });
-                                }
-                                Err(error) => {
-                                    global_state.info_message = Some(error);
-                                    self.main_menu_ui.cancel_connection();
-                                }
-                            }
+                        if !matches!(self.init, InitState::None) {
+                            continue;
                         }
                     }
-                    #[cfg(not(target_os = "trueos"))]
                     attempt_login(
                         &mut global_state.info_message,
                         username,
@@ -231,7 +207,7 @@ impl PlayState for MainMenuState {
                     self.main_menu_ui.cancel_connection();
                     #[cfg(target_os = "trueos")]
                     {
-                        self.pending_login.cancel();
+                        self.pending_scene.cancel();
                         global_state.window.resume_menu();
                         self.main_menu_ui.invalidate_native();
                     }
@@ -284,56 +260,27 @@ impl PlayState for MainMenuState {
                 .update_stage(DetailedInitializationStage::Client(client_stage_update));
         }
 
-        // Graphics startup is a login stage, before ClientInit can open a socket.
-        #[cfg(target_os = "trueos")]
-        match self
-            .pending_login
-            .poll(|| global_state.window.poll_scene_renderer())
-        {
-            scene_login::Status::Idle => {}
-            scene_login::Status::Waiting(done, total) => {
-                if done == 0 && total == 0 {
-                    self.main_menu_ui.update_stage(DetailedInitializationStage::StartingGraphics(
-                        crate::render::scene_startup_label().into()));
-                } else {
-                    self.main_menu_ui.update_stage(DetailedInitializationStage::CreatingRenderPipeline(done, total));
-                }
-            }
-            scene_login::Status::Ready(SceneLogin {
-                username,
-                password,
-                connection_args,
-            }) => {
-                attempt_login(
-                    &mut global_state.info_message,
-                    username,
-                    password,
-                    connection_args,
-                    &mut self.init,
-                    &global_state.tokio_runtime,
-                    global_state
-                        .settings
-                        .language
-                        .send_to_server
-                        .then_some(global_state.settings.language.selected_language.clone()),
-                    &global_state.i18n,
-                    &global_state.config_dir,
-                    global_state.args.client_type.0,
-                );
-            }
-            scene_login::Status::Failed(error) => {
-                tracing::error!(%error, "Scene startup failed before server connection");
-                self.main_menu_ui.cancel_connection();
-                global_state.info_message = Some(error);
-            }
-        }
-
         // Poll client creation.
         match self.init.client().and_then(|init| init.poll()) {
             Some(InitMsg::Done(Ok(mut client))) => {
                 // load local plugins needed by the server
                 // Register voxygen components / resources
                 crate::ecs::init(client.state_mut().ecs_mut());
+                #[cfg(target_os = "trueos")]
+                {
+                    // ClientInit has authenticated and received the server's
+                    // registration acceptance. Only now admit scene graphics.
+                    if let Err(error) = global_state.window.start_scene_renderer(
+                        &global_state.tokio_runtime,
+                        global_state.settings.graphics.render_mode.clone(),
+                    ) {
+                        self.init = InitState::None;
+                        self.main_menu_ui.cancel_connection();
+                        global_state.info_message = Some(error);
+                        return PlayStateResult::Continue;
+                    }
+                    self.pending_scene.begin(());
+                }
                 self.init =
                     InitState::Pipeline(Box::new(client), hud::PersistedHudState::default());
             }
@@ -421,8 +368,42 @@ impl PlayState for MainMenuState {
             }
         }
 
-        // Poll renderer pipeline creation
+        #[cfg(target_os = "trueos")]
+        if !matches!(self.init, InitState::Pipeline(..)) {
+            self.pending_scene.cancel();
+        }
+
+        // The accepted client stays alive while scene graphics become ready.
         if let InitState::Pipeline(..) = &self.init {
+            #[cfg(target_os = "trueos")]
+            match self
+                .pending_scene
+                .poll(|| global_state.window.poll_scene_renderer())
+            {
+                scene_login::Status::Waiting(done, total) => {
+                    if done == 0 && total == 0 {
+                        self.main_menu_ui.update_stage(
+                            DetailedInitializationStage::StartingGraphics(
+                                crate::render::scene_startup_label().into(),
+                            ),
+                        );
+                    } else {
+                        self.main_menu_ui.update_stage(
+                            DetailedInitializationStage::CreatingRenderPipeline(done, total),
+                        );
+                    }
+                    return PlayStateResult::Continue;
+                }
+                scene_login::Status::Failed(error) => {
+                    tracing::error!(%error, "Scene startup failed after authentication");
+                    self.init = InitState::None;
+                    self.main_menu_ui.cancel_connection();
+                    global_state.info_message = Some(error);
+                    return PlayStateResult::Continue;
+                }
+                scene_login::Status::Ready(()) | scene_login::Status::Idle => {}
+            }
+
             if let Some((done, total)) = &global_state.window.renderer().pipeline_creation_status()
             {
                 self.main_menu_ui.update_stage(

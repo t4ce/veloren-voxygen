@@ -269,6 +269,8 @@ where
 {
     pub own: Box<T>,
     pub cpu_stats: CpuTimeline,
+    #[cfg(target_os = "trueos")]
+    traced_first_run: bool,
 }
 
 impl<'a, T> specs::System<'a> for Job<T>
@@ -278,6 +280,13 @@ where
     type SystemData = (T::SystemData, ReadExpect<'a, SysMetrics>);
 
     fn run(&mut self, data: Self::SystemData) {
+        #[cfg(target_os = "trueos")]
+        let trace_first_run = !self.traced_first_run;
+        #[cfg(target_os = "trueos")]
+        if trace_first_run {
+            self.traced_first_run = true;
+            eprintln!("voxy: ecs-first-run system={} stage=enter", T::sys_name());
+        }
         common_base::span!(_guard, "run", &format!("{}::Sys::run", T::NAME));
         self.cpu_stats.reset();
         T::run(self, data.0);
@@ -291,6 +300,10 @@ where
             .lock()
             .unwrap()
             .insert(T::NAME.to_string(), self.cpu_stats.clone());
+        #[cfg(target_os = "trueos")]
+        if trace_first_run {
+            eprintln!("voxy: ecs-first-run system={} stage=complete", T::sys_name());
+        }
     }
 }
 
@@ -302,6 +315,8 @@ where
         Self {
             own: Box::<T>::default(),
             cpu_stats: CpuTimeline::default(),
+            #[cfg(target_os = "trueos")]
+            traced_first_run: false,
         }
     }
 }

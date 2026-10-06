@@ -114,3 +114,32 @@ negotiation, format checks, line GPU admission, scene descriptors, pipeline
 handles, and remaining scene resources. Initial TRUEOS pipeline handles are
 created sequentially on the existing scene-init worker; no extra compilation
 pool is needed for excluded shaders.
+
+
+## Authentication before graphics
+
+A login click starts the existing ClientInit directly. Server discovery,
+handshake, authentication, and registration acceptance happen before scene
+startup. Authentication failures return through the normal login error UI
+without allocating the scene GPU device or preparing pipeline handles.
+ClientInit itself rejects authentication before loading GameSync initial data.
+Only a successfully accepted client starts the scene-init worker; its network
+tick continues while that worker prepares graphics. The client and scene
+transition are dropped if the user cancels or graphics returns an error.
+
+## Client first-tick bringup
+
+`Prepare Client` can remain the last painted message after ClientInit completes:
+the main menu ticks the accepted client synchronously while graphics initializes.
+`ecs-dispatch-enter` from that client therefore identifies simulation dispatch,
+not map generation or shader compilation.
+
+TRUEOS client ECS and unscoped parallel helpers share the existing client runtime
+through `State::pools_on`, avoiding separate ECS and default iterator runtimes.
+Client dispatch uses the dispatcher's sequential dependency stages inside that
+pool's install scope. Every system still runs; internal parallel operations are
+retained. Server dispatch and desktop clients retain their previous scheduling.
+This is a bringup scheduling workaround, not a proven diagnosis of the rig hang.
+Each system logs its first entry and completion, including its origin, so the
+next run can attribute a remaining stall. Restore concurrent client system groups
+after the TRUEOS carrier/scheduler behavior is established.
