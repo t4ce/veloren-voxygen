@@ -255,6 +255,33 @@ mod scheduling {
         }
     }
     #[test]
+    fn replacement_sprite_pixels_are_uploaded_even_when_commands_are_unchanged() {
+        let (scene, _, _) = target(true);
+        let (foreground, state, _) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        for revision in 1..=2 {
+            let mut frame = plan(1.);
+            frame.foreground.commands[0].quad.sprite_id = 7;
+            frame
+                .foreground
+                .uploads
+                .push(crate::ui::ice::renderer::bcs::Upload {
+                    id: 7,
+                    image: std::sync::Arc::new(image::RgbaImage::from_pixel(
+                        1,
+                        1,
+                        image::Rgba([revision as u8, 0, 0, 255]),
+                    )),
+                });
+            presenter.submit(revision, vek::Vec2::new(8, 8), frame);
+            wait(|| presenter.published_revision() == revision);
+        }
+        assert_eq!(state.lock().unwrap().publications, 2);
+        let (_, activity) = presenter.take_activity();
+        assert_eq!(activity.uploads, 2);
+        presenter.check().unwrap();
+    }
+    #[test]
     fn scene_receipt_never_blocks_the_foreground_producer() {
         let (scene, scene_state, _) = target(false);
         let (foreground, ui_state, _) = target(true);

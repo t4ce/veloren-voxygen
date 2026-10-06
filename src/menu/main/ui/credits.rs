@@ -1,4 +1,4 @@
-use super::Message;
+use super::{Imgs, Message};
 use crate::{
     credits::Credits,
     ui::{
@@ -26,6 +26,7 @@ impl Screen {
     pub(super) fn view(
         &mut self,
         fonts: &Fonts,
+        imgs: &Imgs,
         i18n: &Localization,
         credits: &Credits,
         button_style: style::button::Style,
@@ -79,6 +80,18 @@ impl Screen {
 
                 Ok(text)
             };
+
+        let longest_line = credits
+            .music
+            .iter()
+            .chain(&credits.fonts)
+            .chain(&credits.other_art)
+            .map(&format_art_credit)
+            .chain(credits.sounds.iter().map(&format_sounds_credit))
+            .chain(credits.contributors.iter().map(&format_contributor_credit))
+            .filter_map(Result::ok)
+            .max_by_key(|text| text.chars().count())
+            .unwrap_or_default();
 
         let music_header_color = iced::Color::from_rgb8(0xfc, 0x71, 0x76);
         let fonts_header_color = iced::Color::from_rgb8(0xf7, 0xd1, 0x81);
@@ -143,7 +156,8 @@ impl Screen {
             )
         };
 
-        Container::new(
+        let panel = Column::with_children(vec![
+            crate::ui::ice::widget::ribbon::Ribbon::new(imgs.banner_top).into(),
             Container::new(
                 Column::with_children(vec![
                     iced::Text::new(i18n.get_msg("main-credits"))
@@ -211,8 +225,16 @@ impl Screen {
                     (11, 11, 11, 255).into(),
                     (54, 46, 38, 255).into(),
                 ),
-            ),
-        )
+            )
+            .into(),
+        ])
+        .width(Length::Fill)
+        .height(Length::Fill);
+        Container::new(crate::ui::ice::widget::panel_width::PanelWidth::new(
+            longest_line,
+            fonts.cyri.scale(23),
+            panel.into(),
+        ))
         .center_x()
         .center_y()
         .padding(70)

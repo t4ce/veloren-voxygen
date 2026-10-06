@@ -39,6 +39,9 @@ pub(super) struct Renderer {
     next_graphic: u32,
     next_sprite: u32,
     activity: PreparationActivity,
+    dialog: Option<(u8, LayerPlan)>,
+    closing_dialog: Option<(LayerPlan, std::time::Instant)>,
+    closing_sprite: Option<u32>,
 }
 impl Renderer {
     pub(super) fn new(width: u32, height: u32) -> Self {
@@ -53,6 +56,9 @@ impl Renderer {
             next_graphic: 0,
             next_sprite: 1,
             activity: PreparationActivity::default(),
+            dialog: None,
+            closing_dialog: None,
+            closing_sprite: None,
         }
     }
     pub(super) fn take_activity(&mut self) -> PreparationActivity {
@@ -110,9 +116,12 @@ impl Renderer {
     pub(super) fn resize(&mut self, width: u32, height: u32) {
         self.width = width;
         self.height = height;
+        self.dialog = None;
+        self.closing_dialog = None;
     }
     pub(super) fn prepare(&mut self, primitive: &Primitive) -> Result<FramePlan, String> {
         let mut plan = FramePlan::default();
+        let previous = self.dialog.take();
         self.draw(
             primitive,
             (0., 0.),
@@ -120,7 +129,43 @@ impl Renderer {
             Rect::new(0., 0., self.width as f32, self.height as f32),
             &mut plan,
         )?;
+        if previous.as_ref().map(|(id, _)| *id) != self.dialog.as_ref().map(|(id, _)| *id) {
+            if let Some((_, layer)) = previous {
+                // Retain one noninteractive outgoing snapshot, even under rapid clicks.
+                let id = if let Some(id) = self.closing_sprite {
+                    id
+                } else {
+                    let id = self.sprite_id();
+                    self.closing_sprite = Some(id);
+                    id
+                };
+                self.closing_dialog =
+                    Some((snapshot_dialog(&layer, id), std::time::Instant::now()));
+            }
+        }
+        if let Some((_, layer)) = &self.dialog {
+            plan.foreground
+                .uploads
+                .extend(layer.uploads.iter().cloned());
+            plan.foreground
+                .commands
+                .extend(layer.commands.iter().cloned());
+        }
+        if let Some((layer, started)) = &self.closing_dialog {
+            let progress = started.elapsed().as_secs_f32() / 0.5;
+            if progress < 1.0 {
+                let mut outgoing = layer.clone();
+                animate_dialog(&mut outgoing, progress);
+                plan.foreground.uploads.extend(outgoing.uploads);
+                plan.foreground.commands.extend(outgoing.commands);
+            } else {
+                self.closing_dialog = None;
+            }
+        }
         Ok(plan)
+    }
+    pub(super) fn dialog_animating(&self) -> bool {
+        self.closing_dialog.is_some()
     }
     fn glyph(&mut self, byte: u8, scale: u32, color: u32) -> (u32, Arc<::image::RgbaImage>) {
         let key = (byte, scale, color);
@@ -159,6 +204,11 @@ impl Renderer {
         plan: &mut FramePlan,
     ) -> Result<(), String> {
         match primitive {
+            Primitive::Dialog { id, content } => {
+                let mut dialog = FramePlan::default();
+                self.draw(content, offset, opacity, clip, &mut dialog)?;
+                self.dialog = Some((*id, dialog.foreground));
+            }
             Primitive::Group { primitives } => {
                 for p in primitives {
                     self.draw(p, offset, opacity, clip, plan)?;
@@ -390,6 +440,147 @@ impl Renderer {
         Ok(())
     }
 }
+// Materialize the outgoing panel once. Reuse a single upload slot across
+// transitions; animation then scales/blends one sprite instead of every glyph.
+fn snapshot_dialog(layer: &LayerPlan, id: u32) -> LayerPlan {
+    if layer.commands.is_empty() {
+        return LayerPlan::default();
+    }
+    let left = layer
+        .commands
+        .iter()
+        .map(|c| c.quad.c0.x.floor() as i32)
+        .min()
+        .unwrap();
+    let top = layer
+        .commands
+        .iter()
+        .map(|c| c.quad.c0.y.floor() as i32)
+        .min()
+        .unwrap();
+    let right = layer
+        .commands
+        .iter()
+        .map(|c| c.quad.c2.x.ceil() as i32)
+        .max()
+        .unwrap();
+    let bottom = layer
+        .commands
+        .iter()
+        .map(|c| c.quad.c2.y.ceil() as i32)
+        .max()
+        .unwrap();
+    let mut image = ::image::RgbaImage::new((right - left) as u32, (bottom - top) as u32);
+    for command in &layer.commands {
+        let q = command.quad;
+        let source = layer.uploads.iter().find(|u| u.id == q.sprite_id);
+        let tint = q.color_rgba.to_le_bytes();
+        for y in q.c0.y.floor() as i32..q.c2.y.ceil() as i32 {
+            for x in q.c0.x.floor() as i32..q.c2.x.ceil() as i32 {
+                let ink = if q.sprite_id == 0 {
+                    tint
+                } else {
+                    let source = source.expect("retained dialog sprite upload");
+                    let u =
+                        q.c0.u + (q.c1.u - q.c0.u) * (x as f32 + 0.5 - q.c0.x) / (q.c1.x - q.c0.x);
+                    let v =
+                        q.c0.v + (q.c3.v - q.c0.v) * (y as f32 + 0.5 - q.c0.y) / (q.c3.y - q.c0.y);
+                    let sx = (u * source.image.width() as f32)
+                        .floor()
+                        .clamp(0., (source.image.width() - 1) as f32)
+                        as u32;
+                    let sy = (v * source.image.height() as f32)
+                        .floor()
+                        .clamp(0., (source.image.height() - 1) as f32)
+                        as u32;
+                    let sample = source.image.get_pixel(sx, sy).0;
+                    core::array::from_fn(|i| {
+                        ((sample[i] as u16 * tint[i] as u16 + 127) / 255) as u8
+                    })
+                };
+                if ink[3] == 0 {
+                    continue;
+                }
+                let pixel = image.get_pixel_mut((x - left) as u32, (y - top) as u32);
+                if command.backend == SpriteBackend::Bcs0 || !q.source_over {
+                    pixel.0 = ink;
+                } else {
+                    pixel.0 = core::array::from_fn(|i| {
+                        (ink[i] as u16 + (pixel.0[i] as u16 * (255 - ink[3]) as u16 + 127) / 255)
+                            .min(255) as u8
+                    });
+                }
+            }
+        }
+    }
+    let mut result = LayerPlan::default();
+    retain(&mut result, id, Arc::new(image));
+    append_quad(
+        &mut result,
+        id,
+        Rect::new(
+            left as f32,
+            top as f32,
+            (right - left) as f32,
+            (bottom - top) as f32,
+        ),
+        [0., 0., 1., 1.],
+        u32::MAX,
+        SpriteBackend::PremultipliedCompositor,
+        Rect::new(
+            left as f32,
+            top as f32,
+            (right - left) as f32,
+            (bottom - top) as f32,
+        ),
+    );
+    result
+}
+
+fn animate_dialog(layer: &mut LayerPlan, progress: f32) {
+    let progress = progress.clamp(0.0, 1.0);
+    let mut left = f32::INFINITY;
+    let mut top = f32::INFINITY;
+    let mut right = f32::NEG_INFINITY;
+    let mut bottom = f32::NEG_INFINITY;
+    for command in &layer.commands {
+        for corner in [
+            command.quad.c0,
+            command.quad.c1,
+            command.quad.c2,
+            command.quad.c3,
+        ] {
+            left = left.min(corner.x);
+            top = top.min(corner.y);
+            right = right.max(corner.x);
+            bottom = bottom.max(corner.y);
+        }
+    }
+    let center = ((left + right) * 0.5, (top + bottom) * 0.5);
+    let scale = 1.0 + 0.1 * progress;
+    for command in &mut layer.commands {
+        command.backend = SpriteBackend::PremultipliedCompositor;
+        for corner in [
+            &mut command.quad.c0,
+            &mut command.quad.c1,
+            &mut command.quad.c2,
+            &mut command.quad.c3,
+        ] {
+            corner.x = center.0 + (corner.x - center.0) * scale;
+            corner.y = center.1 + (corner.y - center.1) * scale;
+        }
+        // Both sprite texels and solid fills are premultiplied. Modulate all
+        // four channels to preserve source-over blending throughout the fade.
+        command.quad.color_rgba = u32::from_le_bytes(
+            command
+                .quad
+                .color_rgba
+                .to_le_bytes()
+                .map(|channel| (channel as f32 * (1.0 - progress)).round() as u8),
+        );
+    }
+}
+
 fn retain(plan: &mut LayerPlan, id: u32, image: Arc<::image::RgbaImage>) {
     if plan.uploads.iter().all(|u| u.id != id) {
         plan.uploads.push(Upload { id, image });
@@ -595,6 +786,132 @@ mod tests {
             color: Rgba::new(255, 255, 255, 255),
             source_rect: None,
         }
+    }
+    fn dialog(id: u8) -> Primitive {
+        Primitive::Dialog {
+            id,
+            content: Box::new(Primitive::Rectangle {
+                bounds: bounds(20., 20., 100., 80.),
+                linear_color: Rgba::new(1., 1., 1., 1.),
+            }),
+        }
+    }
+    #[test]
+    fn dense_dialog_transition_uses_one_snapshot_and_preserves_copy_path() {
+        let mut renderer = Renderer::new(400, 300);
+        let dense = Primitive::Dialog {
+            id: 1,
+            content: Box::new(Primitive::Group {
+                primitives: (0..600)
+                    .map(|i| Primitive::Rectangle {
+                        bounds: bounds((i % 30) as f32 * 4., (i / 30) as f32 * 4., 3., 3.),
+                        linear_color: Rgba::new(1., 0., 0., 1.),
+                    })
+                    .collect(),
+            }),
+        };
+        renderer.prepare(&dense).unwrap();
+        let replacement = renderer.prepare(&dialog(2)).unwrap();
+        assert_eq!(replacement.foreground.commands.len(), 2);
+        assert_eq!(
+            replacement.foreground.commands[0].backend,
+            SpriteBackend::Bcs0
+        );
+        let snapshot = &renderer.closing_dialog.as_ref().unwrap().0;
+        assert_eq!(snapshot.commands.len(), 1);
+        assert_eq!(snapshot.uploads.len(), 1);
+        assert_eq!(
+            snapshot.uploads[0].image.get_pixel(0, 0).0,
+            [255, 0, 0, 255]
+        );
+        assert_eq!(snapshot.uploads[0].image.get_pixel(3, 0).0, [0; 4]);
+        let id = snapshot.uploads[0].id;
+        renderer.prepare(&dialog(3)).unwrap();
+        assert_eq!(
+            renderer.closing_dialog.as_ref().unwrap().0.uploads[0].id,
+            id
+        );
+    }
+    #[test]
+    fn dialog_replacement_retains_only_one_outgoing_snapshot() {
+        let mut renderer = Renderer::new(400, 300);
+        assert_eq!(
+            renderer
+                .prepare(&dialog(1))
+                .unwrap()
+                .foreground
+                .commands
+                .len(),
+            1
+        );
+        assert!(!renderer.dialog_animating());
+        let replacement = renderer.prepare(&dialog(2)).unwrap();
+        assert_eq!(replacement.foreground.commands.len(), 2);
+        assert_eq!(renderer.dialog.as_ref().unwrap().0, 2);
+        assert!(renderer.dialog_animating());
+        // A third click replaces the ghost instead of accumulating dialogs.
+        assert_eq!(
+            renderer
+                .prepare(&dialog(3))
+                .unwrap()
+                .foreground
+                .commands
+                .len(),
+            2
+        );
+        renderer.closing_dialog.as_mut().unwrap().1 =
+            std::time::Instant::now() - std::time::Duration::from_millis(501);
+        assert_eq!(
+            renderer
+                .prepare(&dialog(3))
+                .unwrap()
+                .foreground
+                .commands
+                .len(),
+            1
+        );
+        assert!(!renderer.dialog_animating());
+        assert_eq!(
+            renderer
+                .prepare(&Primitive::Nothing)
+                .unwrap()
+                .foreground
+                .commands
+                .len(),
+            1
+        );
+        assert!(renderer.dialog.is_none());
+        renderer.closing_dialog.as_mut().unwrap().1 =
+            std::time::Instant::now() - std::time::Duration::from_millis(501);
+        assert!(
+            renderer
+                .prepare(&Primitive::Nothing)
+                .unwrap()
+                .foreground
+                .commands
+                .is_empty()
+        );
+        assert!(!renderer.dialog_animating());
+    }
+    #[test]
+    fn dialog_fade_scales_about_center_and_modulates_premultiplied_color() {
+        let mut renderer = Renderer::new(400, 300);
+        renderer.prepare(&dialog(1)).unwrap();
+        let original = renderer.dialog.as_ref().unwrap().1.clone();
+        let mut half = original.clone();
+        animate_dialog(&mut half, 0.5);
+        let quad = half.commands[0].quad;
+        assert!((quad.c0.x - 17.5).abs() < 0.001);
+        assert!((quad.c0.y - 18.).abs() < 0.001);
+        assert_eq!(quad.color_rgba.to_le_bytes(), [128; 4]);
+        assert_eq!(
+            half.commands[0].backend,
+            SpriteBackend::PremultipliedCompositor
+        );
+        let mut end = original;
+        animate_dialog(&mut end, 1.0);
+        assert!((end.commands[0].quad.c1.x - end.commands[0].quad.c0.x - 110.).abs() < 0.001);
+        assert_eq!(end.commands[0].quad.color_rgba, 0);
     }
     #[test]
     fn scene_and_foreground_keep_separate_sources_and_alpha() {

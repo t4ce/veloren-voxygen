@@ -12,10 +12,15 @@ pub fn neat_button<M: Clone + 'static>(
     button_style: Style,
     message: Option<M>,
 ) -> Element<'_, M, ui::IcedRenderer> {
-    let button = Button::new(state, FillText::new(label).fill_fraction(fill_fraction))
-        .height(Length::Fill)
-        .width(Length::Fill)
-        .style(button_style);
+    let button = Button::new(
+        state,
+        FillText::new(label)
+            .fill_fraction(fill_fraction)
+            .vertical_adjustment(0.0),
+    )
+    .height(Length::Fill)
+    .width(Length::Fill)
+    .style(button_style);
 
     let button = match message {
         Some(message) => button.on_press(message),

@@ -294,6 +294,13 @@ impl IcedRenderer {
     }
 
     #[cfg(target_os = "trueos")]
+    pub fn native_dialog_animating(&self) -> bool {
+        self.native
+            .as_ref()
+            .is_some_and(|renderer| renderer.dialog_animating())
+    }
+
+    #[cfg(target_os = "trueos")]
     pub fn draw_native(&mut self, primitive: &Primitive) -> Result<bcs::FramePlan, String> {
         self.native
             .as_mut()
@@ -995,6 +1002,9 @@ impl IcedRenderer {
             }
             Primitive::Opacity { alpha: a, content } => {
                 self.draw_primitive(*content, offset, alpha * a, renderer, pool);
+            }
+            Primitive::Dialog { content, .. } => {
+                self.draw_primitive(*content, offset, alpha, renderer, pool);
             }
             Primitive::Nothing => {}
         }

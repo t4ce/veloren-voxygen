@@ -1,5 +1,5 @@
-use iced::{Element, Hasher, Layout, Length, Point, Rectangle, Size, Widget, layout};
 use core::hash::Hash;
+use iced::{Element, Hasher, Layout, Length, Point, Rectangle, Size, Widget, layout};
 
 const DEFAULT_FILL_FRACTION: f32 = 1.0;
 const DEFAULT_VERTICAL_ADJUSTMENT: f32 = 0.05;
@@ -32,7 +32,7 @@ where
             //max_font_size: u16::MAX,
             fill_fraction: DEFAULT_FILL_FRACTION,
             vertical_adjustment: DEFAULT_VERTICAL_ADJUSTMENT,
-            text: iced::Text::new(label),
+            text: iced::Text::new(label).vertical_alignment(iced::VerticalAlignment::Center),
         }
     }
 
@@ -65,9 +65,13 @@ impl<M, R> Widget<M, R> for FillText<R>
 where
     R: iced::text::Renderer,
 {
-    fn width(&self) -> Length { Length::Fill }
+    fn width(&self) -> Length {
+        Length::Fill
+    }
 
-    fn height(&self) -> Length { Length::Fill }
+    fn height(&self) -> Length {
+        Length::Fill
+    }
 
     fn layout(&self, renderer: &R, limits: &layout::Limits) -> layout::Node {
         let limits = limits.width(Length::Fill).height(Length::Fill);
@@ -126,5 +130,7 @@ impl<'a, M, R> From<FillText<R>> for Element<'a, M, R>
 where
     R: 'a + iced::text::Renderer,
 {
-    fn from(fill_text: FillText<R>) -> Element<'a, M, R> { Element::new(fill_text) }
+    fn from(fill_text: FillText<R>) -> Element<'a, M, R> {
+        Element::new(fill_text)
+    }
 }

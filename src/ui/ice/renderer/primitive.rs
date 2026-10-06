@@ -38,5 +38,9 @@ pub enum Primitive {
         alpha: f32,
         content: Box<Primitive>,
     },
+    Dialog {
+        id: u8,
+        content: Box<Primitive>,
+    },
     Nothing,
 }

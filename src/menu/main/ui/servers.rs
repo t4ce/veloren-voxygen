@@ -96,7 +96,8 @@ impl Screen {
                                 .width(Length::FillPortion(95))
                                 .vertical_alignment(iced::VerticalAlignment::Center)
                                 .into(),
-                        ]),
+                        ])
+                        .align_items(Align::Center),
                     )
                     .style(
                         style::button::Style::new(imgs.selection)
@@ -118,26 +119,32 @@ impl Screen {
         }
 
         Container::new(
-            Container::new(
-                Column::with_children(vec![
-                    title.into(),
-                    list.into(),
-                    Row::with_children(vec![delete_button.into(), back_button.into()])
-                        .width(Length::Fill)
-                        .into(),
-                ])
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .spacing(10)
-                .padding(20),
-            )
-            .style(
-                style::container::Style::color_with_double_cornerless_border(
-                    (22, 18, 16, 255).into(),
-                    (11, 11, 11, 255).into(),
-                    (54, 46, 38, 255).into(),
-                ),
-            )
+            Column::with_children(vec![
+                crate::ui::ice::widget::ribbon::Ribbon::new(imgs.banner_top).into(),
+                Container::new(
+                    Column::with_children(vec![
+                        title.into(),
+                        list.into(),
+                        Row::with_children(vec![delete_button.into(), back_button.into()])
+                            .width(Length::Fill)
+                            .into(),
+                    ])
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .spacing(10)
+                    .padding(20),
+                )
+                .style(
+                    style::container::Style::color_with_double_cornerless_border(
+                        (22, 18, 16, 255).into(),
+                        (11, 11, 11, 255).into(),
+                        (54, 46, 38, 255).into(),
+                    ),
+                )
+                .into(),
+            ])
+            .width(Length::Fill)
+            .height(Length::Fill)
             .max_width(500),
         )
         .width(Length::Fill)

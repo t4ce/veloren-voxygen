@@ -45,8 +45,8 @@ pub struct Screen {
 }
 
 impl Screen {
-    pub(super) fn view(
-        &mut self,
+    pub(super) fn view<'a>(
+        &'a mut self,
         fonts: &Fonts,
         imgs: &Imgs,
         logo_glow: &super::logo_glow::LogoGlow,
@@ -58,7 +58,8 @@ impl Screen {
         selected_language_index: Option<usize>,
         language_metadatas: &[LanguageMetadata],
         button_style: style::button::Style,
-    ) -> Element<'_, Message> {
+        dialog: Option<(u8, Element<'a, Message>)>,
+    ) -> Element<'a, Message> {
         let mut buttons = vec![neat_button(
             &mut self.account_button,
             i18n.get_msg("main-account"),
@@ -119,12 +120,19 @@ impl Screen {
         .align_y(Align::End);
 
         let left_column = Column::with_children(vec![buttons.into()])
-            .width(Length::Fill)
+            .width(if dialog.is_some() {
+                Length::Units(154)
+            } else {
+                Length::Fill
+            })
             .height(Length::Fill)
             .padding(MENU_EDGE_MARGIN)
             .into();
 
-        let central_content = if let Some(error) = error {
+        let external_dialog = dialog.as_ref().map(|(id, _)| *id);
+        let central_content = if let Some((_, content)) = dialog {
+            content
+        } else if let Some(error) = error {
             Container::new(
                 Column::with_children(vec![
                     Scrollable::new(&mut self.error_scroll)
@@ -183,6 +191,22 @@ impl Screen {
             }
         };
 
+        let dialog_id = external_dialog.or_else(|| {
+            if error.is_some() {
+                Some(5)
+            } else {
+                match show {
+                    Showing::Login => None,
+                    Showing::Account => Some(1),
+                    Showing::Languages => Some(2),
+                }
+            }
+        });
+        let central_content = if let Some(id) = dialog_id {
+            crate::ui::ice::widget::dialog::Dialog::new(id, central_content).into()
+        } else {
+            central_content
+        };
         let central_column = Container::new(central_content)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -211,15 +235,16 @@ impl Screen {
         })
         .align_x(Align::End);
 
-        Row::with_children(vec![
-            left_column,
-            central_column.into(),
-            right_column.into(),
-        ])
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .spacing(10)
-        .into()
+        let columns = if external_dialog.is_some() {
+            vec![left_column, central_column.into()]
+        } else {
+            vec![left_column, central_column.into(), right_column.into()]
+        };
+        Row::with_children(columns)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .spacing(10)
+            .into()
     }
 }
 
@@ -276,7 +301,8 @@ impl LanguageSelectBanner {
                             .size(fonts.universal.scale(25))
                             .vertical_alignment(iced::VerticalAlignment::Center)
                             .into(),
-                    ]),
+                    ])
+                    .align_items(Align::Center),
                 )
                 .style(
                     style::button::Style::new(imgs.selection)

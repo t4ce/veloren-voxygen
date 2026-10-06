@@ -117,7 +117,7 @@ impl IcedUi {
         let compare_started = std::time::Instant::now();
         let unchanged = self.last_native_primitive.as_ref() == Some(&primitive);
         self.native_activity.compare_us += micros(compare_started.elapsed());
-        if unchanged {
+        if unchanged && !self.renderer.native_dialog_animating() {
             self.native_activity.unchanged += 1;
             return Ok((messages, None));
         }

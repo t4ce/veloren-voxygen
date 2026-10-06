@@ -197,6 +197,7 @@ pub struct Controls {
     time: f64,
 
     screen: Screen,
+    dialog_chrome: login::Screen,
 }
 
 #[derive(Clone)]
@@ -288,6 +289,7 @@ impl Controls {
             time: 0.0,
 
             screen,
+            dialog_chrome: login::Screen::default(),
         }
     }
 
@@ -315,7 +317,27 @@ impl Controls {
             // Note: Keeping in case we re-add the disclaimer
             //Screen::Disclaimer { screen } => screen.view(&self.fonts, &self.i18n, button_style),
             Screen::Credits { screen } => {
-                screen.view(&self.fonts, &self.i18n.read(), &self.credits, button_style)
+                let content = screen.view(
+                    &self.fonts,
+                    &self.imgs,
+                    &self.i18n.read(),
+                    &self.credits,
+                    button_style,
+                );
+                self.dialog_chrome.view(
+                    &self.fonts,
+                    &self.imgs,
+                    &self.logo_glow,
+                    self.server_field_locked,
+                    &self.login_info,
+                    None,
+                    &self.i18n.read(),
+                    &Showing::Login,
+                    self.selected_language_index,
+                    &language_metadatas,
+                    button_style,
+                    Some((3, content)),
+                )
             }
             Screen::Login { screen, error } => screen.view(
                 &self.fonts,
@@ -329,15 +351,32 @@ impl Controls {
                 self.selected_language_index,
                 &language_metadatas,
                 button_style,
+                None,
             ),
-            Screen::Servers { screen } => screen.view(
-                &self.fonts,
-                &self.imgs,
-                &settings.networking.servers,
-                self.selected_server_index,
-                &self.i18n.read(),
-                button_style,
-            ),
+            Screen::Servers { screen } => {
+                let content = screen.view(
+                    &self.fonts,
+                    &self.imgs,
+                    &settings.networking.servers,
+                    self.selected_server_index,
+                    &self.i18n.read(),
+                    button_style,
+                );
+                self.dialog_chrome.view(
+                    &self.fonts,
+                    &self.imgs,
+                    &self.logo_glow,
+                    self.server_field_locked,
+                    &self.login_info,
+                    None,
+                    &self.i18n.read(),
+                    &Showing::Login,
+                    self.selected_language_index,
+                    &language_metadatas,
+                    button_style,
+                    Some((4, content)),
+                )
+            }
             Screen::Connecting {
                 screen,
                 connection_state,
@@ -390,12 +429,19 @@ impl Controls {
         match message {
             Message::Quit => events.push(Event::Quit),
             Message::Back => {
+                self.show = Showing::Login;
                 self.screen = Screen::Login {
                     screen: Box::default(),
                     error: None,
                 };
             }
             Message::ShowAccount => {
+                if !matches!(self.screen, Screen::Login { .. }) {
+                    self.screen = Screen::Login {
+                        screen: Box::default(),
+                        error: None,
+                    };
+                }
                 self.show = Showing::Account;
                 if let Screen::Login { screen, error } = &mut self.screen {
                     *error = None;
@@ -434,15 +480,15 @@ impl Controls {
                 }
             }
             Message::ShowServers => {
-                if matches!(&self.screen, Screen::Login { .. }) {
-                    self.selected_server_index =
-                        servers.iter().position(|f| f == &self.login_info.server);
-                    self.screen = Screen::Servers {
-                        screen: servers::Screen::new(),
-                    };
-                }
+                self.show = Showing::Login;
+                self.selected_server_index =
+                    servers.iter().position(|f| f == &self.login_info.server);
+                self.screen = Screen::Servers {
+                    screen: servers::Screen::new(),
+                };
             }
             Message::ShowCredits => {
+                self.show = Showing::Login;
                 self.screen = Screen::Credits {
                     screen: credits::Screen::new(),
                 };
@@ -465,7 +511,19 @@ impl Controls {
             Message::LanguageChanged(new_value) => {
                 events.push(Event::ChangeLanguage(language_metadatas.remove(new_value)));
             }
-            Message::OpenLanguageMenu => self.show.toggle(Showing::Languages),
+            Message::OpenLanguageMenu => {
+                if !matches!(self.screen, Screen::Login { .. }) {
+                    self.screen = Screen::Login {
+                        screen: Box::default(),
+                        error: None,
+                    };
+                    self.show = Showing::Login;
+                }
+                if let Screen::Login { error, .. } = &mut self.screen {
+                    *error = None;
+                }
+                self.show.toggle(Showing::Languages);
+            }
             Message::Password(new_value) => self.login_info.password = new_value,
             Message::Server(new_value) => {
                 self.login_info.server = new_value;

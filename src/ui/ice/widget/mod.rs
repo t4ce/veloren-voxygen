@@ -1,11 +1,14 @@
 pub mod aspect_ratio_container;
 pub mod background_container;
 pub mod compound_graphic;
+pub mod dialog;
 pub mod fill_text;
 pub mod image;
 pub mod mouse_detector;
 pub mod overlay;
+pub mod panel_width;
 pub mod proximity_select;
+pub mod ribbon;
 pub mod stack;
 pub mod tooltip;
 

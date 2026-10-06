@@ -7,7 +7,7 @@ use super::{
     bcs::{FramePlan, LayerPlan},
 };
 use std::{
-    collections::HashSet,
+    collections::HashMap,
     sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -143,7 +143,7 @@ fn spawn(
     })
 }
 fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<(), String> {
-    let mut uploaded = HashSet::new();
+    let mut uploaded = HashMap::new();
     let mut previous: Option<(Vec2<u32>, Vec<SpriteCommand>)> = None;
     let mut job: Option<Job> = None;
     let mut phase = 0;
@@ -171,7 +171,13 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         };
         if phase == 0
             && previous.as_ref().is_some_and(|(size, commands)| {
-                *size == current.size && *commands == current.plan.commands
+                *size == current.size
+                    && *commands == current.plan.commands
+                    && current.plan.uploads.iter().all(|upload| {
+                        uploaded
+                            .get(&upload.id)
+                            .is_some_and(|image| Arc::ptr_eq(image, &upload.image))
+                    })
             })
         {
             mailbox.counters.unchanged.fetch_add(1, Ordering::Relaxed);
@@ -189,7 +195,10 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     .map_err(|e| format!("extent: {e:?}"))?;
                 let mut result = Ok(());
                 for upload in &current.plan.uploads {
-                    if uploaded.contains(&upload.id) {
+                    if uploaded
+                        .get(&upload.id)
+                        .is_some_and(|image| Arc::ptr_eq(image, &upload.image))
+                    {
                         continue;
                     }
                     let call_started = std::time::Instant::now();
@@ -206,7 +215,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     if result.is_err() {
                         break;
                     }
-                    uploaded.insert(upload.id);
+                    uploaded.insert(upload.id, Arc::clone(&upload.image));
                     mailbox.counters.uploads.fetch_add(1, Ordering::Relaxed);
                     mailbox
                         .counters
