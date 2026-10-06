@@ -1,0 +1,15 @@
+[package]
+name = "voxy-native-asset-sync-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+veloren-common-assets = { path = "../../common/assets", features = ["picasso-assets"] }
+picasso = { package = "trueos-picasso", path = "../../../TRUEOS-Picasso", default-features = false, features = ["runtime-assets", "test-std"] }
+tokio = { version = "=1.52.3", features = ["rt-multi-thread", "net", "io-util", "time", "macros", "sync"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("trueos"))'] }

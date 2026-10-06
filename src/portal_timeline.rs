@@ -84,7 +84,7 @@ impl Cinematic {
                 if p < 0.2 {
                     Self::ramp(p / 0.2) - 1.0
                 } else {
-                    Self::ramp((p - 0.6) / 0.4)
+                    Self::ramp((Self::ramp(p) - 0.6) / 0.4)
                 }
             }
             WhiteHold => 1.0,
@@ -128,13 +128,13 @@ mod tests {
         assert_eq!(c.display_fade(), 0.0);
     }
     #[test]
-    fn white_starts_only_after_sixty_percent_of_look_up() {
+    fn white_starts_only_after_sixty_percent_of_upward_angle() {
         let mut c = Cinematic {
             stage: CameraStage::LookUp,
-            elapsed: 1.5,
+            elapsed: 1.4,
         };
         assert_eq!(c.display_fade(), 0.0);
-        c.advance(0.5);
+        c.advance(0.025);
         assert!(c.display_fade() > 0.0 && c.display_fade() < 1.0);
     }
     #[test]

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt, io,
+    sync::RwLock,
     time::Instant,
 };
 
@@ -34,6 +35,64 @@ impl Entry {
 
 const CATALOG_KEY: &str = "__veloren_asset_catalog/v1";
 const MAX_DATABASE_IMAGE_BYTES: usize = 1024 * 1024 * 1024;
+
+pub(super) struct LivePicassoSource {
+    current: RwLock<PicassoSource>,
+}
+impl LivePicassoSource {
+    pub(super) fn new() -> io::Result<Self> {
+        Ok(Self {
+            current: RwLock::new(PicassoSource::new()?),
+        })
+    }
+    pub(super) fn snapshot(
+        &self,
+        progress: &mut impl FnMut(&str) -> io::Result<()>,
+    ) -> io::Result<voxy_asset_sync::AssetDb> {
+        let store = self
+            .current
+            .read()
+            .map_err(|_| io::Error::other("asset source lock poisoned"))?
+            .store
+            .fork_runtime_database()
+            .map_err(storage_error)?;
+        voxy_asset_sync::AssetDb::from_store(store, progress)
+    }
+    pub(super) fn install(&self, image: Vec<u8>) -> io::Result<()> {
+        let source = PicassoSource::from_database_image(image)?;
+        *self
+            .current
+            .write()
+            .map_err(|_| io::Error::other("asset source lock poisoned"))? = source;
+        Ok(())
+    }
+}
+impl fmt::Debug for LivePicassoSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("LivePicassoSource")
+    }
+}
+impl Source for LivePicassoSource {
+    fn read(&self, id: &str, ext: &str) -> io::Result<FileContent<'_>> {
+        self.current
+            .read()
+            .map_err(|_| io::Error::other("asset source lock poisoned"))?
+            .store
+            .embedded_asset(&asset_key(id, ext))
+            .map_err(storage_error)?
+            .map(FileContent::Buffer)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("asset {id}.{ext}")))
+    }
+    fn read_dir(&self, id: &str, callback: &mut dyn FnMut(DirEntry)) -> io::Result<()> {
+        self.current
+            .read()
+            .map_err(|_| io::Error::other("asset source lock poisoned"))?
+            .read_dir(id, callback)
+    }
+    fn exists(&self, entry: DirEntry) -> bool {
+        self.current.read().is_ok_and(|source| source.exists(entry))
+    }
+}
 
 fn asset_progress(message: fmt::Arguments<'_>) {
     #[cfg(target_os = "trueos")]
@@ -75,7 +134,7 @@ impl PicassoSource {
         // Neither filesystem source nor a path is retained by PicassoSource.
         #[cfg(not(target_os = "trueos"))]
         let source = if let Some(path) = std::env::var_os("VOXYGEN_ASSET_DATABASE") {
-            Self::from_database_image(std::fs::read(path)?)?
+            Self::from_database_image(voxy_asset_sync::decode_image(std::fs::read(path)?)?)?
         } else {
             Self::import(&super::fs::FileSystem::new()?)?
         };
@@ -237,7 +296,9 @@ impl PicassoSource {
                 DirEntry::File(id, ext) if !is_bundle(id, ext) => {
                     entries.push(Entry::File(id.to_owned(), ext.to_owned()));
                 }
-                DirEntry::Directory(id) => entries.push(Entry::Directory(id.to_owned())),
+                DirEntry::Directory(id) if id != "node-asset-server" => {
+                    entries.push(Entry::Directory(id.to_owned()))
+                }
                 _ => {}
             })?;
             for entry in &entries {

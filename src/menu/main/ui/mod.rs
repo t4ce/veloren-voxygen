@@ -136,6 +136,7 @@ pub struct LoginInfo {
 
 enum ConnectionState {
     InProgress,
+    AssetSync { message: String, cancellable: bool },
     AuthTrustPrompt { auth_server: String, msg: String },
 }
 
@@ -159,6 +160,10 @@ enum Screen {
         screen: connecting::Screen,
         connection_state: ConnectionState,
         init_stage: DetailedInitializationStage,
+    },
+    #[cfg(feature = "picasso-assets")]
+    AssetSync {
+        screen: connecting::Screen,
     },
 }
 
@@ -203,10 +208,16 @@ pub struct Controls {
     dialog_chrome: login::Screen,
     quit_dialog: quit::Screen,
     confirming_quit: bool,
+    #[cfg(feature = "picasso-assets")]
+    asset_sync: Option<crate::asset_sync::Job>,
+    #[cfg(feature = "picasso-assets")]
+    asset_sync_previous: Option<Box<Screen>>,
 }
 
 #[derive(Clone)]
 enum Message {
+    AssetSync,
+    CancelAssetSync,
     Quit,
     ConfirmQuit,
     BackFromQuit,
@@ -299,6 +310,10 @@ impl Controls {
             dialog_chrome: login::Screen::default(),
             quit_dialog: quit::Screen::default(),
             confirming_quit: false,
+            #[cfg(feature = "picasso-assets")]
+            asset_sync: None,
+            #[cfg(feature = "picasso-assets")]
+            asset_sync_previous: None,
         }
     }
 
@@ -312,11 +327,10 @@ impl Controls {
             .text_color(TEXT_COLOR)
             .disabled_text_color(DISABLED_TEXT_COLOR);
 
-        let bg_img = if matches!(&self.screen, Screen::Connecting { .. }) {
-            self.bg_img
-        } else {
-            self.imgs.bg
-        };
+        let loading = matches!(&self.screen, Screen::Connecting { .. });
+        #[cfg(feature = "picasso-assets")]
+        let loading = loading || matches!(&self.screen, Screen::AssetSync { .. });
+        let bg_img = if loading { self.bg_img } else { self.imgs.bg };
 
         let language_metadatas = i18n::list_localizations();
 
@@ -426,6 +440,24 @@ impl Controls {
                 settings.interface.loading_tips,
                 &settings.controls,
             ),
+            #[cfg(feature = "picasso-assets")]
+            Screen::AssetSync { screen } => {
+                let status = self.asset_sync.as_ref().unwrap().status();
+                screen.view(
+                    &self.fonts,
+                    &self.imgs,
+                    &ConnectionState::AssetSync {
+                        message: status.message,
+                        cancellable: status.cancellable,
+                    },
+                    &DetailedInitializationStage::StartingMultiplayer,
+                    self.time,
+                    &self.i18n.read(),
+                    button_style,
+                    false,
+                    &settings.controls,
+                )
+            }
         };
 
         Container::new(
@@ -446,6 +478,13 @@ impl Controls {
         ui: &mut Ui,
         runtime: &alloc::sync::Arc<tokio::runtime::Runtime>,
     ) {
+        #[cfg(feature = "picasso-assets")]
+        if let Some(job) = &self.asset_sync {
+            if matches!(message, Message::CancelAssetSync) {
+                job.cancel();
+            }
+            return;
+        }
         if self.confirming_quit {
             match message {
                 Message::ConfirmQuit => events.push(Event::Quit),
@@ -469,6 +508,23 @@ impl Controls {
         let mut language_metadatas = i18n::list_localizations();
 
         match message {
+            Message::AssetSync => {
+                #[cfg(feature = "picasso-assets")]
+                {
+                    self.asset_sync = Some(crate::asset_sync::Job::start(
+                        self.login_info.server.clone(),
+                        runtime,
+                    ));
+                    let screen = Screen::AssetSync {
+                        screen: connecting::Screen::new(ui),
+                    };
+                    self.asset_sync_previous =
+                        Some(Box::new(std::mem::replace(&mut self.screen, screen)));
+                }
+                #[cfg(not(feature = "picasso-assets"))]
+                self.connection_error("Asset Sync requires the Picasso asset database.".into());
+            }
+            Message::CancelAssetSync => {}
             Message::Quit => self.request_quit(),
             Message::ConfirmQuit | Message::BackFromQuit => {}
             Message::Back => {
@@ -692,6 +748,12 @@ impl Controls {
     }
 
     fn request_quit(&mut self) {
+        #[cfg(feature = "picasso-assets")]
+        if let Some(job) = &self.asset_sync {
+            // Cancel preparation, but never interrupt the atomic disk commit.
+            job.cancel();
+            return;
+        }
         if !self.confirming_quit {
             self.quit_dialog.open();
             self.confirming_quit = true;
@@ -778,6 +840,8 @@ impl MainMenuUi {
         resolution: vek::Vec2<u32>,
         dt: Duration,
     ) -> Result<(Vec<Event>, Option<ui::ice::renderer::bcs::FramePlan>), String> {
+        #[cfg(feature = "picasso-assets")]
+        self.poll_asset_sync();
         self.poll_account();
         let (messages, plan) = self.ui.maintain_native(
             self.controls.view(settings, dt.as_secs_f32()),
@@ -805,6 +869,8 @@ impl MainMenuUi {
                 Showing::Account => "account",
             },
             Screen::Connecting { .. } => "connecting",
+            #[cfg(feature = "picasso-assets")]
+            Screen::AssetSync { .. } => "asset-sync",
             Screen::Servers { .. } => "servers",
             Screen::Credits { .. } => "credits",
         }
@@ -932,6 +998,8 @@ impl MainMenuUi {
     pub fn maintain(&mut self, global_state: &mut GlobalState, dt: Duration) -> Vec<Event> {
         let mut events = Vec::new();
 
+        #[cfg(feature = "picasso-assets")]
+        self.poll_asset_sync();
         self.poll_account();
 
         let (messages, _) = self.ui.maintain(
@@ -953,6 +1021,35 @@ impl MainMenuUi {
 
         self.update_clipboard(&mut global_state.clipboard);
         events
+    }
+
+    #[cfg(feature = "picasso-assets")]
+    fn poll_asset_sync(&mut self) {
+        let Some(result) = self
+            .controls
+            .asset_sync
+            .as_ref()
+            .and_then(|job| job.status().result)
+        else {
+            return;
+        };
+        self.controls.asset_sync = None;
+        if let Some(previous) = self.controls.asset_sync_previous.take() {
+            self.controls.screen = *previous;
+        }
+        if matches!(&result, Err(message) if message == "Asset sync canceled") {
+            return;
+        }
+        let message = result.unwrap_or_else(|error| format!("Asset Sync failed: {error}"));
+        self.controls.show = Showing::Login;
+        if let Screen::Login { error, .. } = &mut self.controls.screen {
+            *error = Some(message);
+        } else {
+            self.controls.screen = Screen::Login {
+                screen: Box::default(),
+                error: Some(message),
+            };
+        }
     }
 
     fn poll_account(&mut self) {

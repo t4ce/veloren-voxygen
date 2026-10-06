@@ -88,6 +88,50 @@ impl Screen {
         let frame_id = animation.frames[frame_index as usize];
 
         let children = match connection_state {
+            ConnectionState::AssetSync {
+                message,
+                cancellable,
+            } => {
+                let stage = Container::new(Text::new(message).size(fonts.cyri.scale(18)))
+                    .width(Length::FillPortion(4))
+                    .padding(10);
+                let cancel = Container::new(neat_button(
+                    &mut self.cancel_button,
+                    i18n.get_msg("common-cancel"),
+                    0.7,
+                    button_style,
+                    cancellable.then_some(Message::CancelAssetSync),
+                ))
+                .width(Length::Units(130))
+                .height(Length::Units(30))
+                .center_x();
+                let gear = Container::new(
+                    Image::new(frame_id)
+                        .width(Length::Units(64))
+                        .height(Length::Units(64)),
+                )
+                .width(Length::Units(84))
+                .padding(10)
+                .align_x(Align::End);
+                let bottom = Row::with_children(vec![
+                    stage.into(),
+                    if *cancellable {
+                        cancel.into()
+                    } else {
+                        Space::new(Length::Units(130), Length::Units(30)).into()
+                    },
+                    gear.into(),
+                ])
+                .align_items(Align::Center)
+                .width(Length::Fill);
+                vec![
+                    Space::new(Length::Fill, Length::Fill).into(),
+                    Container::new(bottom)
+                        .height(Length::Units(110))
+                        .style(style::container::Style::image(imgs.loading_art))
+                        .into(),
+                ]
+            }
             ConnectionState::InProgress => {
                 let tip = if show_tip {
                     let key = |code| match controls.keybindings.get(&code) {

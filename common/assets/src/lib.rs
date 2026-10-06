@@ -20,6 +20,8 @@ pub use assets_manager::{
 mod fs;
 #[cfg(feature = "picasso-assets")]
 mod picasso_source;
+#[cfg(feature = "picasso-assets")]
+pub use voxy_asset_sync as sync;
 #[cfg(all(test, feature = "picasso-assets"))]
 mod tar_source;
 mod walk;
@@ -33,7 +35,7 @@ lazy_static! {
 
 fn create_asset_cache() -> AssetCache {
     #[cfg(feature = "picasso-assets")]
-    return AssetCache::with_source(picasso_source::PicassoSource::new().unwrap());
+    return AssetCache::with_source(picasso_source::LivePicassoSource::new().unwrap());
     #[cfg(not(feature = "picasso-assets"))]
     AssetCache::with_source(fs::FileSystem::new().unwrap())
 }
@@ -48,6 +50,27 @@ pub fn prepare_picasso_asset_database(path: &std::path::Path) -> std::io::Result
 #[cfg(feature = "picasso-assets")]
 pub fn initialize_picasso_assets() {
     lazy_static::initialize(&ASSETS);
+}
+
+/// Independent writable RAM image; the serving source remains intact on cancel.
+#[cfg(feature = "picasso-assets")]
+pub fn asset_sync_snapshot(
+    progress: &mut impl FnMut(&str) -> std::io::Result<()>,
+) -> std::io::Result<sync::AssetDb> {
+    ASSETS
+        .downcast_raw_source::<picasso_source::LivePicassoSource>()
+        .ok_or_else(|| std::io::Error::other("asset sync requires the Picasso database"))?
+        .snapshot(progress)
+}
+
+/// Publish verified raw assets only after their persistent image was committed.
+/// Already decoded assets held by the renderer remain valid until client restart.
+#[cfg(feature = "picasso-assets")]
+pub fn install_asset_sync_image(image: Vec<u8>) -> std::io::Result<()> {
+    ASSETS
+        .downcast_raw_source::<picasso_source::LivePicassoSource>()
+        .ok_or_else(|| std::io::Error::other("asset sync requires the Picasso database"))?
+        .install(image)
 }
 
 // register a new plugin

@@ -2416,6 +2416,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lz4_flex"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
+dependencies = [
+ "twox-hash 2.1.5",
+]
+
+[[package]]
 name = "mach2"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3894,6 +3903,17 @@ dependencies = [
 
 [[package]]
 name = "sha2"
+version = "0.10.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
+dependencies = [
+ "cfg-if 1.0.5",
+ "cpufeatures 0.2.17",
+ "digest 0.10.7",
+]
+
+[[package]]
+name = "sha2"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "446ba717509524cb3f22f17ecc096f10f4822d76ab5c0b9822c5f9c284e825f4"
@@ -4885,7 +4905,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_repr",
- "sha2",
+ "sha2 0.11.0",
  "slab",
  "slotmap",
  "specs",
@@ -4915,6 +4935,7 @@ dependencies = [
  "tracing",
  "trueos",
  "trueos-picasso",
+ "voxy-asset-sync",
  "wavefront",
 ]
 
@@ -5138,7 +5159,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "sha2",
+ "sha2 0.11.0",
  "slab",
  "specs",
  "strum",
@@ -5165,6 +5186,17 @@ dependencies = [
  "wgpu-profiler",
  "winit",
  "zeroize",
+]
+
+[[package]]
+name = "voxy-asset-sync"
+version = "0.1.0"
+dependencies = [
+ "lz4_flex",
+ "ron",
+ "serde",
+ "sha2 0.10.9",
+ "trueos-picasso",
 ]
 
 [[package]]

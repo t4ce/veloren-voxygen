@@ -10,6 +10,8 @@
 #![recursion_limit = "2048"]
 
 extern crate alloc;
+#[cfg(feature = "picasso-assets")]
+pub mod asset_sync;
 
 /// Fixed processor budget for this client.
 pub const CPU_COUNT: usize = 4;

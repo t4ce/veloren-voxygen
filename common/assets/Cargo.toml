@@ -9,9 +9,10 @@ version = "0.18.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 [features]
-picasso-assets = ["dep:picasso", "dep:serde"]
+picasso-assets = ["dep:picasso", "dep:serde", "dep:voxy-asset-sync"]
 
 [dependencies]
+voxy-asset-sync = { path = "../../../voxy-assets/node-asset-server", optional = true }
 lazy_static = "1.4.0"
 serde = { version = "1", features = ["derive"], optional = true }
 assets_manager = { version = "0.13", features = [

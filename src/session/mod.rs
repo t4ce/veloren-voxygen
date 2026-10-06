@@ -216,6 +216,23 @@ impl SessionState {
         }
     }
 
+    fn cancel_server_portal(&mut self, message: String) {
+        if let Some(portal) = self.portal.take() {
+            self.client.borrow_mut().cancel_server_portal(portal.id);
+            let camera = self.scene.camera_mut();
+            camera.set_orientation_instant(portal.saved_camera.orientation);
+            camera.set_distance_instant(portal.saved_camera.distance);
+            camera.set_mode(if portal.saved_camera.first_person {
+                CameraMode::FirstPerson
+            } else {
+                CameraMode::ThirdPerson
+            });
+        }
+        self.scene.portal_camera = None;
+        self.display_fade = None;
+        self.hud.new_message(ChatType::CommandError.into_plain_msg(message));
+    }
+
     fn maintain_server_portal(&mut self, global: &mut GlobalState) -> Option<PlayStateResult> {
         let dt = global.clock.real_dt();
         if let Some(arrival) = &mut self.arrival {
@@ -225,13 +242,21 @@ impl SessionState {
             if arrival.stage == CameraStage::Complete { self.arrival = None; self.display_fade = None; }
         }
         let portal = self.portal.as_mut()?;
+        if portal.cinematic.is_none() {
+            let camera = self.scene.camera();
+            portal.saved_camera = PortalCamera {
+                orientation: camera.get_orientation(),
+                distance: camera.get_distance(),
+                first_person: camera.get_mode() == CameraMode::FirstPerson,
+            };
+        }
         let progress = portal.poll(global, dt);
         let mut failure = progress.as_ref().err().cloned();
         if let Some(cinematic) = &portal.cinematic {
             self.scene.portal_camera = portal.camera();
             if self.display_fade.is_none() { self.display_fade = Some(DisplayFade::new(&global.window)); }
             if let Err(message) = self.display_fade.as_ref().unwrap().set(cinematic.display_fade()) { failure = Some(message); }
-            if (cinematic.stage == CameraStage::LookUp && cinematic.progress() >= 0.6
+            if (cinematic.stage == CameraStage::LookUp && Cinematic::ramp(cinematic.progress()) >= 0.6
                 || cinematic.stage == CameraStage::WhiteHold) && portal.snapshot.is_none() {
                 let (tx, rx) = crossbeam_channel::bounded(1);
                 global.window.renderer_mut().create_screenshot(move |image| { let _ = tx.send(image); });
@@ -239,28 +264,19 @@ impl SessionState {
             }
         }
         if let Some(message) = failure {
-            let portal = self.portal.take().unwrap();
-            self.client.borrow_mut().cancel_server_portal(portal.id);
-            self.scene.portal_camera = None;
-            let camera = self.scene.camera_mut();
-            camera.set_orientation_instant(portal.saved_camera.orientation);
-            camera.set_distance_instant(portal.saved_camera.distance);
-            camera.set_mode(if portal.saved_camera.first_person { CameraMode::FirstPerson } else { CameraMode::ThirdPerson });
-            self.display_fade = None;
-            self.hud.new_message(ChatType::CommandError.into_plain_msg(message));
+            self.cancel_server_portal(message);
             return None;
         }
         if progress == Ok(true) {
             let image = match portal.snapshot.as_ref()?.try_recv() {
                 Ok(Ok(image)) => image,
-                Ok(Err(message)) => { self.client.borrow_mut().cancel_server_portal(portal.id);
-                    self.hud.new_message(ChatType::CommandError.into_plain_msg(message));
-                    self.portal = None; self.scene.portal_camera = None; self.display_fade = None;
+                Ok(Err(message)) => {
+                    self.cancel_server_portal(message);
                     return None; },
                 Err(crossbeam_channel::TryRecvError::Empty) => return None,
                 Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                    self.client.borrow_mut().cancel_server_portal(portal.id);
-                    self.portal = None; self.scene.portal_camera = None; self.display_fade = None; return None;
+                    self.cancel_server_portal("The portal snapshot was interrupted. You remain in your home world.".into());
+                    return None;
                 },
             };
             let (client, metadata) = portal.take_destination();
@@ -276,7 +292,10 @@ impl SessionState {
             next.scene.camera_mut().set_orientation_instant(Vec3::zero());
             next.hud.install_portal_snapshot(image);
             next.arrival = Some(arrival); next.display_fade = self.display_fade.take();
-            // Disconnect through the normal persistence path off the render/input thread.
+            // Terminate the source through its normal persistence path even if an
+            // earlier play state still holds a shared client reference.
+            self.client.borrow_mut().logout();
+            // Retire its network off the render/input thread.
             let source = core::mem::replace(&mut self.client, Rc::clone(&next.client));
             if let Ok(source) = Rc::try_unwrap(source) {
                 let source = source.into_inner();

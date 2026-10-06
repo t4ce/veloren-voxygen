@@ -26,6 +26,7 @@ const LOGO_WIDTH: u16 = 245;
 #[derive(Default)]
 pub struct Screen {
     quit_button: button::State,
+    asset_sync_button: button::State,
     // settings_button: button::State,
     servers_button: button::State,
     account_button: button::State,
@@ -96,6 +97,13 @@ impl Screen {
                 FILL_FRAC_ONE,
                 button_style,
                 Some(Message::ShowCredits),
+            ),
+            neat_button(
+                &mut self.asset_sync_button,
+                "Asset Sync",
+                FILL_FRAC_ONE,
+                button_style,
+                Some(Message::AssetSync),
             ),
             neat_button(
                 &mut self.quit_button,

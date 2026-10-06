@@ -4736,6 +4736,14 @@ impl Hud {
             }
         }
 
+        if let (Some(image), Some((alpha, scale))) = (self.portal_snapshot, self.portal_overlay) {
+            let [w, h] = ui_widgets.wh_of(ui_widgets.window).unwrap_or([1.0, 1.0]);
+            Image::new(image).w_h(w * f64::from(scale), h * f64::from(scale))
+                .middle_of(ui_widgets.window).floating(true).graphics_for(ui_widgets.window)
+                .color(Some(Color::Rgba(1.0, 1.0, 1.0, alpha)))
+                .set(self.ids.portal_snapshot, ui_widgets);
+        }
+
         // if a menu is open, notify window so it can restrict GameInputs
         global_state.window.menu_open = !self.show.focus.is_empty();
 
@@ -5316,14 +5324,6 @@ impl Hud {
         // in flickering artifacts, figure out a better way to make use of the
         // thread pool
         let _pool = client.state().ecs().read_resource::<SlowJobPool>();
-        if let (Some(image), Some((alpha, scale))) = (self.portal_snapshot, self.portal_overlay) {
-            let (ref mut widgets, _, _) = self.ui.set_widgets();
-            let [w, h] = widgets.wh_of(widgets.window).unwrap_or([1.0, 1.0]);
-            Image::new(image).w_h(w * f64::from(scale), h * f64::from(scale))
-                .middle_of(widgets.window).floating(true).graphics_for(widgets.window)
-                .color(Some(Color::Rgba(1.0, 1.0, 1.0, alpha)))
-                .set(self.ids.portal_snapshot, widgets);
-        }
         self.ui.maintain(
             global_state.window.renderer_mut(),
             None,

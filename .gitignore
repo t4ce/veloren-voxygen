@@ -7,3 +7,4 @@ blueprint/target/
 /assets/*.redb
 /assets/*.redb.lz4
 /assets/*.redb.lz4.sha256
+tests/native-asset-sync/target/
