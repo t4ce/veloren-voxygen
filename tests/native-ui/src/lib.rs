@@ -43,6 +43,7 @@ pub mod ui4_solara_text {
     pub enum Error {
         Busy,
         Invalid,
+        InvalidState,
     }
     pub struct Damage;
     impl Damage {
@@ -57,7 +58,10 @@ pub mod ui4_solara_text {
         pub publications: u64,
         pub lease: bool,
         pub busy_draw: bool,
-        pub stale_receipts: bool,
+        pub background: bool,
+        pub pending_resize: bool,
+        pub extent: Option<(u32, u32)>,
+        pub tracked_attempts: usize,
         pub commands: Vec<Vec<SpriteCommand>>,
     }
     pub struct SceneTarget {
@@ -65,7 +69,13 @@ pub mod ui4_solara_text {
         pub live: std::sync::Arc<std::sync::atomic::AtomicBool>,
     }
     impl SceneTarget {
-        pub fn set_extent(&mut self, _: u32, _: u32) -> Result<(), Error> {
+        pub fn set_extent(&mut self, width: u32, height: u32) -> Result<(), Error> {
+            let mut state = self.observations.lock().unwrap();
+            let extent = (width, height);
+            if state.extent.is_some_and(|previous| previous != extent) {
+                state.pending_resize = true;
+            }
+            state.extent = Some(extent);
             Ok(())
         }
         pub fn upload_sprite_rgba8(
@@ -103,18 +113,28 @@ pub mod ui4_solara_text {
             state.commands.push(commands.to_vec());
             Ok(())
         }
-        pub fn publish_tracked(&mut self, _: Damage) -> Result<u64, Error> {
+        pub fn publish(&mut self, _: Damage) -> Result<(), Error> {
             let mut state = self.observations.lock().unwrap();
             if !state.lease {
                 return Err(Error::Invalid);
             }
             state.lease = false;
             state.publications += 1;
-            Ok(state.publications)
+            state.pending_resize = false;
+            Ok(())
         }
-        pub fn was_presented(&self, _: u64) -> Result<bool, Error> {
-            Ok(!self.observations.lock().unwrap().stale_receipts
-                && self.live.load(std::sync::atomic::Ordering::Acquire))
+        pub fn publish_tracked(&mut self, damage: Damage) -> Result<u64, Error> {
+            {
+                let mut state = self.observations.lock().unwrap();
+                state.tracked_attempts += 1;
+                // Match the kernel: receipts describe foreground publications,
+                // not background updates or staged paired resize handoffs.
+                if state.background || state.pending_resize {
+                    return Err(Error::InvalidState);
+                }
+            }
+            self.publish(damage)?;
+            Ok(self.observations.lock().unwrap().publications)
         }
     }
 }
@@ -262,19 +282,23 @@ mod scheduling {
         presenter.check().unwrap();
     }
     #[test]
-    fn superseded_display_receipts_do_not_freeze_new_frames() {
+    fn background_and_paired_resize_use_untracked_publication() {
         let (scene, scene_state, _) = target(true);
         let (foreground, ui_state, _) = target(true);
-        scene_state.lock().unwrap().stale_receipts = true;
-        ui_state.lock().unwrap().stale_receipts = true;
+        scene_state.lock().unwrap().background = true;
         let presenter = LayeredPresenter::new(foreground, scene).unwrap();
         presenter.submit(1, vek::Vec2::new(8, 8), plan(1.));
-        wait(|| ui_state.lock().unwrap().publications == 1);
+        wait(|| {
+            ui_state.lock().unwrap().publications == 1
+                && scene_state.lock().unwrap().publications == 1
+        });
         presenter.submit(2, vek::Vec2::new(10, 10), plan(2.));
         wait(|| {
             ui_state.lock().unwrap().publications == 2
                 && scene_state.lock().unwrap().publications == 2
         });
+        assert_eq!(scene_state.lock().unwrap().tracked_attempts, 0);
+        assert_eq!(ui_state.lock().unwrap().tracked_attempts, 0);
         presenter.check().unwrap();
     }
     #[test]

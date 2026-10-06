@@ -7,7 +7,7 @@ use super::{
     bcs::{FramePlan, LayerPlan},
 };
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::HashSet,
     sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -134,24 +134,8 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     let mut previous: Option<(Vec2<u32>, Vec<SpriteCommand>)> = None;
     let mut job: Option<Job> = None;
     let mut phase = 0;
-    let mut receipts = VecDeque::new();
-    let mut first = true;
     while !mailbox.stopped.load(Ordering::Acquire) {
         mailbox.counters.iterations.fetch_add(1, Ordering::Relaxed);
-        // Receipts can be superseded during resize and are never admission
-        // tokens. Only begin/publish may apply producer backpressure.
-        if first {
-            for &serial in &receipts {
-                if target.was_presented(serial).unwrap_or(false) {
-                    tracing::info!(producer = name, serial, "Native layer reached SURFLIVE");
-                    first = false;
-                    break;
-                }
-            }
-            if !first {
-                receipts.clear();
-            }
-        }
         if job.is_none() {
             job = mailbox.latest.lock().unwrap().take();
             phase = 0;
@@ -249,13 +233,16 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
             }
             3 => {
                 let call_started = std::time::Instant::now();
-                let result = target.publish_tracked(Damage::full(current.size.x, current.size.y));
+                // Foreground receipts cannot represent a background commit or
+                // a staged paired resize. Publish both capabilities normally;
+                // the kernel retains responsibility for display retirement.
+                let result = target.publish(Damage::full(current.size.x, current.size.y));
                 mailbox
                     .counters
                     .publish_call_us
                     .fetch_add(micros(call_started.elapsed()), Ordering::Relaxed);
                 match result {
-                    Ok(serial) => {
+                    Ok(()) => {
                         mailbox
                             .counters
                             .publications
@@ -263,15 +250,8 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                         tracing::trace!(
                             producer = name,
                             revision = current.revision,
-                            serial,
                             "Native layer published"
                         );
-                        if first {
-                            receipts.push_back(serial);
-                            if receipts.len() > 16 {
-                                receipts.pop_front();
-                            }
-                        }
                         Ok(())
                     }
                     Err(error) => Err(error),
