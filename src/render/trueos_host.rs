@@ -789,7 +789,7 @@ impl RenderPassInterface for Pass {
         assert!(!self.terrain, "terrain requires indexed quad draw");
     }
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        if self.terrain {
+        if self.terrain && cfg!(feature = "trueos-native-lines") {
             self.extract(indices, base_vertex, instances);
         }
     }

@@ -285,9 +285,35 @@ fn handle_main_events_cleared(
 
         span!(guard, "Render");
 
-        #[cfg(target_os = "trueos")]
+        #[cfg(all(target_os = "trueos", feature = "trueos-native-lines"))]
         let scene_display_ready = last.uses_native_ui() || global_state.window.prepare_scene_display()
             .expect("UI4 producer handoff failed");
+        #[cfg(all(target_os = "trueos", not(feature = "trueos-native-lines")))]
+        let scene_display_ready = {
+            if !last.uses_native_ui() {
+                if let Err(error) = global_state.window.prepare_scene_display() {
+                    let _ = trueos::logl::log_record(
+                        trueos::logl::level::ERROR,
+                        "apps::voxygen",
+                        format_args!("Voxygen black scene handoff failed: {error}; exiting cleanly"),
+                    );
+                    event_loop.exit();
+                    return;
+                }
+                // Only the world scene gets the capped black-frame loop.
+                // Main menu, loader and selector retain their own backgrounds.
+                if let Err(error) = global_state.window.present_black_scene() {
+                    let _ = trueos::logl::log_record(
+                        trueos::logl::level::ERROR,
+                        "apps::voxygen",
+                        format_args!("Voxygen black scene producer failed: {error}; exiting cleanly"),
+                    );
+                    event_loop.exit();
+                    return;
+                }
+            }
+            false
+        };
         #[cfg(not(target_os = "trueos"))]
         let scene_display_ready = true;
 

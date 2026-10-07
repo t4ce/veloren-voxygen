@@ -558,6 +558,17 @@ impl Window {
         Ok(())
     }
 
+    #[cfg(all(target_os = "trueos", not(feature = "trueos-native-lines")))]
+    pub(crate) fn present_black_scene(&mut self) -> Result<(), String> {
+        self.menu_presenter.check()?;
+        let size = self.physical_size();
+        if size.x != 0 && size.y != 0 {
+            self.menu_revision += 1;
+            self.menu_presenter.clear_scene(self.menu_revision, size);
+        }
+        Ok(())
+    }
+
     #[cfg(target_os = "trueos")]
     pub fn resume_menu(&mut self) {
         self.menu_handoff = None;
@@ -574,8 +585,14 @@ impl Window {
         if size.x == 0 || size.y == 0 { return Ok(false); }
         let extent = [size.x, size.y];
         if self.menu_handoff.is_none_or(|handoff| handoff.extent != extent) {
+            #[cfg(feature = "trueos-native-lines")]
             let scene_revision = self.menu_handoff.map_or(self.menu_revision, |handoff| handoff.scene_revision);
             self.menu_revision += 1;
+            #[cfg(not(feature = "trueos-native-lines"))]
+            let scene_revision = {
+                self.menu_presenter.clear_scene(self.menu_revision, size);
+                self.menu_revision
+            };
             self.menu_presenter.clear_foreground(self.menu_revision, size);
             self.menu_handoff = Some(Handoff {
                 scene_revision, foreground_revision: self.menu_revision, extent,

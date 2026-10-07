@@ -6,6 +6,8 @@ pub mod addr;
 pub mod error;
 #[cfg(target_os = "trueos")]
 mod auth;
+#[cfg(target_os = "trueos")]
+mod teardown;
 
 // Reexports
 pub use crate::client::error::Error;
@@ -3683,6 +3685,20 @@ impl Drop for Client {
             trace!("no disconnect msg necessary as client wasn't registered")
         }
 
+        #[cfg(target_os = "trueos")]
+        {
+            let _ = teardown::retire_connection(
+                &self.runtime,
+                self.participant.take(),
+                self.network.take(),
+            );
+            let _ = trueos::logl::log_record(
+                trueos::logl::level::IMPORTANT,
+                "apps::voxygen",
+                format_args!("Voxygen client teardown: graceful disconnect queued outside input loop"),
+            );
+        }
+        #[cfg(not(target_os = "trueos"))]
         tokio::task::block_in_place(|| {
             if let Err(e) = self
                 .runtime
@@ -3692,6 +3708,7 @@ impl Drop for Client {
             }
         });
         //explicitly drop the network here while the runtime is still existing
+        #[cfg(not(target_os = "trueos"))]
         drop(self.network.take());
     }
 }

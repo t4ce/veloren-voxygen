@@ -3,10 +3,23 @@ use super::ui;
 use crate::{
     GlobalState,
     client::Client,
-    ui::ice::{Element, IcedUi},
+    ui::{
+        ice::{Element, IcedUi, style},
+        img_ids::ImageGraphic,
+    },
     window::Event,
 };
-use iced::{Button, Column, Container, Length, Text, button};
+use iced::{Align, Button, Column, Container, Length, Text, button};
+
+image_ids_ice! {
+    struct Imgs {
+        <ImageGraphic>
+        background: "voxygen.background.bg_main",
+        button: "voxygen.element.ui.generic.buttons.button",
+        button_hover: "voxygen.element.ui.generic.buttons.button_hover",
+        button_press: "voxygen.element.ui.generic.buttons.button_press",
+    }
+}
 
 #[derive(Clone)]
 enum Message {
@@ -17,6 +30,7 @@ enum Message {
 
 pub(super) struct Selector {
     ui: IcedUi,
+    imgs: Imgs,
     buttons: Vec<button::State>,
     spectate: button::State,
     logout: button::State,
@@ -27,8 +41,12 @@ pub(super) struct Selector {
 
 impl Selector {
     pub fn new(state: &GlobalState) -> Self {
+        let mut ui = IcedUi::new_native(state.window.physical_size(), state.window.scale_factor());
+        let imgs = Imgs::load(&mut ui).expect("Failed to load character selector images");
+        ui.mark_scene_image(imgs.background);
         Self {
-            ui: IcedUi::new_native(state.window.physical_size(), state.window.scale_factor()),
+            ui,
+            imgs,
             buttons: Vec::new(),
             spectate: button::State::new(),
             logout: button::State::new(),
@@ -64,11 +82,15 @@ impl Selector {
         let list = client.character_list();
         self.buttons
             .resize_with(list.characters.len(), button::State::new);
+        let button_style = style::button::Style::new(self.imgs.button)
+            .hover_image(self.imgs.button_hover)
+            .press_image(self.imgs.button_press)
+            .text_color(iced::Color::WHITE);
         let mut column = Column::new()
-            .padding(40)
+            .padding(24)
             .spacing(18)
-            .push(Text::new("Character Selection").size(30))
-            .push(Text::new("Near terrain outline bring-up").size(20));
+            .align_items(Align::Center)
+            .push(Text::new("Character Selection").size(30));
         if self.joining {
             column = column.push(Text::new("Joining world...").size(24));
         } else if list.loading {
@@ -82,27 +104,45 @@ impl Selector {
                             Text::new(format!("Play: {}", item.character.alias)).size(24),
                         )
                         .padding(8)
+                        .width(Length::Fill)
+                        .style(button_style)
                         .on_press(Message::Play(id)),
                     );
                 }
             }
             if list.characters.is_empty() {
-                column = column.push(Text::new("No existing characters. Character creation is out-gated for this bring-up.").size(20));
+                column = column.push(Text::new("No characters on this server.").size(20));
             }
             column = column.push(
                 Button::new(&mut self.spectate, Text::new("Spectate").size(24))
                     .padding(8)
+                    .width(Length::Fill)
+                    .style(button_style)
                     .on_press(Message::Spectate),
             );
         }
         column = column.push(
             Button::new(&mut self.logout, Text::new("Back to main menu").size(24))
                 .padding(8)
+                .width(Length::Fill)
+                .style(button_style)
                 .on_press(Message::Logout),
         );
-        let root: Element<'_, Message> = Container::new(column)
+        let panel = Container::new(column)
+            .width(Length::Fill)
+            .max_width(520)
+            .style(style::container::Style::color_with_double_cornerless_border(
+                (22, 18, 16, 255).into(),
+                (11, 11, 11, 255).into(),
+                (54, 46, 38, 255).into(),
+            ));
+        let root: Element<'_, Message> = Container::new(panel)
             .width(Length::Fill)
             .height(Length::Fill)
+            .align_x(Align::Center)
+            .align_y(Align::Center)
+            .padding(40)
+            .style(style::container::Style::image(self.imgs.background))
             .into();
         let (messages, plan) = match self.ui.maintain_native(root, size, &mut state.clipboard) {
             Ok(result) => result,

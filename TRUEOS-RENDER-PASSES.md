@@ -206,6 +206,42 @@ The exact cause of the recorded boot's stall remains unproven until these
 boundaries are observed on the rig; the selector prerequisites were unnecessary
 regardless of which boundary that run stopped at.
 
+## Default pack: opaque black scene
+
+Native geometry is now excluded by the opt-in `trueos-native-lines` feature.
+The default pack does not construct the line presenter, open its vGPU device,
+allocate vertex/index buffers, create a line shader/pipeline, extract/project
+terrain edges or submit indexed geometry. It retains the ordinary client and
+state loop. The existing UI4 scene producer clears opaque black (`0xff000000`)
+with an empty sprite batch and publishes through its existing Busy/retry loop.
+The capped world render loop queues a fresh black frame every tick. Only these
+explicit black-clear jobs bypass the unchanged-plan shortcut. Main-menu and
+loader background images pass through unchanged, and menu jobs retain their
+normal cached-publication behavior. No original 3D frame is recorded in this
+mode. Entering a world clears the menu foreground.
+Both scene and foreground still publish when paired resize needs new buffers.
+
+This is a black-frame bring-up, not proof of terrain pixels. The dormant line
+executor also has an unresolved error-contract bug: a rejected native render
+submission can return Busy safely, while its caller promotes the error to a
+panic. Keep the feature off until that contract is fixed.
+
+The native character selector is a temporary replacement for the excluded
+character-preview/Conrod screen, not scene-rendered text. It now uses the
+existing menu background and button skins in a centered panel. Internal
+bring-up labels have been removed. Character creation/editing/deletion remain
+excluded; existing characters and Spectate still use the real client requests.
+
+Back previously popped the state and synchronously ran `Client::drop`, which
+called `Runtime::block_on(Participant::disconnect())` on the input/Hull thread.
+The network's graceful flush can wait up to 120 seconds. TRUEOS now transfers
+the participant and network into an asynchronous runtime task: input returns
+immediately, ownership is retained while disconnect completes, and network
+destruction runs in an async context where scheduler acknowledgement is
+deferred. Desktop teardown remains unchanged. The recorded run reaches native
+selection but contains no kernel panic record; it does not establish the exact
+kernel failure behind the reported freeze.
+
 ## Selector transition and cooperative stop
 
 The `a227e832...` capture advances through client first-tick completion, scene

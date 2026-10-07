@@ -1,5 +1,5 @@
-//! Full-client command bridge. Only terrain edges execute through native vGPU;
-//! other graphics passes have explicit host handles and remain out-gated.
+//! Full-client command bridge. The default scene is UI4's opaque black clear.
+//! Native terrain geometry is opt-in; original graphics passes remain out-gated.
 use super::trueos_host::{self, Host, HostTexture};
 use std::{
     pin::Pin,
@@ -8,7 +8,7 @@ use std::{
 use wgpu::custom::*;
 
 pub(super) fn instance() -> wgpu::Instance {
-    tracing::info!(target: "voxy_scene_contract", "TRUEOS full scene flow: near terrain lines admitted; original graphics shaders out-gated");
+    tracing::info!(target: "voxy_scene_contract", native_lines = cfg!(feature = "trueos-native-lines"), "TRUEOS scene: UI4 black background by default; original graphics shaders out-gated");
     wgpu::Instance::from_custom(SceneInstance)
 }
 
@@ -37,7 +37,7 @@ impl InstanceInterface for SceneInstance {
                     first_surflive: false,
                     attempted_frames: 0,
                     last_source_log: None,
-                    #[cfg(target_os = "trueos")]
+                    #[cfg(all(target_os = "trueos", feature = "trueos-native-lines"))]
                     presenter: None,
                 })),
             })),
@@ -153,7 +153,7 @@ struct SurfaceState {
     first_surflive: bool,
     attempted_frames: u64,
     last_source_log: Option<std::time::Instant>,
-    #[cfg(target_os = "trueos")]
+    #[cfg(all(target_os = "trueos", feature = "trueos-native-lines"))]
     presenter: Option<super::trueos_lines::LinePresenter>,
 }
 impl std::fmt::Debug for SurfaceState {
@@ -186,7 +186,7 @@ impl SurfaceInterface for SceneSurface {
         assert!(!state.acquired, "Cannot configure acquired terrain frame");
         state.width = config.width;
         state.height = config.height;
-        #[cfg(target_os = "trueos")]
+        #[cfg(all(target_os = "trueos", feature = "trueos-native-lines"))]
         {
             if let Some(presenter) = &mut state.presenter {
                 presenter
@@ -256,7 +256,7 @@ pub(super) fn present(detail: &DispatchSurfaceOutputDetail, host: &Arc<Host>) {
     let frame = host.take_frame();
     let lines = frame.lines;
     state.attempted_frames += 1;
-    #[cfg(target_os = "trueos")]
+    #[cfg(all(target_os = "trueos", feature = "trueos-native-lines"))]
     {
         if state
             .last_source_log
@@ -331,7 +331,8 @@ pub(crate) fn startup_label() -> &'static str {
         0 => "Starting graphics worker",
         1 => "Negotiating terrain bridge",
         2 => "Checking scene formats",
-        3 => "Admitting native line GPU",
+        3 if cfg!(feature = "trueos-native-lines") => "Admitting native line GPU",
+        3 => "Using UI4 black scene; native geometry disabled",
         4 => "Loading scene descriptors",
         5 => "Preparing terrain pipeline handles",
         6 => "Finishing scene resources",
@@ -358,7 +359,7 @@ pub(super) fn prepare_surface(
         .as_custom::<SceneSurface>()
         .ok_or("Foreign terrain surface")?;
     let mut state = surface.state.lock().unwrap();
-    #[cfg(target_os = "trueos")]
+    #[cfg(all(target_os = "trueos", feature = "trueos-native-lines"))]
     if state.presenter.is_none() {
         state.presenter = Some(super::trueos_lines::LinePresenter::new(
             state.window,

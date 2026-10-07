@@ -23,6 +23,8 @@ struct Job {
     revision: u64,
     size: Vec2<u32>,
     plan: LayerPlan,
+    clear_rgba: u32,
+    refresh: bool,
 }
 #[derive(Default)]
 struct Mailbox {
@@ -102,11 +104,15 @@ impl LayeredPresenter {
             revision,
             size,
             plan: plan.background,
+            clear_rgba: 0,
+            refresh: false,
         });
         self.foreground.mailbox.submit(Job {
             revision,
             size,
             plan: plan.foreground,
+            clear_rgba: 0,
+            refresh: false,
         });
     }
     pub fn clear_foreground(&self, revision: u64, size: Vec2<u32>) {
@@ -114,6 +120,18 @@ impl LayeredPresenter {
             revision,
             size,
             plan: LayerPlan::default(),
+            clear_rgba: 0,
+            refresh: false,
+        });
+    }
+    #[cfg(not(feature = "trueos-native-lines"))]
+    pub fn clear_scene(&self, revision: u64, size: Vec2<u32>) {
+        self.scene.mailbox.submit(Job {
+            revision,
+            size,
+            plan: LayerPlan::default(),
+            clear_rgba: 0xff00_0000,
+            refresh: true,
         });
     }
     pub fn scene_published_revision(&self) -> u64 {
@@ -179,7 +197,7 @@ fn spawn(
 }
 fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<(), String> {
     let mut uploaded = HashMap::new();
-    let mut previous: Option<(Vec2<u32>, Vec<SpriteCommand>)> = None;
+    let mut previous: Option<(Vec2<u32>, u32, Vec<SpriteCommand>)> = None;
     let mut job: Option<Job> = None;
     let mut phase = 0;
     while !mailbox.stopped.load(Ordering::Acquire) {
@@ -205,8 +223,10 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
             continue;
         };
         if phase == 0
-            && previous.as_ref().is_some_and(|(size, commands)| {
+            && !current.refresh
+            && previous.as_ref().is_some_and(|(size, clear_rgba, commands)| {
                 *size == current.size
+                    && *clear_rgba == current.clear_rgba
                     && *commands == current.plan.commands
                     && current.plan.uploads.iter().all(|upload| {
                         uploaded
@@ -260,7 +280,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 result
             }
             1 => {
-                let result = target.begin_gpu_frame();
+                let result = target.begin_sprite_frame(current.clear_rgba);
                 if result.is_ok() {
                     mailbox.counters.begins.fetch_add(1, Ordering::Relaxed);
                 }
@@ -322,7 +342,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 }
             }
             _ => {
-                previous = Some((current.size, current.plan.commands.clone()));
+                previous = Some((current.size, current.clear_rgba, current.plan.commands.clone()));
                 job = None;
                 continue;
             }

@@ -4,9 +4,9 @@ pub(crate) use trueos_scene::startup_label as scene_startup_label;
 mod trueos_scene;
 #[cfg(target_os = "trueos")]
 mod trueos_host;
-#[cfg(target_os = "trueos")]
+#[cfg(all(target_os = "trueos", feature = "trueos-native-lines"))]
 mod trueos_lines;
-#[cfg(target_os = "trueos")]
+#[cfg(all(target_os = "trueos", feature = "trueos-native-lines"))]
 mod trueos_presentation;
 pub mod bound;
 mod buffer;
