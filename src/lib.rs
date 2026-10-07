@@ -27,6 +27,8 @@ pub mod audio;
 pub mod cli;
 pub mod client;
 pub mod portal_timeline;
+#[cfg(all(target_os = "trueos", not(feature = "headless")))]
+pub mod native_dump;
 #[cfg(not(feature = "headless"))]
 pub mod server_portal;
 pub mod clipboard;
@@ -98,6 +100,8 @@ pub struct GlobalState {
     pub tokio_runtime: Arc<Runtime>,
     /// Process-only credentials; never part of Settings or Profile serialization.
     pub portal_credentials: Option<Arc<server_portal::PortalCredentials>>,
+    #[cfg(target_os = "trueos")]
+    pub native_connection: Arc<std::sync::Mutex<Option<native_dump::Connection>>>,
 
     pub lazy_init: scene::terrain::SpriteRenderContextLazy,
     pub audio: AudioFrontend,

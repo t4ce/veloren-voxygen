@@ -73,6 +73,13 @@ pub(crate) struct LayeredPresenter {
     foreground: Producer,
     errors: mpsc::Receiver<String>,
 }
+impl Drop for LayeredPresenter {
+    fn drop(&mut self) {
+        // Both sides of a paired resize must stop before either thread is joined.
+        self.scene.mailbox.stop();
+        self.foreground.mailbox.stop();
+    }
+}
 impl LayeredPresenter {
     pub fn new(foreground: SceneTarget, scene: SceneTarget) -> Result<Self, String> {
         let (errors_tx, errors) = mpsc::channel();

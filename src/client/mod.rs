@@ -339,6 +339,11 @@ pub struct Client {
     ping_deltas: VecDeque<f64>,
 
     tick: u64,
+    // Advanced only by received world updates, never by local client ticks.
+    #[cfg(target_os = "trueos")]
+    received_world_update: u64,
+    #[cfg(target_os = "trueos")]
+    received_terrain_update: u64,
     state: State,
 
     flashing_lights_enabled: bool,
@@ -1150,6 +1155,10 @@ impl Client {
             ping_deltas: VecDeque::new(),
 
             tick: 0,
+            #[cfg(target_os = "trueos")]
+            received_world_update: 0,
+            #[cfg(target_os = "trueos")]
+            received_terrain_update: 0,
             state,
 
             flashing_lights_enabled: true,
@@ -2894,12 +2903,16 @@ impl Client {
                 self.state
                     .ecs_mut()
                     .apply_entity_sync_package(entity_sync_package, uid);
+                #[cfg(target_os = "trueos")]
+                { self.received_world_update = self.received_world_update.wrapping_add(1); }
             },
             ServerGeneral::CompSync(comp_sync_package, force_counter) => {
                 self.force_update_counter = force_counter;
                 self.state
                     .ecs_mut()
                     .apply_comp_sync_package(comp_sync_package);
+                #[cfg(target_os = "trueos")]
+                { self.received_world_update = self.received_world_update.wrapping_add(1); }
             },
             ServerGeneral::CreateEntity(entity_package) => {
                 self.state.ecs_mut().apply_entity_package(entity_package);
@@ -3179,6 +3192,8 @@ impl Client {
                 self.terrain_decode_pending = None;
                 if let Some(chunk) = chunk {
                     self.state.insert_chunk(key, Arc::new(chunk));
+                    self.received_terrain_update = self.received_terrain_update.wrapping_add(1);
+                    self.received_world_update = self.received_world_update.wrapping_add(1);
                 }
                 self.pending_chunks.remove(&key);
             }
@@ -3202,6 +3217,11 @@ impl Client {
             ServerGeneral::TerrainChunkUpdate { key, chunk } => {
                 if let Some(chunk) = chunk.ok().and_then(|c| c.to_chunk()) {
                     self.state.insert_chunk(key, Arc::new(chunk));
+                    #[cfg(target_os = "trueos")]
+                    {
+                        self.received_terrain_update = self.received_terrain_update.wrapping_add(1);
+                        self.received_world_update = self.received_world_update.wrapping_add(1);
+                    }
                 }
                 self.pending_chunks.remove(&key);
             },
@@ -3214,6 +3234,11 @@ impl Client {
                     blocks.drain().for_each(|(pos, block)| {
                         self.state.set_block(pos, block);
                     });
+                    #[cfg(target_os = "trueos")]
+                    {
+                        self.received_terrain_update = self.received_terrain_update.wrapping_add(1);
+                        self.received_world_update = self.received_world_update.wrapping_add(1);
+                    }
                 }
             },
             _ => unreachable!("Not a terrain message"),
@@ -3397,6 +3422,11 @@ impl Client {
     pub fn registered(&self) -> bool { self.registered }
 
     pub fn get_tick(&self) -> u64 { self.tick }
+
+    #[cfg(target_os = "trueos")]
+    pub fn received_world_updates(&self) -> (u64, u64) {
+        (self.received_world_update, self.received_terrain_update)
+    }
 
     pub fn get_ping_ms(&self) -> f64 { self.last_ping_delta * 1000.0 }
 
