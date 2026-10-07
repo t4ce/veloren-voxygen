@@ -599,8 +599,25 @@ impl SpriteRenderContext {
             }
         });
 
+        // The menu may never consume prepared sprites. Retain ownership of
+        // that finite worker so native shutdown cannot acknowledge a detached
+        // thread which still executes Blueprint code.
+        struct PreparationThread(Option<std::thread::JoinHandle<SpriteWorkerResponse>>);
+        impl PreparationThread {
+            fn take(&mut self) -> Option<std::thread::JoinHandle<SpriteWorkerResponse>> {
+                self.0.take()
+            }
+        }
+        impl Drop for PreparationThread {
+            fn drop(&mut self) {
+                #[cfg(target_os = "trueos")]
+                if let Some(worker) = self.0.take() {
+                    let _ = worker.join();
+                }
+            }
+        }
         let init = core::cell::OnceCell::new();
-        let mut join_handle = Some(join_handle);
+        let mut join_handle = PreparationThread(Some(join_handle));
         let mut closure = move |renderer: &mut Renderer| {
             // A negotiated smaller device needs a smaller atlas. Reuse the
             // original preparation path rather than uploading an oversized one.

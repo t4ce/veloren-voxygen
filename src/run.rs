@@ -121,6 +121,12 @@ impl<F: FnOnce(&dyn ActiveEventLoop) -> GlobalState> ApplicationHandler for App<
     }
 
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
+        #[cfg(target_os = "trueos")]
+        if matches!(trueos::shutdown::requested(), Ok(true)) {
+            tracing::info!("voxy: cooperative stop requested; exiting event loop");
+            event_loop.exit();
+            return;
+        }
         if let Some(global_state) = self.global_state.as_mut() {
             for event in self.file_drop.poll() {
                 global_state.window.send_event(Event::IcedUi(event));
@@ -132,6 +138,10 @@ impl<F: FnOnce(&dyn ActiveEventLoop) -> GlobalState> ApplicationHandler for App<
 
 impl<F> Drop for App<F> {
     fn drop(&mut self) {
+        // Release clients/play states before their window and runtime. The
+        // shutdown guard in main acknowledges cleanup only after this returns.
+        #[cfg(target_os = "trueos")]
+        self.states.clear();
         if let Some(global_state) = self.global_state.as_mut() {
             global_state
                 .settings

@@ -1,7 +1,21 @@
-use std::{panic, panic::PanicHookInfo};
+use std::panic;
+#[cfg(not(target_os = "trueos"))]
+use std::panic::PanicHookInfo;
 use std::path::PathBuf;
 use tracing::error;
 
+#[cfg(target_os = "trueos")]
+pub fn set_panic_hook(_log_filename: String, _logs_dir: PathBuf) {
+    let default_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        error!("voxy: panic {panic_info}");
+        // Preserve explicitly requested RUST_BACKTRACE behavior, without
+        // forcing a full backtrace and desktop bug-report dialog every time.
+        default_hook(panic_info);
+    }));
+}
+
+#[cfg(not(target_os = "trueos"))]
 pub fn set_panic_hook(log_filename: String, logs_dir: PathBuf) {
     // Set up panic handler to relay swish panic messages to the user
     let default_hook = panic::take_hook();
@@ -78,10 +92,12 @@ pub fn set_panic_hook(log_filename: String, logs_dir: PathBuf) {
     }));
 }
 
+#[cfg(not(target_os = "trueos"))]
 enum PotentialPanicCause {
     GraphicsCardIncompatibleWithRenderingBackend,
 }
 
+#[cfg(not(target_os = "trueos"))]
 fn potential_cause(panic_info: &PanicHookInfo) -> Option<String> {
     let location = panic_info
         .location()
@@ -100,6 +116,7 @@ fn potential_cause(panic_info: &PanicHookInfo) -> Option<String> {
     potential_cause.map(potential_cause_to_string)
 }
 
+#[cfg(not(target_os = "trueos"))]
 fn potential_cause_to_string(potential_cause: PotentialPanicCause) -> String {
     match potential_cause {
         PotentialPanicCause::GraphicsCardIncompatibleWithRenderingBackend => {

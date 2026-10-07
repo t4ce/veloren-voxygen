@@ -39,6 +39,12 @@ use wgpu::{Backends, Instance};
 
 #[cfg(not(feature = "headless"))]
 fn main() {
+    // Declared first and dropped last: host teardown must wait for owned
+    // presenter workers and the Tokio runtime to finish normal destruction.
+    #[cfg(target_os = "trueos")]
+    let _vm_shutdown = trueos::shutdown::ShutdownGuard::register()
+        .expect("Failed to register cooperative Voxy shutdown");
+
     // Process CLI arguments
     use clap::Parser;
     let args = cli::Args::parse();
@@ -85,6 +91,10 @@ fn main() {
     // Init logging and hold the guards.
     let now = Utc::now();
     let log_filename = format!("{}_voxygen.log", now.format("%Y-%m-%d"));
+    // Bring-up diagnostics must not commit the growing log file each batch.
+    #[cfg(target_os = "trueos")]
+    let _guards = common_frontend::init_stdout(None);
+    #[cfg(not(target_os = "trueos"))]
     let _guards = common_frontend::init_stdout(Some((&logs_dir, &log_filename)));
 
     #[cfg(feature = "picasso-assets")]
@@ -186,7 +196,7 @@ fn main() {
     i18n.set_english_fallback(settings.language.use_english_fallback);
 
     // Keep the original play-state stack. TRUEOS first publishes its UI4 menu;
-    // scene-device initialization is requested by Login, before connecting.
+    // scene-device initialization starts only after successful login.
     {
         // Create window
         use veloren_voxygen::{error::Error, render::RenderError};

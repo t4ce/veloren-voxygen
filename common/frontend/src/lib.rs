@@ -1,4 +1,4 @@
- use std::fs;
+use std::fs;
 use std::path::Path;
 
 use termcolor::{ColorChoice, StandardStream};
@@ -7,20 +7,6 @@ use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
     EnvFilter, filter::LevelFilter, fmt::writer::MakeWriter, prelude::*, registry,
 };
-
-// TRUEOS std file writes are buffered until an explicit sync or close. Commit
-// each logging batch so an operator can read the live log through TRUEOSFS.
-#[cfg(target_os = "trueos")]
-struct SyncedLogFile(fs::File);
-
-#[cfg(target_os = "trueos")]
-impl std::io::Write for SyncedLogFile {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        std::io::Write::write(&mut self.0, bytes)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> { self.0.sync_data() }
-}
 
 const RUST_LOG_ENV: &str = "RUST_LOG";
 
@@ -55,131 +41,135 @@ where
     W2: MakeWriter<'static> + 'static,
     <W2 as MakeWriter<'static>>::Writer: 'static + Send + Sync,
 {
-    // To hold the guards that we create, they will cause the logs to be
-    // flushed when they're dropped.
-    
-    let mut guards: Vec<WorkerGuard> = Vec::new();
-
-    // We will do lower logging than the default (INFO) by INCLUSION. This
-    // means that if you need lower level logging for a specific module, then
-    // put it in the environment in the correct format i.e. DEBUG logging for
-    // this crate would be veloren_voxygen=debug.
-
-    let mut filter = EnvFilter::default().add_directive(LevelFilter::INFO.into());
-
-    let default_directives = [
-        "dot_vox::parser=warn",
-        "veloren_common::trade=info",
-        "veloren_world::sim=info",
-        "veloren_world::civ=info",
-        "veloren_world::site::economy=info",
-        "veloren_server::events::entity_manipulation=info",
-        "hyper=info",
-        "prometheus_hyper=info",
-        "mio::poll=info",
-        "mio::sys::windows=info",
-        "assets_manager::anycache=info",
-        "polling::epoll=info",
-        "h2=info",
-        "tokio_util=info",
-        "rustls=info",
-        "naga=info",
-        "gfx_backend_vulkan=info",
-        "wgpu_core=info",
-        "wgpu_core::device=warn",
-        "wgpu_core::swap_chain=info",
-        "veloren_network_protocol=info",
-        "quinn_proto::connection=info",
-        "refinery_core::traits::divergent=off",
-        "veloren_server::persistence::character=info",
-        "veloren_server::settings=info",
-        "veloren_query_server=info",
-        "symphonia_format_ogg::demuxer=off",
-        "symphonia_core::probe=off",
-        "wgpu_hal::dx12::device=off",
-    ];
-
-    for s in default_directives {
-        filter = filter.add_directive(s.parse().unwrap());
+    #[cfg(target_os = "trueos")]
+    {
+        // Blueprint's resident collector owns filtering and transport. In
+        // particular, do not open a legacy file before appender replacement.
+        let _ = (log_path_file, terminal);
+        registry().init();
+        Vec::<WorkerGuard>::new()
     }
+    #[cfg(not(target_os = "trueos"))]
+    {
+        // To hold the guards that we create, they will cause the logs to be
+        // flushed when they're dropped.
 
-    match std::env::var(RUST_LOG_ENV) {
-        Ok(env) => {
-            for s in env.split(',') {
-                match s.parse() {
-                    Ok(d) => filter = filter.add_directive(d),
-                    Err(err) => eprintln!("WARN ignoring log directive: `{s}`: {err}"),
+        let mut guards: Vec<WorkerGuard> = Vec::new();
+
+        // We will do lower logging than the default (INFO) by INCLUSION. This
+        // means that if you need lower level logging for a specific module, then
+        // put it in the environment in the correct format i.e. DEBUG logging for
+        // this crate would be veloren_voxygen=debug.
+
+        let mut filter = EnvFilter::default().add_directive(LevelFilter::INFO.into());
+
+        let default_directives = [
+            "dot_vox::parser=warn",
+            "veloren_common::trade=info",
+            "veloren_world::sim=info",
+            "veloren_world::civ=info",
+            "veloren_world::site::economy=info",
+            "veloren_server::events::entity_manipulation=info",
+            "hyper=info",
+            "prometheus_hyper=info",
+            "mio::poll=info",
+            "mio::sys::windows=info",
+            "assets_manager::anycache=info",
+            "polling::epoll=info",
+            "h2=info",
+            "tokio_util=info",
+            "rustls=info",
+            "naga=info",
+            "gfx_backend_vulkan=info",
+            "wgpu_core=info",
+            "wgpu_core::device=warn",
+            "wgpu_core::swap_chain=info",
+            "veloren_network_protocol=info",
+            "quinn_proto::connection=info",
+            "refinery_core::traits::divergent=off",
+            "veloren_server::persistence::character=info",
+            "veloren_server::settings=info",
+            "veloren_query_server=info",
+            "symphonia_format_ogg::demuxer=off",
+            "symphonia_core::probe=off",
+            "wgpu_hal::dx12::device=off",
+        ];
+
+        for s in default_directives {
+            filter = filter.add_directive(s.parse().unwrap());
+        }
+
+        match std::env::var(RUST_LOG_ENV) {
+            Ok(env) => {
+                for s in env.split(',') {
+                    match s.parse() {
+                        Ok(d) => filter = filter.add_directive(d),
+                        Err(err) => eprintln!("WARN ignoring log directive: `{s}`: {err}"),
+                    }
                 }
             }
-        },
-        Err(std::env::VarError::NotUnicode(os_string)) => {
-            eprintln!("WARN ignoring log directives due to non-unicode data: {os_string:?}");
-        },
-        Err(std::env::VarError::NotPresent) => {},
-    };
+            Err(std::env::VarError::NotUnicode(os_string)) => {
+                eprintln!("WARN ignoring log directives due to non-unicode data: {os_string:?}");
+            }
+            Err(std::env::VarError::NotPresent) => {}
+        };
 
-    let filter = filter; // mutation is done
+        let filter = filter; // mutation is done
 
-    let registry = registry();
-    
-    let mut file_setup = false;
+        let registry = registry();
 
-    // Create the terminal writer layer.
-    
-    let registry = {
-        let (non_blocking, stdio_guard) = tracing_appender::non_blocking(terminal.make_writer());
-        guards.push(stdio_guard);
-        registry.with(tracing_subscriber::fmt::layer().with_writer(non_blocking))
-    };
+        let mut file_setup = false;
 
-    // Try to create the log file's parent folders.
-    
-    if let Some((path, file)) = log_path_file {
-        match fs::create_dir_all(path) {
-            Ok(_) => {
-                #[cfg(target_os = "trueos")]
-                let file_appender = SyncedLogFile(
-                    fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(path.join(file))
-                        .expect("Failed to open server log file"),
-                );
-                #[cfg(not(target_os = "trueos"))]
-                let file_appender = tracing_appender::rolling::never(path, file); // It is actually rolling daily since the log name is changing daily
-                let (non_blocking_file, file_guard) = tracing_appender::non_blocking(file_appender);
-                guards.push(file_guard);
-                file_setup = true;
-                registry
-                    .with(tracing_subscriber::fmt::layer().with_writer(non_blocking_file))
-                    .with(filter)
-                    .init();
-            },
-            Err(e) => {
-                tracing::error!(
-                    ?e,
-                    "Failed to create log file!. Falling back to terminal logging only.",
-                );
-                registry.with(filter).init();
-            },
+        // Create the terminal writer layer.
+
+        let registry = {
+            let (non_blocking, stdio_guard) =
+                tracing_appender::non_blocking(terminal.make_writer());
+            guards.push(stdio_guard);
+            registry.with(tracing_subscriber::fmt::layer().with_writer(non_blocking))
+        };
+
+        // Try to create the log file's parent folders.
+
+        if let Some((path, file)) = log_path_file {
+            match fs::create_dir_all(path) {
+                Ok(_) => {
+                    let file_appender = tracing_appender::rolling::never(path, file); // It is actually rolling daily since the log name is changing daily
+                    let (non_blocking_file, file_guard) =
+                        tracing_appender::non_blocking(file_appender);
+                    guards.push(file_guard);
+                    file_setup = true;
+                    registry
+                        .with(tracing_subscriber::fmt::layer().with_writer(non_blocking_file))
+                        .with(filter)
+                        .init();
+                }
+                Err(e) => {
+                    tracing::error!(
+                        ?e,
+                        "Failed to create log file!. Falling back to terminal logging only.",
+                    );
+                    registry.with(filter).init();
+                }
+            }
+        } else {
+            registry.with(filter).init();
         }
-    } else {
-        registry.with(filter).init();
+
+        if file_setup {
+            let (path, file) = log_path_file.unwrap();
+            info!(?path, ?file, "Setup terminal and file logging.");
+        }
+
+        if tracing::level_enabled!(tracing::Level::TRACE) {
+            info!("Tracing Level: TRACE");
+        } else if tracing::level_enabled!(tracing::Level::DEBUG) {
+            info!("Tracing Level: DEBUG");
+        };
+
+        // Return the guards
+        guards
     }
-
-    if file_setup {
-        let (path, file) = log_path_file.unwrap();
-        info!(?path, ?file, "Setup terminal and file logging.");
-    }
-
-    if tracing::level_enabled!(tracing::Level::TRACE) {
-        info!("Tracing Level: TRACE");
-    } else if tracing::level_enabled!(tracing::Level::DEBUG) {
-        info!("Tracing Level: DEBUG");
-    };
-
-    // Return the guards
-    guards
 }
 
 pub fn init_stdout(log_path_file: Option<(&Path, &str)>) -> Vec<impl Drop + use<>> {
