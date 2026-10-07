@@ -23,8 +23,6 @@ struct Job {
     revision: u64,
     size: Vec2<u32>,
     plan: LayerPlan,
-    clear_rgba: u32,
-    refresh: bool,
 }
 #[derive(Default)]
 struct Mailbox {
@@ -66,12 +64,7 @@ impl Drop for Producer {
     fn drop(&mut self) {
         self.mailbox.stop();
         if let Some(thread) = self.thread.take() {
-            let name = thread.thread().name().unwrap_or("voxy-producer").to_owned();
-            let joined = thread.join().is_ok();
-            let _ = trueos::logl::log_record(
-                trueos::logl::level::IMPORTANT, "apps::voxygen",
-                format_args!("Voxygen cleanup: producer={} joined={}", name, joined),
-            );
+            let _ = thread.join();
         }
     }
 }
@@ -81,13 +74,6 @@ pub(crate) struct LayeredPresenter {
     errors: mpsc::Receiver<String>,
 }
 impl LayeredPresenter {
-    pub(crate) fn stop(&self) {
-        // Both producers may participate in a paired resize. Signal both
-        // before either destructor waits for a worker to finish.
-        self.scene.mailbox.stop();
-        self.foreground.mailbox.stop();
-    }
-
     pub fn new(foreground: SceneTarget, scene: SceneTarget) -> Result<Self, String> {
         let (errors_tx, errors) = mpsc::channel();
         let scene = spawn("scene", scene, errors_tx.clone())?;
@@ -104,15 +90,11 @@ impl LayeredPresenter {
             revision,
             size,
             plan: plan.background,
-            clear_rgba: 0,
-            refresh: false,
         });
         self.foreground.mailbox.submit(Job {
             revision,
             size,
             plan: plan.foreground,
-            clear_rgba: 0,
-            refresh: false,
         });
     }
     pub fn clear_foreground(&self, revision: u64, size: Vec2<u32>) {
@@ -120,22 +102,7 @@ impl LayeredPresenter {
             revision,
             size,
             plan: LayerPlan::default(),
-            clear_rgba: 0,
-            refresh: false,
         });
-    }
-    #[cfg(not(feature = "trueos-native-lines"))]
-    pub fn clear_scene(&self, revision: u64, size: Vec2<u32>) {
-        self.scene.mailbox.submit(Job {
-            revision,
-            size,
-            plan: LayerPlan::default(),
-            clear_rgba: 0xff00_0000,
-            refresh: true,
-        });
-    }
-    pub fn scene_published_revision(&self) -> u64 {
-        self.scene.mailbox.published_revision.load(Ordering::Acquire)
     }
     pub fn foreground_published_revision(&self) -> u64 {
         self.foreground
@@ -168,13 +135,6 @@ impl LayeredPresenter {
         }
     }
 }
-
-impl Drop for LayeredPresenter {
-    fn drop(&mut self) {
-        self.stop();
-    }
-}
-
 fn spawn(
     name: &'static str,
     mut target: SceneTarget,
@@ -197,7 +157,7 @@ fn spawn(
 }
 fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<(), String> {
     let mut uploaded = HashMap::new();
-    let mut previous: Option<(Vec2<u32>, u32, Vec<SpriteCommand>)> = None;
+    let mut previous: Option<(Vec2<u32>, Vec<SpriteCommand>)> = None;
     let mut job: Option<Job> = None;
     let mut phase = 0;
     while !mailbox.stopped.load(Ordering::Acquire) {
@@ -223,10 +183,8 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
             continue;
         };
         if phase == 0
-            && !current.refresh
-            && previous.as_ref().is_some_and(|(size, clear_rgba, commands)| {
+            && previous.as_ref().is_some_and(|(size, commands)| {
                 *size == current.size
-                    && *clear_rgba == current.clear_rgba
                     && *commands == current.plan.commands
                     && current.plan.uploads.iter().all(|upload| {
                         uploaded
@@ -280,7 +238,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 result
             }
             1 => {
-                let result = target.begin_sprite_frame(current.clear_rgba);
+                let result = target.begin_gpu_frame();
                 if result.is_ok() {
                     mailbox.counters.begins.fetch_add(1, Ordering::Relaxed);
                 }
@@ -342,7 +300,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 }
             }
             _ => {
-                previous = Some((current.size, current.clear_rgba, current.plan.commands.clone()));
+                previous = Some((current.size, current.plan.commands.clone()));
                 job = None;
                 continue;
             }
@@ -368,48 +326,4 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::Instant;
-
-    #[test]
-    fn paired_stop_releases_both_workers_before_joining_either() {
-        let scene = Arc::new(Mailbox::default());
-        let foreground = Arc::new(Mailbox::default());
-        let (ready_tx, ready_rx) = mpsc::channel();
-        let (finished_tx, finished_rx) = mpsc::channel();
-        let producer = |mailbox: Arc<Mailbox>| {
-            let pair = [Arc::clone(&scene), Arc::clone(&foreground)];
-            let ready_tx = ready_tx.clone();
-            let finished_tx = finished_tx.clone();
-            let thread = thread::spawn(move || {
-                ready_tx.send(()).unwrap();
-                // A paired resize can keep one worker waiting for its peer.
-                // Bound the test so a regression fails instead of hanging.
-                let deadline = Instant::now() + Duration::from_secs(1);
-                let both_stopped = || pair.iter().all(|m| m.stopped.load(Ordering::Acquire));
-                while !both_stopped() && Instant::now() < deadline {
-                    thread::sleep(Duration::from_millis(1));
-                }
-                finished_tx.send(both_stopped()).unwrap();
-            });
-            Producer { mailbox, thread: Some(thread) }
-        };
-        let (_, errors) = mpsc::channel();
-        let presenter = LayeredPresenter {
-            scene: producer(Arc::clone(&scene)),
-            foreground: producer(Arc::clone(&foreground)),
-            errors,
-        };
-        for _ in 0..2 {
-            ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
-        }
-        drop(presenter);
-        for _ in 0..2 {
-            assert!(finished_rx.recv_timeout(Duration::from_secs(2)).unwrap());
-        }
-    }
 }

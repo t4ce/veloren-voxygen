@@ -483,22 +483,7 @@ impl SpriteRenderContext {
             sprite_atlas_size: Vec2<u16>,
             sprite_mesh: Mesh<SpriteVertex>,
         }
-        #[cfg(target_os = "trueos")]
-        struct SpritePreparationJob<T> {
-            response: std::sync::mpsc::Receiver<T>,
-            thread: Option<std::thread::JoinHandle<()>>,
-        }
-        #[cfg(target_os = "trueos")]
-        impl<T> Drop for SpritePreparationJob<T> {
-            fn drop(&mut self) {
-                if let Some(thread) = self.thread.take() {
-                    let _ = thread.join();
-                }
-            }
-        }
 
-        #[cfg(target_os = "trueos")]
-        let (response_send, response_recv) = std::sync::mpsc::sync_channel(1);
         let join_handle = std::thread::spawn(move || {
             prof_span!("mesh all sprites");
             // Load all the sprite config data.
@@ -604,31 +589,17 @@ impl SpriteRenderContext {
                 greedy.finalize()
             };
 
-            let response = SpriteWorkerResponse {
+            SpriteWorkerResponse {
                 //sprite_config,
                 sprite_data,
                 missing_sprite_placeholder,
                 sprite_atlas_texture_data,
                 sprite_atlas_size,
                 sprite_mesh,
-            };
-            #[cfg(target_os = "trueos")]
-            {
-                // The consumer needs these meshes, independently of worker
-                // thread teardown on the Blueprint's carriers.
-                let _ = response_send.send(response);
             }
-            #[cfg(not(target_os = "trueos"))]
-            { response }
         });
 
         let init = core::cell::OnceCell::new();
-        #[cfg(target_os = "trueos")]
-        let job = SpritePreparationJob {
-            response: response_recv,
-            thread: Some(join_handle),
-        };
-        #[cfg(not(target_os = "trueos"))]
         let mut join_handle = Some(join_handle);
         let mut closure = move |renderer: &mut Renderer| {
             // A negotiated smaller device needs a smaller atlas. Reuse the
@@ -640,17 +611,6 @@ impl SpriteRenderContext {
             // implies that our sprite assets either were not found or did not
             // satisfy the size requirements for meshing, both of which are
             // considered invariant violations.
-            #[cfg(target_os = "trueos")]
-            let response = job.response.recv().expect("Sprite preparation worker stopped before delivering its meshes");
-            #[cfg(not(target_os = "trueos"))]
-            let response = join_handle
-                .take()
-                .expect(
-                    "Closure should only be called once (in a `OnceCell::get_or_init`) in the \
-                     absence of caught panics!",
-                )
-                .join()
-                .unwrap();
             let SpriteWorkerResponse {
                 //sprite_config,
                 sprite_data,
@@ -658,7 +618,14 @@ impl SpriteRenderContext {
                 sprite_atlas_texture_data,
                 sprite_atlas_size,
                 sprite_mesh,
-            } = response;
+            } = join_handle
+                .take()
+                .expect(
+                    "Closure should only be called once (in a `OnceCell::get_or_init`) in the \
+                     absence of caught panics!",
+                )
+                .join()
+                .unwrap();
 
             let [sprite_col_lights] =
                 sprite_atlas_texture_data.create_textures(renderer, sprite_atlas_size);

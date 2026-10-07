@@ -1,7 +1,7 @@
-//! Hold an authenticated scene transition until graphics startup succeeds. The caller handles
+//! Hold a login request until graphics startup succeeds. The caller handles
 //! UI input (including cancellation) before polling this gate each tick.
 
-pub(super) struct DeferredScene<T> {
+pub(super) struct DeferredLogin<T> {
     request: Option<T>,
 }
 
@@ -12,13 +12,13 @@ pub(super) enum Status<T> {
     Failed(String),
 }
 
-impl<T> Default for DeferredScene<T> {
+impl<T> Default for DeferredLogin<T> {
     fn default() -> Self {
         Self { request: None }
     }
 }
 
-impl<T> DeferredScene<T> {
+impl<T> DeferredLogin<T> {
     pub fn is_pending(&self) -> bool {
         self.request.is_some()
     }
@@ -54,8 +54,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn boot_and_cancel_never_poll_graphics_or_release_a_scene_transition() {
-        let mut gate = DeferredScene::default();
+    fn boot_and_cancel_never_poll_graphics_or_release_a_connection_request() {
+        let mut gate = DeferredLogin::default();
         assert!(matches!(
             gate.poll(|| panic!("boot requested graphics")),
             Status::<u8>::Idle
@@ -73,8 +73,8 @@ mod tests {
     }
 
     #[test]
-    fn authenticated_scene_is_released_once_and_only_after_graphics_succeeds() {
-        let mut gate = DeferredScene::default();
+    fn connection_request_is_released_once_and_only_after_graphics_succeeds() {
+        let mut gate = DeferredLogin::default();
         gate.begin("connection");
         for progress in [(0, 0), (0, 3), (2, 3)] {
             assert!(matches!(
@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn device_failure_discards_request_and_allows_retry() {
-        let mut gate = DeferredScene::default();
+        let mut gate = DeferredLogin::default();
         gate.begin("first");
         assert!(
             matches!(gate.poll(|| Err("device unavailable".into())), Status::Failed(message) if message == "device unavailable")

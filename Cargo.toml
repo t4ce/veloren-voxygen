@@ -26,8 +26,6 @@ picasso-assets = ["common/picasso-assets"]
 noaudio = []
 # Opt-in Conrod HUD/ESC drawing during TRUEOS scene bring-up. Iced is independent.
 conrod-ui = []
-# Native terrain geometry stays out of the default pack; UI4 clears the scene black.
-trueos-native-lines = []
 
 # Full client dependencies are available to TRUEOS, rather than desktop-gated.
 [dependencies]

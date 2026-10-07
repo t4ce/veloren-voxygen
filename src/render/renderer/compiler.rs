@@ -31,16 +31,6 @@ impl PrecompiledCompiler {
         _stage: ShaderStage,
         name: &str,
     ) -> Result<wgpu::ShaderModule, RenderError> {
-        #[cfg(target_os = "trueos")]
-        {
-            // Original modules are recorded as excluded pass handles. Only the
-            // admitted direct line package executes on the GPU in this bridge.
-            return Ok(device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some(name),
-                source: wgpu::ShaderSource::Wgsl("// TRUEOS excluded scene shader".into()),
-            }));
-        }
-        #[allow(unreachable_code)]
         use sha2::{Digest, Sha256};
         let sha256 = |bytes: &[u8]| -> String {
             Sha256::digest(bytes)

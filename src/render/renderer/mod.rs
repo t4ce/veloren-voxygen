@@ -230,8 +230,6 @@ impl Renderer {
             .unwrap_or(wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY);
 
         #[cfg(target_os = "trueos")]
-        crate::render::trueos_scene::mark_stage(1);
-        #[cfg(target_os = "trueos")]
         let instance = crate::render::trueos_scene::instance();
         #[cfg(not(target_os = "trueos"))]
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -409,8 +407,6 @@ impl Renderer {
             view_formats: Vec::new(),
         };
 
-        #[cfg(target_os = "trueos")]
-        crate::render::trueos_scene::mark_stage(2);
         let supported_internal_formats = [wgpu::TextureFormat::Rgba16Float, format];
         let intermediate_format = supported_internal_formats
             .into_iter()
@@ -442,16 +438,9 @@ impl Renderer {
             })
             // This should be unreachable as the surface format should always support the
             // needed capabilities
-            .ok_or_else(|| RenderError::CustomError(
-                "No supported intermediate format for the scene descriptor contract".into()))?;
+            .expect("No supported intermediate format");
         info!("Using {:?} as the intermediate format", intermediate_format);
 
-        #[cfg(target_os = "trueos")]
-        {
-            crate::render::trueos_scene::mark_stage(3);
-            crate::render::trueos_scene::prepare_surface(&surface, dims.width, dims.height)
-                .map_err(RenderError::CustomError)?;
-        }
         surface.configure(&device, &surface_config);
 
         let shadow_views = Self::create_shadow_views(
@@ -463,8 +452,6 @@ impl Renderer {
         let rain_occlusion_view =
             Self::create_rain_view(&device, &pipeline_modes, max_texture_size);
 
-        #[cfg(target_os = "trueos")]
-        crate::render::trueos_scene::mark_stage(4);
         let shaders = Shaders::load_expect("");
         let shaders_watcher = shaders.reload_watcher();
 
@@ -511,8 +498,6 @@ impl Renderer {
             }
         };
 
-        #[cfg(target_os = "trueos")]
-        crate::render::trueos_scene::mark_stage(5);
         let (interface_pipelines, creating) = pipeline_creation::initial_create_pipelines(
             device.clone(),
             graphics_backend,
@@ -534,8 +519,6 @@ impl Renderer {
             creating,
         };
 
-        #[cfg(target_os = "trueos")]
-        crate::render::trueos_scene::mark_stage(6);
         let create_sampler = |filter| {
             device.create_sampler(&wgpu::SamplerDescriptor {
                 label: None,
@@ -553,17 +536,6 @@ impl Renderer {
         let sampler = create_sampler(FilterMode::Linear);
         let depth_sampler = create_sampler(FilterMode::Nearest);
 
-        // Noise is sampled only by original shader passes, which the native
-        // line stage gates. Keep its descriptor binding without asset decoding.
-        #[cfg(target_os = "trueos")]
-        let noise_tex = Texture::new(
-            &device,
-            &queue,
-            &image::DynamicImage::new_rgba8(1, 1),
-            Some(FilterMode::Linear),
-            Some(AddressMode::Repeat),
-        )?;
-        #[cfg(not(target_os = "trueos"))]
         let noise_tex = Texture::new(
             &device,
             &queue,
@@ -576,8 +548,6 @@ impl Renderer {
             create_quad_index_buffer_u16(&device, QUAD_INDEX_BUFFER_U16_START_VERT_LEN as usize);
         let quad_index_buffer_u32 =
             create_quad_index_buffer_u32(&device, QUAD_INDEX_BUFFER_U32_START_VERT_LEN as usize);
-        #[cfg(target_os = "trueos")]
-        crate::render::trueos_scene::mark_stage(7);
         other_modes.profiler_enabled &= profiler_features_enabled;
 
         let profiler = wgpu_profiler::GpuProfiler::new(
@@ -602,8 +572,6 @@ impl Renderer {
             use winit::platform::trueos::WindowExtTrueOS;
             super::display_color::DisplayColor::new(window.trueos_window_id())
         };
-        #[cfg(target_os = "trueos")]
-        crate::render::trueos_scene::mark_stage(8);
         Ok(Self {
             #[cfg(target_os = "trueos")]
             display_color,

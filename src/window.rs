@@ -216,9 +216,7 @@ pub enum LastInput {
 pub struct Window {
     renderer: Option<Renderer>,
     #[cfg(target_os = "trueos")]
-    scene_init: Option<std::sync::mpsc::Receiver<Result<Renderer, crate::render::RenderError>>>,
-    #[cfg(target_os = "trueos")]
-    scene_init_threads: Vec<std::thread::JoinHandle<()>>,
+    scene_init: Option<std::thread::JoinHandle<Result<Renderer, crate::render::RenderError>>>,
     #[cfg(target_os = "trueos")]
     display: winit::event_loop::OwnedDisplayHandle,
     #[cfg(target_os = "trueos")]
@@ -226,9 +224,7 @@ pub struct Window {
     #[cfg(target_os = "trueos")]
     menu_revision: u64,
     #[cfg(target_os = "trueos")]
-    menu_handoff: Option<crate::ui::ice::renderer::handoff::Handoff>,
-    #[cfg(target_os = "trueos")]
-    menu_handoff_progress: Option<std::time::Instant>,
+    menu_handoff: Option<u64>,
     window: Arc<dyn winit::window::Window>,
     cursor_grabbed: bool,
     pub pan_sensitivity: u32,
@@ -264,27 +260,6 @@ pub struct Window {
     // saved to file, so initialized here
     pub gamelayer_mod1: bool,
     pub gamelayer_mod2: bool,
-}
-
-#[cfg(target_os = "trueos")]
-impl Drop for Window {
-    fn drop(&mut self) {
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen cleanup: stopping both menu producers"),
-        );
-        self.menu_presenter.stop();
-        // Closing the result mailbox lets unfinished startup release its
-        // renderer on the worker. Join while native-job admission is alive.
-        self.scene_init = None;
-        for thread in self.scene_init_threads.drain(..) {
-            let _ = thread.join();
-        }
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen cleanup: scene initialization workers joined"),
-        );
-    }
 }
 
 impl Window {
@@ -404,8 +379,6 @@ impl Window {
             #[cfg(target_os = "trueos")]
             scene_init: None,
             #[cfg(target_os = "trueos")]
-            scene_init_threads: Vec::new(),
-            #[cfg(target_os = "trueos")]
             display: event_loop.owned_display_handle(),
             #[cfg(target_os = "trueos")]
             menu_presenter,
@@ -413,8 +386,6 @@ impl Window {
             menu_revision: 0,
             #[cfg(target_os = "trueos")]
             menu_handoff: None,
-            #[cfg(target_os = "trueos")]
-            menu_handoff_progress: None,
             window,
             cursor_grabbed: false,
             pan_sensitivity: settings.gameplay.pan_sensitivity,
@@ -485,56 +456,35 @@ impl Window {
         let window = Arc::clone(&self.window);
         let display = self.display.clone();
         let runtime = Arc::clone(runtime);
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-        let thread = std::thread::Builder::new()
-            .name("voxy-scene-init".into())
-            .spawn(move || {
-                let result = Renderer::new(window, display, mode, &runtime);
-                let _ = trueos::logl::log_record(
-                    trueos::logl::level::IMPORTANT,
-                    "apps::voxygen",
-                    format_args!("Voxygen scene worker: resources returned success={}", result.is_ok()),
-                );
-                // Publish completion before thread teardown; the UI never joins
-                // a worker or depends on platform is_finished bookkeeping.
-                let _ = sender.send(result);
-            })
-            .map_err(|error| format!("Could not start graphics initialization: {error}"))?;
-        // Readiness still comes from the result mailbox. Retain the thread
-        // handle solely to finish it while cooperative cleanup keeps Hull alive.
-        self.scene_init_threads.push(thread);
-        self.scene_init = Some(receiver);
+        self.scene_init = Some(
+            std::thread::Builder::new()
+                .name("voxy-scene-init".into())
+                .spawn(move || Renderer::new(window, display, mode, &runtime))
+                .map_err(|error| format!("Could not start graphics initialization: {error}"))?,
+        );
         Ok(())
     }
 
-    /// Poll the result mailbox without joining a worker or acquiring a scene frame.
+    /// Poll without joining an unfinished worker or acquiring a scene frame.
     #[cfg(target_os = "trueos")]
     pub fn poll_scene_renderer(&mut self) -> Result<Option<(usize, usize)>, String> {
-        if let Some(receiver) = &self.scene_init {
-            let result = match receiver.try_recv() {
-                Ok(result) => result,
-                Err(std::sync::mpsc::TryRecvError::Empty) => return Ok(Some((0, 0))),
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    self.scene_init = None;
-                    return Err("Graphics initialization worker stopped unexpectedly".into());
-                }
-            };
-            self.scene_init = None;
-            let renderer = result.map_err(|error| {
-                tracing::error!(?error, "Game graphics initialization failed");
-                let reason = match error {
-                    crate::render::RenderError::CustomError(message) => message,
-                    other => format!("{other:?}"),
-                };
-                format!("Could not start game graphics: {reason}\nThe main menu is still available.")
-            })?;
+        if let Some(job) = &self.scene_init {
+            if !job.is_finished() {
+                return Ok(Some((0, 0)));
+            }
+            let renderer = self
+                .scene_init
+                .take()
+                .unwrap()
+                .join()
+                .map_err(|_| "Graphics initialization worker stopped unexpectedly".to_string())?
+                .map_err(|error| {
+                    tracing::error!(?error, "Game graphics initialization failed");
+                    "Could not start game graphics.\nThe main menu is still available. Details are in the log."
+                        .to_string()
+                })?;
             self.renderer = Some(renderer);
             self.resized = true;
-            let _ = trueos::logl::log_record(
-                trueos::logl::level::IMPORTANT,
-                "apps::voxygen",
-                format_args!("Voxygen scene worker: renderer accepted by main loop"),
-            );
         }
         let renderer = self
             .renderer
@@ -558,79 +508,23 @@ impl Window {
         Ok(())
     }
 
-    #[cfg(all(target_os = "trueos", not(feature = "trueos-native-lines")))]
-    pub(crate) fn present_black_scene(&mut self) -> Result<(), String> {
-        self.menu_presenter.check()?;
-        let size = self.physical_size();
-        if size.x != 0 && size.y != 0 {
-            self.menu_revision += 1;
-            self.menu_presenter.clear_scene(self.menu_revision, size);
-        }
-        Ok(())
-    }
-
     #[cfg(target_os = "trueos")]
     pub fn resume_menu(&mut self) {
         self.menu_handoff = None;
-        self.menu_handoff_progress = None;
     }
 
-    /// Drain both menu producers before terrain takes the scene capability.
-    /// Foreground resize publications remain independent of scene retirement.
+    /// Retire the menu foreground before the first scene frame, without waiting
+    /// for GPU fences on the event thread. The scene producer remains idle.
     #[cfg(target_os = "trueos")]
-    pub fn prepare_scene_display(&mut self) -> Result<bool, String> {
-        use crate::ui::ice::renderer::handoff::Handoff;
-        self.menu_presenter.check()?;
-        let size = self.physical_size();
-        if size.x == 0 || size.y == 0 { return Ok(false); }
-        let extent = [size.x, size.y];
-        if self.menu_handoff.is_none_or(|handoff| handoff.extent != extent) {
-            #[cfg(feature = "trueos-native-lines")]
-            let scene_revision = self.menu_handoff.map_or(self.menu_revision, |handoff| handoff.scene_revision);
+    pub fn prepare_scene_display(&mut self) -> bool {
+        let revision = *self.menu_handoff.get_or_insert_with(|| {
             self.menu_revision += 1;
-            #[cfg(not(feature = "trueos-native-lines"))]
-            let scene_revision = {
-                self.menu_presenter.clear_scene(self.menu_revision, size);
-                self.menu_revision
-            };
-            self.menu_presenter.clear_foreground(self.menu_revision, size);
-            self.menu_handoff = Some(Handoff {
-                scene_revision, foreground_revision: self.menu_revision, extent,
-            });
-            self.menu_handoff_progress = Some(std::time::Instant::now());
-            let _ = trueos::logl::log_record(
-                trueos::logl::level::IMPORTANT,
-                "apps::voxygen",
-                format_args!(
-                    "Voxygen scene handoff: begin background_revision={} foreground_revision={} extent={}x{}",
-                    scene_revision, self.menu_revision, extent[0], extent[1],
-                ),
-            );
-        }
-        let handoff = self.menu_handoff.unwrap();
-        let scene_published = self.menu_presenter.scene_published_revision();
-        let foreground_published = self.menu_presenter.foreground_published_revision();
-        let ready = handoff.ready(scene_published, foreground_published);
-        let report = if ready {
-            self.menu_handoff_progress.take().is_some()
-        } else if self.menu_handoff_progress.is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(2)) {
-            self.menu_handoff_progress = Some(std::time::Instant::now());
-            true
-        } else {
-            false
-        };
-        if report {
-            let _ = trueos::logl::log_record(
-                trueos::logl::level::IMPORTANT,
-                "apps::voxygen",
-                format_args!(
-                    "Voxygen scene handoff: ready={} background={}/{} foreground={}/{} extent={}x{}",
-                    ready, scene_published, handoff.scene_revision,
-                    foreground_published, handoff.foreground_revision, extent[0], extent[1],
-                ),
-            );
-        }
-        Ok(ready)
+            let size = self.window.surface_size();
+            self.menu_presenter
+                .clear_foreground(self.menu_revision, Vec2::new(size.width, size.height));
+            self.menu_revision
+        });
+        self.menu_presenter.foreground_published_revision() >= revision
     }
 
     pub fn resolve_deduplicated_events(
@@ -641,14 +535,7 @@ impl Window {
         // Handle screenshots and toggling fullscreen
         if self.take_screenshot {
             self.take_screenshot = false;
-            #[cfg(not(target_os = "trueos"))]
             self.take_screenshot(settings);
-            #[cfg(target_os = "trueos")]
-            {
-                tracing::warn!("Screenshot readback is out-gated in the terrain-line bridge");
-                self.events.push(Event::ScreenshotMessage(
-                    "Screenshots are unavailable during terrain-line bring-up".into()));
-            }
         }
         if self.toggle_fullscreen {
             self.toggle_fullscreen = false;
@@ -1751,11 +1638,6 @@ impl Window {
 
     pub fn modifiers(&self) -> winit::keyboard::ModifiersState {
         self.modifiers
-    }
-
-    pub fn physical_size(&self) -> Vec2<u32> {
-        let size = self.window.surface_size();
-        Vec2::new(size.width, size.height)
     }
 
     pub fn scale_factor(&self) -> f64 {

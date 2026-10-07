@@ -28,8 +28,6 @@ where
         states: Vec::new(),
         file_drop: ui::ice::FileDropAdapter::default(),
         touches: touch::TouchTracker::default(),
-        #[cfg(target_os = "trueos")]
-        shutdown_requested: false,
     })
 }
 
@@ -39,51 +37,10 @@ struct App<F> {
     states: Vec<Box<dyn PlayState>>,
     file_drop: ui::ice::FileDropAdapter,
     touches: touch::TouchTracker,
-    #[cfg(target_os = "trueos")]
-    shutdown_requested: bool,
-}
-
-impl<F> App<F> {
-    fn exit_if_shutdown_requested(&mut self, event_loop: &dyn ActiveEventLoop) -> bool {
-        #[cfg(target_os = "trueos")]
-        {
-            if !self.shutdown_requested {
-                self.shutdown_requested = match trueos::shutdown::requested() {
-                    Ok(requested) => requested,
-                    Err(_) => {
-                        eprintln!("voxy: cooperative shutdown control failed; exiting cleanly");
-                        let _ = trueos::logl::log_record(
-                            trueos::logl::level::IMPORTANT,
-                            "apps::voxygen",
-                            format_args!("Voxygen shutdown control failed; starting clean teardown"),
-                        );
-                        true
-                    }
-                };
-                if self.shutdown_requested {
-                    let _ = trueos::logl::log_record(
-                        trueos::logl::level::IMPORTANT,
-                        "apps::voxygen",
-                        format_args!("Voxygen cooperative stop: event loop exiting before resource cleanup"),
-                    );
-                }
-            }
-            if self.shutdown_requested {
-                event_loop.exit();
-                return true;
-            }
-        }
-        #[cfg(not(target_os = "trueos"))]
-        let _ = event_loop;
-        false
-    }
 }
 
 impl<F: FnOnce(&dyn ActiveEventLoop) -> GlobalState> ApplicationHandler for App<F> {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
-        if self.exit_if_shutdown_requested(event_loop) {
-            return;
-        }
         let Some(initialize) = self.initialize.take() else {
             return;
         };
@@ -99,9 +56,6 @@ impl<F: FnOnce(&dyn ActiveEventLoop) -> GlobalState> ApplicationHandler for App<
 
     fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, id: WindowId, event: WindowEvent) {
         span!(_guard, "Handle WindowEvent");
-        if self.exit_if_shutdown_requested(event_loop) {
-            return;
-        }
         let Some(global_state) = self.global_state.as_mut() else {
             return;
         };
@@ -159,20 +113,14 @@ impl<F: FnOnce(&dyn ActiveEventLoop) -> GlobalState> ApplicationHandler for App<
         window.handle_window_event(event, &mut global_state.settings);
     }
 
-    fn device_event(&mut self, event_loop: &dyn ActiveEventLoop, _: Option<DeviceId>, event: DeviceEvent) {
+    fn device_event(&mut self, _: &dyn ActiveEventLoop, _: Option<DeviceId>, event: DeviceEvent) {
         span!(_guard, "Handle DeviceEvent");
-        if self.exit_if_shutdown_requested(event_loop) {
-            return;
-        }
         if let Some(global_state) = self.global_state.as_mut() {
             global_state.window.handle_device_event(event);
         }
     }
 
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
-        if self.exit_if_shutdown_requested(event_loop) {
-            return;
-        }
         if let Some(global_state) = self.global_state.as_mut() {
             for event in self.file_drop.poll() {
                 global_state.window.send_event(Event::IcedUi(event));
@@ -192,12 +140,6 @@ impl<F> Drop for App<F> {
                 .profile
                 .save_to_file_warn(&global_state.config_dir);
         }
-        // States may own clients, tasks and renderer resources that rely on
-        // GlobalState's window/runtime. Release them before their owners.
-        self.states.clear();
-        drop(self.global_state.take());
-        // A stop before surface creation must also release captured resources.
-        drop(self.initialize.take());
     }
 }
 
@@ -285,40 +227,8 @@ fn handle_main_events_cleared(
 
         span!(guard, "Render");
 
-        #[cfg(all(target_os = "trueos", feature = "trueos-native-lines"))]
-        let scene_display_ready = last.uses_native_ui() || global_state.window.prepare_scene_display()
-            .expect("UI4 producer handoff failed");
-        #[cfg(all(target_os = "trueos", not(feature = "trueos-native-lines")))]
-        let scene_display_ready = {
-            if !last.uses_native_ui() {
-                if let Err(error) = global_state.window.prepare_scene_display() {
-                    let _ = trueos::logl::log_record(
-                        trueos::logl::level::ERROR,
-                        "apps::voxygen",
-                        format_args!("Voxygen black scene handoff failed: {error}; exiting cleanly"),
-                    );
-                    event_loop.exit();
-                    return;
-                }
-                // Only the world scene gets the capped black-frame loop.
-                // Main menu, loader and selector retain their own backgrounds.
-                if let Err(error) = global_state.window.present_black_scene() {
-                    let _ = trueos::logl::log_record(
-                        trueos::logl::level::ERROR,
-                        "apps::voxygen",
-                        format_args!("Voxygen black scene producer failed: {error}; exiting cleanly"),
-                    );
-                    event_loop.exit();
-                    return;
-                }
-            }
-            false
-        };
-        #[cfg(not(target_os = "trueos"))]
-        let scene_display_ready = true;
-
         // Render the screen using the global renderer
-        if scene_display_ready && !last.uses_native_ui() && let Some(mut drawer) = global_state
+        if !last.uses_native_ui() && let Some(mut drawer) = global_state
             .window
             .renderer_mut()
             .start_recording_frame(last.globals_bind_group())

@@ -1,8 +1,4 @@
-use super::char_selection::CharSelectionState;
-#[cfg(not(target_os = "trueos"))]
-use super::dummy_scene::Scene;
-#[cfg(not(target_os = "trueos"))]
-use crate::ui::ice::load_font;
+use super::{char_selection::CharSelectionState, dummy_scene::Scene};
 use crate::{
     Direction, GlobalState, PlayState, PlayStateResult,
     menu::main::get_client_msg_error,
@@ -11,7 +7,7 @@ use crate::{
     ui::{
         Graphic,
         fonts::IcedFonts as Fonts,
-        ice::{Element, IcedUi as Ui, component::neat_button, style, widget},
+        ice::{Element, IcedUi as Ui, component::neat_button, load_font, style, widget},
         img_ids::ImageGraphic,
     },
     window::{self, Event},
@@ -57,12 +53,7 @@ pub struct Controls {
 
 pub struct ServerInfoState {
     ui: Ui,
-    #[cfg(not(target_os = "trueos"))]
     scene: Scene,
-    #[cfg(target_os = "trueos")]
-    first_plan_queued: bool,
-    #[cfg(target_os = "trueos")]
-    failure_recorded: bool,
     controls: Controls,
     char_select: Option<CharSelectionState>,
 }
@@ -99,29 +90,14 @@ impl ServerInfoState {
                 .is_some_and(|s| s.accepted_rules == Some(rules_hash(&server_description.rules))))
             && !force_show
         {
-            #[cfg(target_os = "trueos")]
-            let _ = trueos::logl::log_record(
-                trueos::logl::level::IMPORTANT, "apps::voxygen",
-                format_args!("Voxygen server rules: skipped rules_present={} force_show={force_show}", server_description.rules.is_some()),
-            );
             return Err(char_select);
         }
-
-        #[cfg(target_os = "trueos")]
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen server rules: constructing native rules screen rules_present={} force_show={force_show}", server_description.rules.is_some()),
-        );
 
         // Load language
         let i18n = &global_state.i18n.read();
         // TODO: don't add default font twice
-        #[cfg(not(target_os = "trueos"))]
         let font = load_font(&i18n.fonts().get("cyri").unwrap().asset_key);
 
-        #[cfg(target_os = "trueos")]
-        let mut ui = Ui::new_native(global_state.window.physical_size(), global_state.window.scale_factor());
-        #[cfg(not(target_os = "trueos"))]
         let mut ui = Ui::new(
             &mut global_state.window,
             font,
@@ -134,8 +110,7 @@ impl ServerInfoState {
                 .is_some_and(|accepted| accepted != rules_hash(&server_description.rules))
         });
 
-        let state = Self {
-            #[cfg(not(target_os = "trueos"))]
+        Ok(Self {
             scene: Scene::new(global_state.window.renderer_mut()),
             controls: Controls {
                 bg_img: ui.add_graphic(Graphic::Image(
@@ -154,17 +129,7 @@ impl ServerInfoState {
             },
             ui,
             char_select: Some(char_select),
-            #[cfg(target_os = "trueos")]
-            first_plan_queued: false,
-            #[cfg(target_os = "trueos")]
-            failure_recorded: false,
-        };
-        #[cfg(target_os = "trueos")]
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen server rules: native rules screen constructed"),
-        );
-        Ok(state)
+        })
     }
 
     fn handle_event(&mut self, event: window::Event) -> bool {
@@ -185,17 +150,6 @@ impl ServerInfoState {
 
 impl PlayState for ServerInfoState {
     fn enter(&mut self, _global_state: &mut GlobalState, _: Direction) {
-        #[cfg(target_os = "trueos")]
-        {
-            let _ = trueos::logl::log_record(
-                trueos::logl::level::IMPORTANT, "apps::voxygen",
-                format_args!("Voxygen server rules: entering native rules screen"),
-            );
-            self.first_plan_queued = false;
-            self.failure_recorded = false;
-            _global_state.window.resume_menu();
-            self.ui.invalidate_native();
-        }
         /*
         // Updated localization in case the selected language was changed
         self.main_menu_ui
@@ -236,50 +190,6 @@ impl PlayState for ServerInfoState {
 
         // Maintain the UI.
         let view = self.controls.view();
-        #[cfg(target_os = "trueos")]
-        let messages = {
-            let size = global_state.window.physical_size();
-            match self.ui.maintain_native(view, size, &mut global_state.clipboard) {
-                Ok((messages, plan)) => {
-                    if let Some(plan) = plan {
-                        match global_state.window.present_menu(size, plan) {
-                            Ok(()) => {
-                                if !self.first_plan_queued {
-                                    self.first_plan_queued = true;
-                                    let _ = trueos::logl::log_record(
-                                        trueos::logl::level::IMPORTANT, "apps::voxygen",
-                                        format_args!("Voxygen server rules: first native plan queued extent={}x{}", size.x, size.y),
-                                    );
-                                }
-                            }
-                            Err(error) => {
-                                tracing::error!(%error, "Server rules presentation failed");
-                                if !self.failure_recorded {
-                                    self.failure_recorded = true;
-                                    let _ = trueos::logl::log_record(
-                                        trueos::logl::level::ERROR, "apps::voxygen",
-                                        format_args!("Voxygen server rules: native presentation failed: {error}"),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    messages
-                }
-                Err(error) => {
-                    tracing::error!(%error, "Server rules layout failed");
-                    if !self.failure_recorded {
-                        self.failure_recorded = true;
-                        let _ = trueos::logl::log_record(
-                            trueos::logl::level::ERROR, "apps::voxygen",
-                            format_args!("Voxygen server rules: native layout failed: {error}"),
-                        );
-                    }
-                    Vec::new()
-                }
-            }
-        };
-        #[cfg(not(target_os = "trueos"))]
         let (messages, _) = self.ui.maintain(
             view,
             global_state.window.renderer_mut(),
@@ -314,26 +224,14 @@ impl PlayState for ServerInfoState {
 
     fn capped_fps(&self) -> bool { true }
 
-    fn uses_native_ui(&self) -> bool { cfg!(target_os = "trueos") }
-
-    fn globals_bind_group(&self) -> &GlobalsBindGroup {
-        #[cfg(not(target_os = "trueos"))]
-        { self.scene.global_bind_group() }
-        #[cfg(target_os = "trueos")]
-        { panic!("Native server rules do not record scene frames") }
-    }
+    fn globals_bind_group(&self) -> &GlobalsBindGroup { self.scene.global_bind_group() }
 
     fn render(&self, drawer: &mut Drawer<'_>, _: &Settings) {
-        #[cfg(target_os = "trueos")]
-        let _ = drawer;
-        #[cfg(not(target_os = "trueos"))]
-        {
-            // Draw the UI to the screen.
-            let mut third_pass = drawer.third_pass();
-            if let Some(mut ui_drawer) = third_pass.draw_ui() {
-                self.ui.render(&mut ui_drawer);
-            };
-        }
+        // Draw the UI to the screen.
+        let mut third_pass = drawer.third_pass();
+        if let Some(mut ui_drawer) = third_pass.draw_ui() {
+            self.ui.render(&mut ui_drawer);
+        };
     }
 }
 

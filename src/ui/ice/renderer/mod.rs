@@ -5,8 +5,6 @@ pub(crate) mod bcs;
 mod defaults;
 #[cfg(target_os = "trueos")]
 pub(crate) mod presenter;
-#[cfg(target_os = "trueos")]
-pub(crate) mod handoff;
 pub(super) mod primitive;
 pub mod style;
 mod widget;

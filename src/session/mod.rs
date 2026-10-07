@@ -144,11 +144,6 @@ impl SessionState {
         client: Rc<RefCell<Client>>,
         persisted_state: Rc<RefCell<PersistedHudState>>,
     ) -> Self {
-        #[cfg(target_os = "trueos")]
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen world startup: preparing scene targets"),
-        );
         global_state.window.renderer_mut().prepare_scene();
         // Create a scene for this session. The scene handles visible elements of the
         // game world.
@@ -157,11 +152,6 @@ impl SessionState {
             &mut global_state.lazy_init,
             &client.borrow(),
             &global_state.settings,
-        );
-        #[cfg(target_os = "trueos")]
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen world startup: terrain scene ready"),
         );
         scene
             .camera_mut()
@@ -189,11 +179,6 @@ impl SessionState {
             }
         }
         let hud = Hud::new(global_state, persisted_state, &client.borrow());
-        #[cfg(target_os = "trueos")]
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen world startup: session ready"),
-        );
         let walk_forward_dir = scene.camera().forward_xy();
         let walk_right_dir = scene.camera().right_xy();
 

@@ -1,6 +1,4 @@
 mod ui;
-#[cfg(target_os = "trueos")]
-mod native;
 
 use crate::{
     Direction, GlobalState, PlayState, PlayStateResult, hud,
@@ -9,34 +7,25 @@ use crate::{
         server_info::ServerInfoState,
     },
     render::{Drawer, GlobalsBindGroup},
+    scene::simple::{self as scene, Scene},
     session::SessionState,
     settings::Settings,
     window::Event as WinEvent,
 };
 use crate::client::{Client};
-use common::{comp, event::UpdateCharacterMetadata};
-#[cfg(not(target_os = "trueos"))]
-use common::resources::DeltaTime;
+use common::{comp, event::UpdateCharacterMetadata, resources::DeltaTime};
 use common_base::span;
-#[cfg(not(target_os = "trueos"))]
 use specs::WorldExt;
 use core::cell::RefCell;
 use alloc::rc::Rc;
 use tracing::error;
-#[cfg(not(target_os = "trueos"))]
 use ui::CharSelectionUi;
-#[cfg(not(target_os = "trueos"))]
-use crate::scene::simple::{self as scene, Scene};
 
 pub struct CharSelectionState {
-    #[cfg(not(target_os = "trueos"))]
     char_selection_ui: CharSelectionUi,
     client: Rc<RefCell<Client>>,
     persisted_state: Rc<RefCell<hud::PersistedHudState>>,
-    #[cfg(not(target_os = "trueos"))]
     scene: Scene,
-    #[cfg(target_os = "trueos")]
-    native: native::Selector,
 }
 
 impl CharSelectionState {
@@ -46,41 +35,24 @@ impl CharSelectionState {
         client: Rc<RefCell<Client>>,
         persisted_state: Rc<RefCell<hud::PersistedHudState>>,
     ) -> Self {
-        // Native selection needs only the authenticated client and its list.
-        // Scene and sprite resources are prepared when the real session starts.
-        #[cfg(not(target_os = "trueos"))]
-        let (scene, char_selection_ui) = {
-            global_state.window.renderer_mut().prepare_scene();
-            let sprite_render_context = (global_state.lazy_init)(global_state.window.renderer_mut());
-            let scene = Scene::new(
-                global_state.window.renderer_mut(),
-                &mut client.borrow_mut(),
-                &global_state.settings,
-                sprite_render_context,
-            );
-            let char_selection_ui = CharSelectionUi::new(global_state, &client.borrow());
-            (scene, char_selection_ui)
-        };
+        global_state.window.renderer_mut().prepare_scene();
+        let sprite_render_context = (global_state.lazy_init)(global_state.window.renderer_mut());
+        let scene = Scene::new(
+            global_state.window.renderer_mut(),
+            &mut client.borrow_mut(),
+            &global_state.settings,
+            sprite_render_context,
+        );
+        let char_selection_ui = CharSelectionUi::new(global_state, &client.borrow());
 
-        let state = Self {
-            #[cfg(not(target_os = "trueos"))]
+        Self {
             char_selection_ui,
             client,
             persisted_state,
-            #[cfg(not(target_os = "trueos"))]
             scene,
-            #[cfg(target_os = "trueos")]
-            native: native::Selector::new(global_state),
-        };
-        #[cfg(target_os = "trueos")]
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen character selection: native selector constructed"),
-        );
-        state
+        }
     }
 
-    #[cfg(not(target_os = "trueos"))]
     fn get_humanoid_body_inventory<'a>(
         char_selection_ui: &'a CharSelectionUi,
         client: &'a Client,
@@ -107,24 +79,20 @@ impl CharSelectionState {
 
 impl PlayState for CharSelectionState {
     fn enter(&mut self, global_state: &mut GlobalState, _: Direction) {
-        #[cfg(target_os = "trueos")]
-        self.native.enter(global_state);
         // Load the player's character list
         if !self.client.borrow().are_plugins_missing() {
             self.client.borrow_mut().load_character_list();
         }
 
-        #[cfg(not(target_os = "trueos"))]
-        {
-            // Updated localization in case the selected language was changed
-            self.char_selection_ui.update_language(global_state.i18n);
-            // Set scale mode in case it was change
-            self.char_selection_ui
-                .set_scale_mode(global_state.settings.interface.ui_scale);
+        // Updated localization in case the selected language was changed
+        self.char_selection_ui.update_language(global_state.i18n);
+        // Set scale mode in case it was change
+        self.char_selection_ui
+            .set_scale_mode(global_state.settings.interface.ui_scale);
 
-            // Clear shadow textures since we don't render to them here
-            global_state.clear_shadows_next_frame = true;
-        }
+        // Clear shadow textures since we don't render to them here
+        global_state.clear_shadows_next_frame = true;
+
     }
 
     fn tick(&mut self, global_state: &mut GlobalState, events: Vec<WinEvent>) -> PlayStateResult {
@@ -136,9 +104,6 @@ impl PlayState for CharSelectionState {
         if client_registered {
             // Handle window events
             for event in events {
-                #[cfg(target_os = "trueos")]
-                self.native.handle(&event);
-                #[cfg(not(target_os = "trueos"))]
                 if self.char_selection_ui.handle_event(event.clone()) {
                     continue;
                 }
@@ -147,23 +112,16 @@ impl PlayState for CharSelectionState {
                         return PlayStateResult::Shutdown;
                     },
                     // Pass all other events to the scene
-                    #[cfg(not(target_os = "trueos"))]
                     event => {
                         self.scene.handle_input_event(event);
                     }, // TODO: Do something if the event wasn't handled?
-                    #[cfg(target_os = "trueos")]
-                    _ => {},
                 }
             }
 
             // Maintain the UI.
-            #[cfg(not(target_os = "trueos"))]
             let events = self
                 .char_selection_ui
                 .maintain(global_state, &self.client.borrow());
-
-            #[cfg(target_os = "trueos")]
-            let events = self.native.maintain(global_state, &self.client.borrow());
 
             for event in events {
                 match event {
@@ -242,8 +200,7 @@ impl PlayState for CharSelectionState {
                         return PlayStateResult::Switch(new_state);
                     },
                     ui::Event::ClearCharacterListError => {
-                        #[cfg(not(target_os = "trueos"))]
-                        { self.char_selection_ui.error = None; }
+                        self.char_selection_ui.error = None;
                     },
                     ui::Event::SelectCharacter(selected) => {
                         let client = self.client.borrow();
@@ -260,7 +217,6 @@ impl PlayState for CharSelectionState {
             }
 
             // Maintain the scene.
-            #[cfg(not(target_os = "trueos"))]
             {
                 let client = self.client.borrow();
                 let (humanoid_body, loadout) =
@@ -325,24 +281,10 @@ impl PlayState for CharSelectionState {
                                 .location_markers
                                 .update(marker_event),
                             crate::client::Event::CharacterCreated(character_id) => {
-                                #[cfg(not(target_os = "trueos"))]
                                 self.char_selection_ui.select_character(character_id);
-                                #[cfg(target_os = "trueos")]
-                                {
-                                    let client = self.client.borrow();
-                                    global_state.profile.set_selected_character(
-                                        &client.server_info().name, Some(character_id),
-                                    );
-                                    global_state.profile.save_to_file_warn(&global_state.config_dir);
-                                }
                             },
                             crate::client::Event::CharacterError(error) => {
-                                #[cfg(not(target_os = "trueos"))]
                                 self.char_selection_ui.display_error(error);
-                                #[cfg(target_os = "trueos")]
-                                error!(?error, "Character selection failed");
-                                #[cfg(target_os = "trueos")]
-                                self.native.failed();
                             },
                             crate::client::Event::CharacterJoined(metadata) => {
                                 join_metadata = Some(metadata);
@@ -387,42 +329,30 @@ impl PlayState for CharSelectionState {
 
     fn capped_fps(&self) -> bool { true }
 
-    fn uses_native_ui(&self) -> bool { cfg!(target_os = "trueos") }
-
-    fn globals_bind_group(&self) -> &GlobalsBindGroup {
-        #[cfg(not(target_os = "trueos"))]
-        { self.scene.global_bind_group() }
-        #[cfg(target_os = "trueos")]
-        { panic!("Native character selection does not record scene frames") }
-    }
+    fn globals_bind_group(&self) -> &GlobalsBindGroup { self.scene.global_bind_group() }
 
     fn render(&self, drawer: &mut Drawer<'_>, _: &Settings) {
-        #[cfg(target_os = "trueos")]
-        let _ = drawer;
-        #[cfg(not(target_os = "trueos"))]
-        {
-            let client = self.client.borrow();
-            let (humanoid_body, loadout) =
-                Self::get_humanoid_body_inventory(&self.char_selection_ui, &client);
+        let client = self.client.borrow();
+        let (humanoid_body, loadout) =
+            Self::get_humanoid_body_inventory(&self.char_selection_ui, &client);
 
-            if let Some(mut first_pass) = drawer.first_pass() {
-                self.scene
-                    .render(&mut first_pass, client.get_tick(), humanoid_body, loadout);
-            }
-
-            if let Some(mut volumetric_pass) = drawer.volumetric_pass() {
-                // Clouds
-                volumetric_pass.draw_clouds();
-            }
-            // Bloom (does nothing if bloom is disabled)
-            drawer.run_bloom_passes();
-            // PostProcess and UI
-            let mut third_pass = drawer.third_pass();
-            third_pass.draw_postprocess();
-            // Draw the UI to the screen.
-            if let Some(mut ui_drawer) = third_pass.draw_ui() {
-                self.char_selection_ui.render(&mut ui_drawer);
-            };
+        if let Some(mut first_pass) = drawer.first_pass() {
+            self.scene
+                .render(&mut first_pass, client.get_tick(), humanoid_body, loadout);
         }
+
+        if let Some(mut volumetric_pass) = drawer.volumetric_pass() {
+            // Clouds
+            volumetric_pass.draw_clouds();
+        }
+        // Bloom (does nothing if bloom is disabled)
+        drawer.run_bloom_passes();
+        // PostProcess and UI
+        let mut third_pass = drawer.third_pass();
+        third_pass.draw_postprocess();
+        // Draw the UI to the screen.
+        if let Some(mut ui_drawer) = third_pass.draw_ui() {
+            self.char_selection_ui.render(&mut ui_drawer);
+        };
     }
 }

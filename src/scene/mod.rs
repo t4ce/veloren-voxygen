@@ -318,17 +318,7 @@ impl Scene {
         settings: &Settings,
     ) -> Self {
         let resolution = renderer.resolution().map(|e| e as f32);
-        #[cfg(target_os = "trueos")]
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen world startup: waiting for sprite mesh data"),
-        );
         let sprite_render_context = lazy_init(renderer);
-        #[cfg(target_os = "trueos")]
-        let _ = trueos::logl::log_record(
-            trueos::logl::level::IMPORTANT, "apps::voxygen",
-            format_args!("Voxygen world startup: sprite mesh data ready"),
-        );
 
         let data = GlobalModel {
             globals: renderer.create_consts(&[Globals::default()]),
