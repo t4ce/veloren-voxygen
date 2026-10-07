@@ -39,9 +39,6 @@ use wgpu::{Backends, Instance};
 
 #[cfg(not(feature = "headless"))]
 fn main() {
-    #[cfg(target_os = "trueos")]
-    let _shutdown = trueos::shutdown::ShutdownGuard::register()
-        .expect("register cooperative Blueprint cleanup");
     // Process CLI arguments
     use clap::Parser;
     let args = cli::Args::parse();
@@ -148,14 +145,6 @@ fn main() {
             .build()
             .unwrap(),
     );
-    #[cfg(target_os = "trueos")]
-    tokio_parallel::ThreadPool::set_shared_runtime(&tokio_runtime);
-    #[cfg(target_os = "trueos")]
-    let runtime_owner = Arc::clone(&tokio_runtime);
-    #[cfg(target_os = "trueos")]
-    let native_connection = Arc::new(std::sync::Mutex::new(None));
-    #[cfg(target_os = "trueos")]
-    let connection_out = Arc::clone(&native_connection);
 
     // Initialise watcher for animation hot-reloading
 
@@ -196,8 +185,8 @@ fn main() {
         });
     i18n.set_english_fallback(settings.language.use_english_fallback);
 
-    // Keep the existing menu and authentication. TRUEOS hands the connected
-    // client to a separate immediate-vGPU consumer, without starting Voxygen GPU.
+    // Keep the original play-state stack. TRUEOS first publishes its UI4 menu;
+    // scene-device initialization is requested by Login, before connecting.
     {
         // Create window
         use veloren_voxygen::{error::Error, render::RenderError};
@@ -239,8 +228,6 @@ fn main() {
             window,
             tokio_runtime,
             portal_credentials: None,
-            #[cfg(target_os = "trueos")]
-            native_connection,
 
             lazy_init,
             clock: Clock::new(core::time::Duration::from_secs_f64(
@@ -257,17 +244,6 @@ fn main() {
         global_state
     })
     .unwrap();
-    }
-    #[cfg(target_os = "trueos")]
-    {
-        let connection = connection_out.lock().unwrap().take();
-        if let Some(connection) = connection {
-            if let Err(error) = veloren_voxygen::native_dump::run(connection) {
-                trueos::logl::log(trueos::logl::level::ERROR,
-                    format_args!("voxy: native dump stopped: {error}"));
-            }
-        }
-        drop(runtime_owner);
     }
 }
 

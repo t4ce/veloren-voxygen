@@ -803,9 +803,6 @@ impl State {
         if trace_first_tick {
             eprintln!("velosrv: first-tick stage=ecs-dispatch-enter");
         }
-        #[cfg(target_os = "trueos")]
-        self.dispatcher.dispatch_seq(&self.ecs);
-        #[cfg(not(target_os = "trueos"))]
         self.dispatcher.dispatch(&self.ecs);
         #[cfg(target_os = "trueos")]
         if trace_first_tick {

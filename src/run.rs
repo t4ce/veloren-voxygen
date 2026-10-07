@@ -149,12 +149,6 @@ fn handle_main_events_cleared(
     global_state: &mut GlobalState,
 ) {
     span!(guard, "Handle MainEventsCleared");
-    #[cfg(target_os = "trueos")]
-    if trueos::shutdown::requested().unwrap_or(true) {
-        states.clear();
-        event_loop.exit();
-        return;
-    }
     // Screenshot / Fullscreen toggle
     global_state
         .window
