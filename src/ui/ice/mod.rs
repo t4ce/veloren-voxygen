@@ -106,8 +106,17 @@ impl IcedUi {
         if self.scale.surface_resized(resolution) || self.scale_changed {
             self.native_activity.resize_invalidations += 1;
             self.scale_changed = false;
-            self.renderer.resize_native(resolution);
+            let logical = self.scale.scaled_resolution().map(|value| value as f32);
+            self.renderer.resize_native(logical, resolution);
             self.last_native_primitive = None;
+            tracing::info!(
+                physical_width = resolution.x,
+                physical_height = resolution.y,
+                logical_width = logical.x,
+                logical_height = logical.y,
+                physical_scale = self.scale.scale_factor_physical(),
+                "Native UI viewport synchronized; layout and paint share scale"
+            );
         }
         use renderer::activity::micros;
         let input_events = self.events.len() as u64;

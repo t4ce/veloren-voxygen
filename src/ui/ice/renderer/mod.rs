@@ -283,14 +283,15 @@ impl IcedRenderer {
     }
 
     #[cfg(target_os = "trueos")]
-    pub fn resize_native(&mut self, physical_resolution: Vec2<u32>) {
-        self.win_dims = physical_resolution.map(|value| value as f32);
+    pub fn resize_native(&mut self, scaled_resolution: Vec2<f32>, physical_resolution: Vec2<u32>) {
+        self.win_dims = scaled_resolution;
         self.window_scissor = default_scissor(physical_resolution);
         self.update_resolution_dependents(physical_resolution);
-        self.native
-            .as_mut()
-            .expect("native renderer state")
-            .resize(physical_resolution.x, physical_resolution.y);
+        self.native.as_mut().expect("native renderer state").resize(
+            physical_resolution.x,
+            physical_resolution.y,
+            self.p_scale,
+        );
     }
 
     #[cfg(target_os = "trueos")]

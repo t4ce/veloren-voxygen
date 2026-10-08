@@ -1,8 +1,8 @@
+use core::hash::Hash;
 use iced::{
     Align, Clipboard, Element, Event, Hasher, Layout, Length, Padding, Point, Rectangle, Size,
     Widget, layout, mouse,
 };
-use core::hash::Hash;
 
 /// A widget used to overlay one widget on top of another
 /// Layout behaves similar to the iced::Container widget
@@ -20,6 +20,7 @@ pub struct Overlay<'a, M, R: Renderer> {
     over: Element<'a, M, R>,
     under: Element<'a, M, R>,
     pos: Option<Point>,
+    on_click_outside: Option<Box<dyn Fn() -> M + 'a>>,
     // add style etc as needed
 }
 
@@ -43,7 +44,15 @@ where
             over: over.into(),
             under: under.into(),
             pos: None,
+            on_click_outside: None,
         }
+    }
+
+    /// Dismiss the front widget and consume the click before it reaches background controls.
+    #[must_use]
+    pub fn on_click_outside(mut self, message: impl Fn() -> M + 'a) -> Self {
+        self.on_click_outside = Some(Box::new(message));
+        self
     }
 
     #[must_use]
@@ -111,9 +120,13 @@ impl<M, R> Widget<M, R> for Overlay<'_, M, R>
 where
     R: Renderer,
 {
-    fn width(&self) -> Length { self.width }
+    fn width(&self) -> Length {
+        self.width
+    }
 
-    fn height(&self) -> Length { self.height }
+    fn height(&self) -> Length {
+        self.height
+    }
 
     fn layout(&self, renderer: &R, limits: &layout::Limits) -> layout::Node {
         let limits = limits
@@ -194,6 +207,18 @@ where
         let mut children = layout.children();
         let over_layout = children.next().unwrap();
 
+        let press_position = match &event {
+            Event::Mouse(mouse::Event::ButtonPressed(_)) => Some(cursor_position),
+            Event::Touch(iced::touch::Event::FingerPressed { position, .. }) => Some(*position),
+            _ => None,
+        };
+        if let (Some(position), Some(dismiss)) = (press_position, &self.on_click_outside) {
+            if layout.bounds().contains(position) && !over_layout.bounds().contains(position) {
+                messages.push(dismiss());
+                return iced::event::Status::Captured;
+            }
+        }
+
         // TODO: consider passing to under if ignored?
         let status = self.over.on_event(
             event.clone(),
@@ -251,5 +276,7 @@ where
     R: 'a + Renderer,
     M: 'a,
 {
-    fn from(overlay: Overlay<'a, M, R>) -> Element<'a, M, R> { Element::new(overlay) }
+    fn from(overlay: Overlay<'a, M, R>) -> Element<'a, M, R> {
+        Element::new(overlay)
+    }
 }

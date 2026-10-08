@@ -230,7 +230,13 @@ impl Screen {
         })
         .align_x(Align::End);
 
-        if dialog_id.is_some() {
+        if let Some(dialog_id) = dialog_id {
+            let dismiss = match dialog_id {
+                1 => Message::AccountBack,
+                2 => Message::OpenLanguageMenu,
+                5 => Message::CloseError,
+                _ => Message::Back,
+            };
             let chrome = Row::with_children(vec![
                 left_column,
                 Space::new(Length::Fill, Length::Fill).into(),
@@ -240,6 +246,7 @@ impl Screen {
             .height(Length::Fill)
             .spacing(10);
             crate::ui::ice::widget::Overlay::new(central_content, chrome)
+                .on_click_outside(move || dismiss.clone())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .center_x()

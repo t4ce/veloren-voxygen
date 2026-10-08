@@ -205,6 +205,8 @@ pub struct Controls {
     time: f64,
 
     screen: Screen,
+    loading_started: Option<std::time::Instant>,
+    pending_connection_error: Option<String>,
     dialog_chrome: login::Screen,
     quit_dialog: quit::Screen,
     confirming_quit: bool,
@@ -307,6 +309,8 @@ impl Controls {
             time: 0.0,
 
             screen,
+            loading_started: None,
+            pending_connection_error: None,
             dialog_chrome: login::Screen::default(),
             quit_dialog: quit::Screen::default(),
             confirming_quit: false,
@@ -319,6 +323,11 @@ impl Controls {
 
     fn view(&mut self, settings: &Settings, dt: f32) -> Element<'_, Message> {
         self.time += dt as f64;
+        if self.loading_minimum_elapsed() {
+            if let Some(error) = self.pending_connection_error.take() {
+                self.connection_error(error);
+            }
+        }
 
         // TODO: consider setting this as the default in the renderer
         let button_style = style::button::Style::new(self.imgs.button)
@@ -593,11 +602,7 @@ impl Controls {
                 };
             }
             Message::Multiplayer => {
-                self.screen = Screen::Connecting {
-                    screen: connecting::Screen::new(ui),
-                    connection_state: ConnectionState::InProgress,
-                    init_stage: DetailedInitializationStage::StartingMultiplayer,
-                };
+                self.begin_connection(ui);
 
                 events.push(Event::LoginAttempt {
                     username: self.login_info.username.trim().to_string(),
@@ -684,8 +689,28 @@ impl Controls {
         }
     }
 
-    // Connection successful of failed
+    // One minimum duration for every connecting-screen spawn. Never block the UI loop.
+    const MIN_SHOW_SEC: u64 = 3;
+
+    fn begin_connection(&mut self, ui: &mut Ui) {
+        self.loading_started = Some(std::time::Instant::now());
+        self.pending_connection_error = None;
+        self.screen = Screen::Connecting {
+            screen: connecting::Screen::new(ui),
+            connection_state: ConnectionState::InProgress,
+            init_stage: DetailedInitializationStage::StartingMultiplayer,
+        };
+    }
+
+    fn loading_minimum_elapsed(&self) -> bool {
+        self.loading_started
+            .is_none_or(|started| started.elapsed() >= Duration::from_secs(Self::MIN_SHOW_SEC))
+    }
+
+    // Explicit cancellation bypasses the minimum and discards a deferred error.
     fn exit_connect_screen(&mut self) {
+        self.loading_started = None;
+        self.pending_connection_error = None;
         if matches!(&self.screen, Screen::Connecting { .. }) {
             self.screen = Screen::Login {
                 screen: Box::default(),
@@ -712,6 +737,12 @@ impl Controls {
     }
 
     fn connection_error(&mut self, error: String) {
+        if matches!(&self.screen, Screen::Connecting { .. }) && !self.loading_minimum_elapsed() {
+            self.pending_connection_error = Some(error);
+            return;
+        }
+        self.loading_started = None;
+        self.pending_connection_error = None;
         if matches!(&self.screen, Screen::Connecting { .. })
             || matches!(&self.screen, Screen::Login { .. })
         {
@@ -906,11 +937,7 @@ impl MainMenuUi {
     /// Exercise the shipped loading screen without creating a client/world.
     #[cfg(target_os = "trueos")]
     pub fn show_loading_proof(&mut self) {
-        self.controls.screen = Screen::Connecting {
-            screen: connecting::Screen::new(&mut self.ui),
-            connection_state: ConnectionState::InProgress,
-            init_stage: DetailedInitializationStage::StartingMultiplayer,
-        };
+        self.controls.begin_connection(&mut self.ui);
     }
 
     pub fn bg_img_spec(&self) -> &'static str {
@@ -941,6 +968,10 @@ impl MainMenuUi {
     pub fn update_stage(&mut self, stage: DetailedInitializationStage) {
         tracing::trace!(?stage, "Updating stage");
         self.controls.update_init_stage(stage);
+    }
+
+    pub fn loading_minimum_elapsed(&self) -> bool {
+        self.controls.loading_minimum_elapsed()
     }
 
     pub fn connected(&mut self) {

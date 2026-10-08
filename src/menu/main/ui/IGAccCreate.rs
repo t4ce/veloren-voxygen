@@ -1,5 +1,5 @@
 //! In-game account creation using the same protocol as veloren.net/js/account.js.
-use super::{FILL_FRAC_ONE, FILL_FRAC_TWO, Imgs, Message};
+use super::{FILL_FRAC_ONE, FILL_FRAC_TWO, Imgs, Message, selection_panel};
 use crate::ui::{
     fonts::IcedFonts as Fonts,
     ice::{
@@ -13,7 +13,7 @@ use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use i18n::Localization;
-use iced::{Align, Column, Container, Length, Space, TextInput, button, text_input};
+use iced::{Align, Column, Container, Length, Space, Text, TextInput, button, text_input};
 use std::{
     sync::{Arc, mpsc},
     time::Duration,
@@ -114,23 +114,32 @@ impl IGAccCreate {
             Some(Message::AccountBack),
         ))
         .width(Length::Units(170));
-        Container::new(
-            Column::with_children(vec![
-                Column::with_children(fields).spacing(5).into(),
-                Space::new(Length::Fill, Length::Units(8)).into(),
-                create.into(),
-                back.into(),
-                Column::with_children(links)
-                    .spacing(5)
-                    .align_items(Align::Center)
-                    .into(),
-            ])
+        let title = Text::new(i18n.get_msg("main-account"))
+            .size(fonts.cyri.scale(35))
+            .width(Length::Fill)
+            .horizontal_alignment(iced::HorizontalAlignment::Center);
+        let controls = Column::with_children(vec![
+            Column::with_children(fields)
+                .width(Length::Units(230))
+                .spacing(5)
+                .align_items(Align::Center)
+                .into(),
+            Space::new(Length::Units(0), Length::Units(8)).into(),
+            create.into(),
+            back.into(),
+            Column::with_children(links)
+                .spacing(5)
+                .align_items(Align::Center)
+                .into(),
+        ])
+        .spacing(8)
+        .align_items(Align::Center);
+        let content = Column::with_children(vec![title.into(), controls.into()])
+            .width(Length::Fill)
+            .height(Length::FillPortion(38))
             .spacing(8)
-            .align_items(Align::Center),
-        )
-        .height(Length::Fill)
-        .center_y()
-        .into()
+            .align_items(Align::Center);
+        selection_panel::panel(imgs, content.into())
     }
 
     pub(super) fn field(&mut self, idx: usize, value: String) {

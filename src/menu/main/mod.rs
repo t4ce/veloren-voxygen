@@ -253,8 +253,7 @@ impl PlayState for MainMenuState {
                     global_state.settings.graphics.render_mode.clone(),
                 ) {
                     self.init = InitState::None;
-                    self.main_menu_ui.cancel_connection();
-                    global_state.info_message = Some(error);
+                    self.main_menu_ui.show_info(error);
                     return PlayStateResult::Continue;
                 }
                 self.init =
@@ -352,8 +351,7 @@ impl PlayState for MainMenuState {
                 Err(error) => {
                     tracing::error!(%error, "Scene startup failed after successful login");
                     self.init = InitState::None;
-                    self.main_menu_ui.cancel_connection();
-                    global_state.info_message = Some(error);
+                    self.main_menu_ui.show_info(error);
                     return PlayStateResult::Continue;
                 }
             };
@@ -365,6 +363,9 @@ impl PlayState for MainMenuState {
                 );
             // If complete go to char select screen
             } else {
+                if !self.main_menu_ui.loading_minimum_elapsed() {
+                    return PlayStateResult::Continue;
+                }
                 #[cfg(target_os = "trueos")]
                 if !global_state.window.prepare_scene_display() {
                     return PlayStateResult::Continue;

@@ -31,9 +31,10 @@ struct Asset {
 pub(super) struct Renderer {
     width: u32,
     height: u32,
+    physical_scale: f32,
     images: Vec<Asset>,
     unsupported: Vec<graphic::Id>,
-    glyphs: Vec<((u8, u32, u32), u32, Arc<::image::RgbaImage>)>,
+    glyphs: Vec<((u8, u32, u32, u32), u32, Arc<::image::RgbaImage>)>,
     prepared: Vec<(PreparedKey, u32, Arc<::image::RgbaImage>, bool)>,
     gradients: Vec<(u32, u32, u32, u32, u32, Arc<::image::RgbaImage>)>,
     next_graphic: u32,
@@ -48,6 +49,7 @@ impl Renderer {
         Self {
             width,
             height,
+            physical_scale: 1.0,
             images: Vec::new(),
             unsupported: Vec::new(),
             glyphs: Vec::new(),
@@ -113,9 +115,11 @@ impl Renderer {
             .find(|a| a.graphic == id)
             .map_or((0, 0), |a| a.image.dimensions())
     }
-    pub(super) fn resize(&mut self, width: u32, height: u32) {
+    pub(super) fn resize(&mut self, width: u32, height: u32, physical_scale: f32) {
+        assert!(physical_scale.is_finite() && physical_scale > 0.0);
         self.width = width;
         self.height = height;
+        self.physical_scale = physical_scale;
         self.dialog = None;
         self.closing_dialog = None;
     }
@@ -168,26 +172,29 @@ impl Renderer {
         self.closing_dialog.is_some()
     }
     fn glyph(&mut self, byte: u8, scale: u32, color: u32) -> (u32, Arc<::image::RgbaImage>) {
-        let key = (byte, scale, color);
+        let width = (microfont::FWIDTH as f32 * scale as f32 * self.physical_scale)
+            .round()
+            .max(1.) as u32;
+        let height = (microfont::FHEIGHT as f32 * scale as f32 * self.physical_scale)
+            .round()
+            .max(1.) as u32;
+        let key = (byte, width, height, color);
         if let Some((_, id, image)) = self.glyphs.iter().find(|(k, _, _)| *k == key) {
             return (*id, Arc::clone(image));
         }
         // Cache a tiny coloured MicroFont mask once, never paint frame pixels.
         let bits = (microfont::font_pixels(byte) as u128) << 2;
-        let image = ::image::RgbaImage::from_fn(
-            microfont::FWIDTH as u32 * scale,
-            microfont::FHEIGHT as u32 * scale,
-            |x, y| {
-                let bit = microfont::FWIDTH * microfont::FHEIGHT
-                    - 1
-                    - ((y / scale) as usize * microfont::FWIDTH + (x / scale) as usize);
-                ::image::Rgba(if bits & (1u128 << bit) != 0 {
-                    premultiply(color).to_le_bytes()
-                } else {
-                    [0; 4]
-                })
-            },
-        );
+        let image = ::image::RgbaImage::from_fn(width, height, |x, y| {
+            let bit = microfont::FWIDTH * microfont::FHEIGHT
+                - 1
+                - ((y as usize * microfont::FHEIGHT / height as usize) * microfont::FWIDTH
+                    + x as usize * microfont::FWIDTH / width as usize);
+            ::image::Rgba(if bits & (1u128 << bit) != 0 {
+                premultiply(color).to_le_bytes()
+            } else {
+                [0; 4]
+            })
+        });
         let image = Arc::new(image);
         let id = self.sprite_id();
         self.activity.glyphs += 1;
@@ -219,7 +226,7 @@ impl Renderer {
                 linear_color,
             } => {
                 let color = packed_color(*linear_color, opacity);
-                let bounds = Rect::bounds(*bounds, offset);
+                let bounds = Rect::bounds(*bounds, offset, self.physical_scale);
                 let backend = choose_backend(
                     &plan.foreground,
                     snap(bounds).intersect(clip),
@@ -240,7 +247,7 @@ impl Renderer {
                 top_linear_color,
                 bottom_linear_color,
             } => {
-                let rect = snap(Rect::bounds(*bounds, offset));
+                let rect = snap(Rect::bounds(*bounds, offset, self.physical_scale));
                 let w = rect.width().max(1.) as u32;
                 let h = rect.height().max(1.) as u32;
                 let top = packed_color(*top_linear_color, opacity);
@@ -309,7 +316,7 @@ impl Renderer {
                     min: vek::Vec2::zero(),
                     max: vek::Vec2::new(w as f32, h as f32),
                 });
-                let rect = snap(Rect::bounds(*bounds, offset));
+                let rect = snap(Rect::bounds(*bounds, offset, self.physical_scale));
                 if rect.width() <= 0. || rect.height() <= 0. {
                     return Ok(());
                 }
@@ -393,10 +400,9 @@ impl Renderer {
                         .max(1.) as u32;
                     let (id, image) = self.glyph(glyph.glyph.id.0 as u8, scale, color);
                     let bounds = Rect::new(
-                        (glyph.glyph.position.x - offset.0).floor(),
-                        (glyph.glyph.position.y
-                            - offset.1
-                            - microfont::FHEIGHT as f32 * scale as f32)
+                        ((glyph.glyph.position.x - offset.0) * self.physical_scale).floor(),
+                        ((glyph.glyph.position.y - offset.1 - glyph.glyph.scale.y)
+                            * self.physical_scale)
                             .floor(),
                         image.width() as f32,
                         image.height() as f32,
@@ -423,7 +429,7 @@ impl Renderer {
                 offset: child,
                 content,
             } => {
-                let clip = clip.intersect(Rect::bounds(*bounds, offset));
+                let clip = clip.intersect(Rect::bounds(*bounds, offset, self.physical_scale));
                 self.draw(
                     content,
                     (offset.0 + child.x as f32, offset.1 + child.y as f32),
@@ -602,8 +608,15 @@ impl Rect {
             bottom: y + h,
         }
     }
-    fn bounds(b: iced::Rectangle, offset: (f32, f32)) -> Self {
-        Self::new(b.x - offset.0, b.y - offset.1, b.width, b.height)
+    // Iced bounds and scroll offsets are logical; every emitted quad and
+    // scissor is physical. Convert once before pixel snapping and preparation.
+    fn bounds(b: iced::Rectangle, offset: (f32, f32), physical_scale: f32) -> Self {
+        Self::new(
+            (b.x - offset.0) * physical_scale,
+            (b.y - offset.1) * physical_scale,
+            b.width * physical_scale,
+            b.height * physical_scale,
+        )
     }
     fn width(self) -> f32 {
         self.right - self.x
@@ -1035,6 +1048,68 @@ mod tests {
         assert!(image.pixels().any(|p| p.0 == [0; 4]));
         assert!(image.pixels().any(|p| p.0 == [128, 100, 0, 128]));
         assert_eq!(image.dimensions(), (6, 11));
+    }
+    #[test]
+    fn fullhd_logical_background_fills_both_smaller_and_fullscreen_frames() {
+        for (width, height, scale) in [(1280, 720, 2. / 3.), (2560, 1440, 4. / 3.)] {
+            let mut renderer = Renderer::new(1920, 1080);
+            let id = renderer.add_image(Arc::new(::image::RgbaImage::from_pixel(
+                1,
+                1,
+                ::image::Rgba([20, 30, 40, 255]),
+            )));
+            renderer.mark_scene_image(id);
+            renderer.resize(width, height, scale);
+            let plan = renderer
+                .prepare(&sprite(id, bounds(0., 0., 1920., 1080.)))
+                .unwrap();
+            let q = plan.background.commands[0].quad;
+            assert_eq!(
+                (q.c0.x, q.c0.y, q.c2.x, q.c2.y),
+                (0., 0., width as f32, height as f32)
+            );
+            assert_eq!(
+                plan.background.uploads[0].image.dimensions(),
+                (width, height)
+            );
+            assert_eq!(plan.background.commands[0].backend, SpriteBackend::Bcs0);
+        }
+    }
+    #[test]
+    fn logical_scroll_clip_and_control_bounds_use_the_same_physical_scale() {
+        let mut renderer = Renderer::new(100, 100);
+        renderer.resize(50, 50, 0.5);
+        let id = renderer.add_image(Arc::new(::image::RgbaImage::from_pixel(
+            1,
+            1,
+            ::image::Rgba([255; 4]),
+        )));
+        let plan = renderer
+            .prepare(&Primitive::Clip {
+                bounds: bounds(20., 20., 20., 20.),
+                offset: vek::Vec2::new(10, 10),
+                content: Box::new(sprite(id, bounds(20., 20., 40., 40.))),
+            })
+            .unwrap();
+        let q = plan.foreground.commands[0].quad;
+        assert_eq!((q.c0.x, q.c0.y, q.c2.x, q.c2.y), (10., 10., 20., 20.));
+        assert_eq!((q.c0.u, q.c0.v, q.c2.u, q.c2.v), (0.25, 0.25, 0.75, 0.75));
+    }
+    #[test]
+    fn physical_glyph_sizes_are_cached_independently_of_logical_font_size() {
+        let mut renderer = Renderer::new(100, 100);
+        let (original, image) = renderer.glyph(b'A', 1, u32::MAX);
+        assert_eq!(image.dimensions(), (6, 11));
+        renderer.resize(50, 50, 0.5);
+        let (small, image) = renderer.glyph(b'A', 1, u32::MAX);
+        assert_ne!(original, small);
+        assert_eq!(image.dimensions(), (3, 6));
+        renderer.resize(200, 200, 2.);
+        let (large, image) = renderer.glyph(b'A', 1, u32::MAX);
+        assert_ne!(small, large);
+        assert_eq!(image.dimensions(), (12, 22));
+        renderer.resize(100, 100, 1.);
+        assert_eq!(renderer.glyph(b'A', 1, u32::MAX).0, original);
     }
     #[test]
     fn empty_ui_plan_does_not_bake_an_opaque_frame() {
