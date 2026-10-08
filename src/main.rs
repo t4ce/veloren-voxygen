@@ -254,6 +254,8 @@ fn main() {
         global_state
     })
     .unwrap();
+    #[cfg(target_os = "trueos")]
+    info!("voxy: shutdown stage=event-loop-returned");
     }
 }
 

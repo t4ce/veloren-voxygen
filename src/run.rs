@@ -141,14 +141,28 @@ impl<F> Drop for App<F> {
         // Release clients/play states before their window and runtime. The
         // shutdown guard in main acknowledges cleanup only after this returns.
         #[cfg(target_os = "trueos")]
-        self.states.clear();
+        {
+            tracing::info!("voxy: shutdown stage=play-states-drop-start");
+            self.states.clear();
+            tracing::info!("voxy: shutdown stage=play-states-drop-complete");
+        }
         if let Some(global_state) = self.global_state.as_mut() {
+            #[cfg(target_os = "trueos")]
+            tracing::info!("voxy: shutdown stage=settings-save-start");
             global_state
                 .settings
                 .save_to_file_warn(&global_state.config_dir);
+            #[cfg(target_os = "trueos")]
+            tracing::info!("voxy: shutdown stage=profile-save-start");
             global_state
                 .profile
                 .save_to_file_warn(&global_state.config_dir);
+        }
+        #[cfg(target_os = "trueos")]
+        {
+            tracing::info!("voxy: shutdown stage=global-state-drop-start");
+            drop(self.global_state.take());
+            tracing::info!("voxy: shutdown stage=global-state-drop-complete");
         }
     }
 }
@@ -225,6 +239,8 @@ fn handle_main_events_cleared(
     }
 
     if exit {
+        #[cfg(target_os = "trueos")]
+        tracing::info!("voxy: shutdown stage=event-loop-exit-requested");
         event_loop.exit();
     }
 
