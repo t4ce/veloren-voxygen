@@ -161,9 +161,13 @@ impl PlayState for CharSelectionState {
             }
 
             // Maintain the UI.
+            #[cfg(target_os = "trueos")]
+            let ui_progress = crate::selection_progress::stage(crate::selection_progress::Stage::Ui);
             let events = self
                 .char_selection_ui
                 .maintain(global_state, &self.client.borrow());
+            #[cfg(target_os = "trueos")]
+            drop(ui_progress);
 
             for event in events {
                 #[cfg(target_os = "trueos")]
@@ -313,6 +317,7 @@ impl PlayState for CharSelectionState {
                     .state()
                     .ecs()
                     .read_resource::<common::resources::TimeOfDay>();
+                let _sky_progress = crate::selection_progress::stage(crate::selection_progress::Stage::SkyMailbox);
                 if let Err(error) = global_state.window.present_sky(time.get_sun_dir().z) {
                     self.char_selection_ui.display_error(error);
                 }
@@ -321,10 +326,14 @@ impl PlayState for CharSelectionState {
             // Tick the client (currently only to keep the connection alive).
             let localized_strings = &global_state.i18n.read();
 
+            #[cfg(target_os = "trueos")]
+            let client_progress = crate::selection_progress::stage(crate::selection_progress::Stage::ClientTick);
             let res = self.client.borrow_mut().tick(
                 comp::ControllerInputs::default(),
                 global_state.clock.game_dt(),
             );
+            #[cfg(target_os = "trueos")]
+            drop(client_progress);
             match res {
                 Ok(events) => {
                     let mut join_metadata = None;
@@ -385,6 +394,8 @@ impl PlayState for CharSelectionState {
             }
 
             // TODO: make sure rendering is not relying on cleaned up stuff
+            #[cfg(target_os = "trueos")]
+            let _cleanup_progress = crate::selection_progress::stage(crate::selection_progress::Stage::ClientCleanup);
             self.client.borrow_mut().cleanup();
 
             PlayStateResult::Continue
@@ -426,9 +437,9 @@ impl PlayState for CharSelectionState {
                     .render(&mut first_pass, client.get_tick(), humanoid_body, loadout);
             }
 
-            if let Some(mut volumetric_pass) = drawer.volumetric_pass() {
-                // Clouds
-                volumetric_pass.draw_clouds();
+            if let Some(mut scene_composition_pass) = drawer.scene_composition_pass() {
+                // BareMinimum copies scene color; other variants compose clouds.
+                scene_composition_pass.draw_scene_composition();
             }
             // Bloom (does nothing if bloom is disabled)
             drawer.run_bloom_passes();

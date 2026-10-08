@@ -77,6 +77,13 @@ impl ClientInit {
         client_type: ClientType,
         portal: bool,
     ) -> Self {
+        #[cfg(target_os = "trueos")]
+        let attempt = {
+            static NEXT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(1);
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        };
+        #[cfg(target_os = "trueos")]
+        tracing::info!(attempt, "Login worker stage=prepare");
         let (tx, rx) = unbounded();
         let (trust_tx, trust_rx) = unbounded();
         let (init_stage_tx, init_stage_rx) = unbounded();
@@ -88,6 +95,9 @@ impl ClientInit {
 
         let password = zeroize::Zeroizing::new(password);
         let _task = runtime.spawn(async move {
+            #[cfg(target_os = "trueos")]
+            tracing::info!(attempt, "Login worker stage=task-entered");
+
             // This TRUEOS build approves the game server's authentication
             // provider directly, without a UI prompt or saved trust-list gate.
             #[cfg(target_os = "trueos")]
@@ -113,6 +123,8 @@ impl ClientInit {
                     break;
                 }
                 let mut mismatched_server_info = None;
+                #[cfg(target_os = "trueos")]
+                tracing::info!(attempt, "Login worker stage=client-construction-enter");
                 match Client::new_with_protocol(
                     connection_args.clone(),
                     Arc::clone(&runtime2),
@@ -132,6 +144,8 @@ impl ClientInit {
                 .await
                 {
                     Ok(client) => {
+                        #[cfg(target_os = "trueos")]
+                        tracing::info!(attempt, "Login worker stage=client-construction-complete");
                         let _ = tx.send(Msg::Done(Ok(client)));
                         tokio::task::block_in_place(move || drop(runtime2));
                         return;
@@ -176,6 +190,9 @@ impl ClientInit {
             // Safe drop runtime
             tokio::task::block_in_place(move || drop(runtime2));
         });
+
+        #[cfg(target_os = "trueos")]
+        tracing::info!(attempt, "Login worker stage=task-scheduled");
 
         ClientInit {
             rx,

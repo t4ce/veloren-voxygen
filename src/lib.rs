@@ -26,6 +26,8 @@ pub mod audio;
 #[cfg(not(feature = "headless"))]
 pub mod cli;
 pub mod client;
+#[cfg(target_os = "trueos")]
+pub mod selection_progress;
 pub mod portal_timeline;
 #[cfg(not(feature = "headless"))]
 pub mod server_portal;

@@ -2466,10 +2466,10 @@ impl PlayState for SessionState {
             &scene_data,
         );
 
-        if let Some(mut volumetric_pass) = drawer.volumetric_pass() {
-            // Clouds
-            prof_span!("clouds");
-            volumetric_pass.draw_clouds();
+        if let Some(mut scene_composition_pass) = drawer.scene_composition_pass() {
+            // BareMinimum copies scene color; other variants compose clouds.
+            prof_span!("scene composition");
+            scene_composition_pass.draw_scene_composition();
         }
         if let Some(mut transparent_pass) = drawer.transparent_pass() {
             // Trails

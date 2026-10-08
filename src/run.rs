@@ -173,10 +173,18 @@ fn handle_main_events_cleared(
     global_state: &mut GlobalState,
 ) {
     span!(guard, "Handle MainEventsCleared");
+    #[cfg(target_os = "trueos")]
+    let _selection_frame = crate::selection_progress::frame(
+        states.last().is_some_and(|state| state.name() == "Character Selection"),
+    );
+    #[cfg(target_os = "trueos")]
+    let window_events = crate::selection_progress::stage(crate::selection_progress::Stage::WindowEvents);
     // Screenshot / Fullscreen toggle
     global_state
         .window
         .resolve_deduplicated_events(&mut global_state.settings, &global_state.config_dir);
+    #[cfg(target_os = "trueos")]
+    drop(window_events);
     // Run tick here
 
     // What's going on here?
@@ -210,8 +218,11 @@ fn handle_main_events_cleared(
             }
             PlayStateResult::Pop => {
                 states.pop().map(|old_state| {
-                    debug!("Popped state '{}'.", old_state.name());
+                    let name = old_state.name();
+                    tracing::info!(state = name, "Play-state cleanup started");
                     global_state.on_play_state_changed();
+                    drop(old_state);
+                    tracing::info!(state = name, "Play-state cleanup complete");
                 });
                 states.last_mut().map(|new_state| {
                     new_state.enter(global_state, Direction::Backwards);
@@ -303,10 +314,16 @@ fn handle_main_events_cleared(
         global_state
             .clock
             .set_target_dt(Duration::from_secs_f64(1.0 / target_fps as f64));
+        #[cfg(target_os = "trueos")]
+        let pacing = crate::selection_progress::stage(crate::selection_progress::Stage::FramePacing);
         global_state.clock.tick();
+        #[cfg(target_os = "trueos")]
+        drop(pacing);
         drop(guard);
 
         // Maintain global state.
+        #[cfg(target_os = "trueos")]
+        let _maintain = crate::selection_progress::stage(crate::selection_progress::Stage::GlobalMaintain);
         global_state.maintain();
     }
 }

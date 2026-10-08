@@ -156,6 +156,9 @@ fn main() {
             .unwrap(),
     );
 
+    #[cfg(target_os = "trueos")]
+    veloren_voxygen::selection_progress::start(&tokio_runtime);
+
     // Initialise watcher for animation hot-reloading
 
     // Setup audio

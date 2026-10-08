@@ -363,17 +363,29 @@ impl<'frame> Drawer<'frame> {
         })
     }
 
-    /// Returns None if the volumetrics pipeline is not available
-    pub fn volumetric_pass(&mut self) -> Option<VolumetricPassDrawer<'_>> {
+    /// Compose first-pass color into the texture consumed by postprocess.
+    /// BareMinimum copies RGB and forces opaque alpha; other variants add clouds.
+    /// Returns None until scene resources and pipelines are available.
+    pub fn scene_composition_pass(&mut self) -> Option<SceneCompositionPassDrawer<'_>> {
         let views = self.borrow.views?;
         self.borrow.locals?;
         let pipelines = &self.borrow.pipelines.all()?;
         let shadow = self.borrow.shadow?;
 
+        let label = if self
+            .borrow
+            .pipeline_modes
+            .experimental_shaders
+            .contains(&super::super::ExperimentalShader::BareMinimum)
+        {
+            "scene color copy (opaque alpha)"
+        } else {
+            "scene composition (clouds)"
+        };
         let mut render_pass = self.encoder.scoped_render_pass(
-            "volumetric_pass",
+            label,
             wgpu::RenderPassDescriptor {
-                label: Some("volumetric pass (clouds)"),
+                label: Some(label),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &views.tgt_color_pp,
                     depth_slice: None,
@@ -393,10 +405,10 @@ impl<'frame> Drawer<'frame> {
         render_pass.set_bind_group(0, &self.globals.bind_group, &[]);
         render_pass.set_bind_group(1, &shadow.bind.bind_group, &[]);
 
-        Some(VolumetricPassDrawer {
+        Some(SceneCompositionPassDrawer {
             render_pass,
             borrow: &self.borrow,
-            clouds_pipeline: &pipelines.clouds,
+            composition_pipeline: &pipelines.clouds,
         })
     }
 
@@ -1307,24 +1319,24 @@ impl<'pass_ref, 'pass: 'pass_ref> FluidDrawer<'pass_ref, 'pass> {
     }
 }
 
-// Second pass: volumetrics
+// Second pass: scene composition (opaque color copy under BareMinimum)
 #[must_use]
-pub struct VolumetricPassDrawer<'pass> {
+pub struct SceneCompositionPassDrawer<'pass> {
     render_pass: OwningScope<'pass, wgpu::RenderPass<'pass>>,
     borrow: &'pass RendererBorrow<'pass>,
-    clouds_pipeline: &'pass clouds::CloudsPipeline,
+    composition_pipeline: &'pass clouds::CloudsPipeline,
 }
 
-impl VolumetricPassDrawer<'_> {
-    pub fn draw_clouds(&mut self) {
+impl SceneCompositionPassDrawer<'_> {
+    pub fn draw_scene_composition(&mut self) {
         self.render_pass
-            .set_pipeline(&self.clouds_pipeline.pipeline);
+            .set_pipeline(&self.composition_pipeline.pipeline);
         self.render_pass.set_bind_group(
             2,
             &self
                 .borrow
                 .locals
-                .expect("volumetric pass has scene locals")
+                .expect("scene composition pass has scene locals")
                 .clouds_bind
                 .bind_group,
             &[],

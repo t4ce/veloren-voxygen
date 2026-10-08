@@ -91,6 +91,7 @@ impl MainMenuState {
 
 impl PlayState for MainMenuState {
     fn enter(&mut self, global_state: &mut GlobalState, _: Direction) {
+        tracing::info!("Main menu re-entry started");
         #[cfg(target_os = "trueos")]
         {
             global_state.window.resume_menu();
@@ -107,6 +108,7 @@ impl PlayState for MainMenuState {
         // Set scale mode in case it was change
         self.main_menu_ui
             .set_scale_mode(global_state.settings.interface.ui_scale);
+        tracing::info!("Main menu ready for login input");
     }
 
     fn tick(&mut self, global_state: &mut GlobalState, events: Vec<Event>) -> PlayStateResult {
@@ -143,6 +145,7 @@ impl PlayState for MainMenuState {
                     password,
                     server_address,
                 } => {
+                    tracing::info!("Multiplayer login event received");
                     global_state.portal_credentials =
                         Some(Arc::new(crate::server_portal::PortalCredentials::new(
                             username.clone(),
@@ -152,15 +155,27 @@ impl PlayState for MainMenuState {
                     let use_srv = net_settings.use_srv;
                     let use_quic = net_settings.use_quic;
                     let validate_tls = net_settings.validate_tls;
+                    let settings_changed = net_settings.username != username
+                        || net_settings.default_server != server_address
+                        || (!server_address.is_empty() && !net_settings.servers.contains(&server_address));
                     net_settings.username.clone_from(&username);
                     net_settings.default_server.clone_from(&server_address);
                     if !server_address.is_empty() && !net_settings.servers.contains(&server_address)
                     {
                         net_settings.servers.push(server_address.clone());
                     }
-                    global_state
-                        .settings
-                        .save_to_file_warn(&global_state.config_dir);
+                    if settings_changed {
+                        #[cfg(target_os = "trueos")]
+                        {
+                            let settings = global_state.settings.clone();
+                            let config_dir = global_state.config_dir.clone();
+                            global_state.tokio_runtime.spawn_blocking(move || {
+                                settings.save_to_file_warn(&config_dir);
+                            });
+                        }
+                        #[cfg(not(target_os = "trueos"))]
+                        global_state.settings.save_to_file_warn(&global_state.config_dir);
+                    }
 
                     let connection_args = if use_srv {
                         ConnectionArgs::Srv {
@@ -263,6 +278,7 @@ impl PlayState for MainMenuState {
             Some(InitMsg::Done(Ok(mut client))) => {
                 // load local plugins needed by the server
                 // Register voxygen components / resources
+                tracing::info!("Login client ready; starting character-selection display");
                 crate::ecs::init(client.state_mut().ecs_mut());
                 // Authentication/admission succeeded. Only now may the play
                 // renderer request a GPU device; keep the loader visible.
@@ -327,10 +343,11 @@ impl PlayState for MainMenuState {
 
         // Tick the client to keep the connection alive if we are waiting on pipelines
         if let InitState::Pipeline(client, _) = &mut self.init {
-            match client.tick(
+            let result = client.tick(
                 comp::ControllerInputs::default(),
                 global_state.clock.game_dt(),
-            ) {
+            );
+            match result {
                 Ok(events) => {
                     for event in events {
                         match event {
@@ -430,6 +447,7 @@ impl PlayState for MainMenuState {
                     let server_info = client.server_info().clone();
                     let server_description = client.server_description().clone();
 
+                    tracing::info!("Login display ready; constructing character selection");
                     let char_select = CharSelectionState::new(
                         global_state,
                         Rc::new(RefCell::new(*client)),
@@ -700,6 +718,7 @@ fn attempt_login(
 
     // Don't try to connect if there is already a connection in progress.
     if let InitState::None = init {
+        tracing::info!("Starting asynchronous Multiplayer client initialization");
         *init = InitState::Client(ClientInit::new(
             connection_args,
             username,

@@ -500,7 +500,14 @@ impl Client {
         let _ = rustls::crypto::ring::default_provider().install_default(); // needs to be initialized before usage
         // Use `usize::MAX` as the output limit: we implicitly trust servers to not send
         // us too much data (TODO: should we?)
-        let network = Network::new(Pid::new(), &runtime);
+        #[cfg(target_os = "trueos")]
+        tracing::info!("Client construction stage=random-pid-enter");
+        let pid = Pid::new();
+        #[cfg(target_os = "trueos")]
+        tracing::info!("Client construction stage=network-new-enter");
+        let network = Network::new(pid, &runtime);
+        #[cfg(target_os = "trueos")]
+        tracing::info!("Client construction stage=network-new-complete");
 
         init_stage_update(ClientInitStage::ConnectionEstablish);
 
@@ -514,6 +521,8 @@ impl Client {
                 // Try to create a resolver backed by /etc/resolv.conf or the Windows Registry
                 // first. If that fails, create a resolver being hard-coded to
                 // Google's 8.8.8.8 public resolver.
+                #[cfg(target_os = "trueos")]
+                tracing::info!("Client construction stage=resolver-config-enter");
                 let resolver = Resolver::builder_tokio()
                     .unwrap_or_else(|error| {
                         error!(
@@ -530,11 +539,16 @@ impl Client {
                         "Could not get a Hickory DNS resolver, maybe you are missing some tls libs",
                     );
 
+                #[cfg(target_os = "trueos")]
+                tracing::info!("Client construction stage=srv-lookup-enter");
                 let quic_service_host = format!("_veloren._udp.{hostname}");
                 let quic_lookup_future = resolver.srv_lookup(quic_service_host);
                 let tcp_service_host = format!("_veloren._tcp.{hostname}");
                 let tcp_lookup_future = resolver.srv_lookup(tcp_service_host);
                 let (quic_rr, tcp_rr) = tokio::join!(quic_lookup_future, tcp_lookup_future);
+                #[cfg(target_os = "trueos")]
+                tracing::info!("Client construction stage=srv-lookup-complete");
+
 
                 #[derive(Eq, PartialEq)]
                 enum ConnMode {
@@ -2500,6 +2514,8 @@ impl Client {
         }
 
         // 4) Tick the client's LocalState
+        #[cfg(target_os = "trueos")]
+        let world_progress = crate::selection_progress::stage(crate::selection_progress::Stage::WorldSimulation);
         self.state.tick(
             Duration::from_secs_f64(dt.as_secs_f64() * self.dt_adjustment),
             true,
@@ -2507,6 +2523,8 @@ impl Client {
             &self.connected_server_constants,
             |_, _| {},
         );
+        #[cfg(target_os = "trueos")]
+        drop(world_progress);
 
         // TODO: avoid emitting these in the first place OR actually use outcomes
         // generated locally on the client (if they can be deduplicated from
@@ -3301,22 +3319,40 @@ impl Client {
         loop {
             let cnt_start = cnt;
 
+            #[cfg(target_os = "trueos")]
+            let general_progress = crate::selection_progress::stage(crate::selection_progress::Stage::GeneralMessages);
             while let Some(msg) = self.general_stream.try_recv()? {
                 cnt += 1;
                 self.handle_server_msg(frontend_events, msg)?;
             }
+            #[cfg(target_os = "trueos")]
+            drop(general_progress);
+            #[cfg(target_os = "trueos")]
+            let ping_progress = crate::selection_progress::stage(crate::selection_progress::Stage::PingMessages);
             while let Some(msg) = self.ping_stream.try_recv()? {
                 cnt += 1;
                 self.handle_ping_msg(msg)?;
             }
+            #[cfg(target_os = "trueos")]
+            drop(ping_progress);
+            #[cfg(target_os = "trueos")]
+            let character_progress = crate::selection_progress::stage(crate::selection_progress::Stage::CharacterMessages);
             while let Some(msg) = self.character_screen_stream.try_recv()? {
                 cnt += 1;
                 self.handle_server_character_screen_msg(frontend_events, msg)?;
             }
+            #[cfg(target_os = "trueos")]
+            drop(character_progress);
+            #[cfg(target_os = "trueos")]
+            let in_game_progress = crate::selection_progress::stage(crate::selection_progress::Stage::InGameMessages);
             while let Some(msg) = self.in_game_stream.try_recv()? {
                 cnt += 1;
                 self.handle_server_in_game_msg(frontend_events, msg)?;
             }
+            #[cfg(target_os = "trueos")]
+            drop(in_game_progress);
+            #[cfg(target_os = "trueos")]
+            let terrain_progress = crate::selection_progress::stage(crate::selection_progress::Stage::TerrainMessages);
             loop {
                 // Keep the decode backlog bounded; leave excess messages in the stream.
                 #[cfg(target_os = "trueos")]
@@ -3325,6 +3361,8 @@ impl Client {
                 cnt += 1;
                 self.handle_server_terrain_msg(msg)?;
             }
+            #[cfg(target_os = "trueos")]
+            drop(terrain_progress);
 
             #[cfg(target_os = "trueos")]
             if self.terrain_decode_queue.len() >= 32 { return Ok(cnt); }
@@ -3370,6 +3408,8 @@ impl Client {
         }
 
         // ignore network events
+        #[cfg(target_os = "trueos")]
+        let _events_progress = crate::selection_progress::stage(crate::selection_progress::Stage::NetworkEvents);
         while let Some(res) = self
             .participant
             .as_mut()

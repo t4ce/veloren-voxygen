@@ -61,9 +61,10 @@ pub use self::{
         AltIndices, CullingMode, Renderer,
         drawer::{
             DebugDrawer, DebugShadowDrawer, Drawer, FigureDrawer, FigureShadowDrawer,
-            FirstPassDrawer, ParticleDrawer, PreparedUiDrawer, ShadowPassDrawer, SpriteDrawer,
+            FirstPassDrawer, ParticleDrawer, PreparedUiDrawer, SceneCompositionPassDrawer, ShadowPassDrawer,
+            SpriteDrawer,
             TerrainDrawer, TerrainShadowDrawer, ThirdPassDrawer, TrailDrawer,
-            TransparentPassDrawer, UI_PREMULTIPLY_PASS, UiDrawer, VolumetricPassDrawer,
+            TransparentPassDrawer, UI_PREMULTIPLY_PASS, UiDrawer,
         },
     },
     texture::Texture,
