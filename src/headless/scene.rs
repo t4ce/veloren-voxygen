@@ -375,16 +375,37 @@ fn cuboid(vertices: &mut Vec<Vertex>, min: [f32; 3], max: [f32; 3], atlas_uv: [f
 }
 
 fn terrain_mesh(terrain: &TerrainGrid, center: Vec3<i32>) -> Mesh {
-    voxel_mesh(center, |pos| {
-        terrain.get(pos).ok().and_then(|block| {
-            block
-                .is_solid()
-                .then(|| block.get_color().unwrap_or_else(Rgb::zero))
-        })
-    })
+    voxel_mesh_with_air(
+        center,
+        |pos| {
+            terrain.get(pos).ok().and_then(|block| {
+                // Collidable sprites have model colors, not voxel RGB. They
+                // belong to the guarded sprite pass, never a black cube fallback.
+                block.is_solid().then(|| block.get_color()).flatten()
+            })
+        },
+        // Missing chunks are unknown, not air. Emitting a face against them
+        // creates an artificial wall extending into the chunk's solid base.
+        // A sprite cell does not occlude neighboring voxel faces. Unknown
+        // chunks still do: do not fabricate walls against missing data.
+        |pos| {
+            terrain
+                .get(pos)
+                .is_ok_and(|block| !block.is_solid() || block.get_color().is_none())
+        },
+    )
 }
 
+#[cfg(test)]
 fn voxel_mesh(center: Vec3<i32>, voxel_color: impl Fn(Vec3<i32>) -> Option<Rgb<u8>>) -> Mesh {
+    voxel_mesh_with_air(center, &voxel_color, |pos| voxel_color(pos).is_none())
+}
+
+fn voxel_mesh_with_air(
+    center: Vec3<i32>,
+    voxel_color: impl Fn(Vec3<i32>) -> Option<Rgb<u8>>,
+    is_known_air: impl Fn(Vec3<i32>) -> bool,
+) -> Mesh {
     let mut vertices = Vec::new();
     let mut atlas = PaletteAtlas::new();
     for z in center.z - VERTICAL_RADIUS..center.z + VERTICAL_RADIUS {
@@ -399,7 +420,7 @@ fn voxel_mesh(center: Vec3<i32>, voxel_color: impl Fn(Vec3<i32>) -> Option<Rgb<u
                     [(x + 1) as f32, (y + 1) as f32, (z + 1) as f32],
                 );
                 for (side, offset) in NEIGHBORS.iter().enumerate() {
-                    if voxel_color(pos + Vec3::from(*offset)).is_some() {
+                    if !is_known_air(pos + Vec3::from(*offset)) {
                         continue;
                     }
                     if vertices.len() + 6 > MAX_VERTICES {

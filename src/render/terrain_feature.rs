@@ -84,7 +84,7 @@ impl NativeTerrain {
     }
 
     /// Caller has leased the paired background and publishes after completion.
-    pub fn draw(&mut self, target: u32, sky: u32, frame: &Frame) -> Result<(), i32> {
+    pub fn draw(&mut self, target: u32, frame: &Frame) -> Result<(), i32> {
         use trueos::vgpu::*;
         if self
             .mesh
@@ -118,7 +118,8 @@ impl NativeTerrain {
                 IndexedDraw {
                     vertex_offset: 80,
                     index_count: mesh.geometry.vertices.len() as u32,
-                    clear_rgba8_srgb: sky,
+                    // Uncovered pixels reveal the display-engine backdrop.
+                    clear_rgba8_srgb: 0,
                     topology: PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
                     sampled_texture: mesh.atlas.raw(),
                     texture_width: ATLAS_SIZE,

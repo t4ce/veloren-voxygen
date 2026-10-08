@@ -83,6 +83,7 @@ pub mod ui4_winit {
         pub tracked_attempts: usize,
         pub commands: Vec<Vec<SpriteCommand>>,
         pub sky_colors: Vec<u32>,
+        pub backdrop_colors: Vec<[u8; 3]>,
         pub busy_sky: bool,
     }
     pub struct SceneTarget {
@@ -144,6 +145,10 @@ pub mod ui4_winit {
             }
             state.draws += 1;
             state.commands.push(commands.to_vec());
+            Ok(())
+        }
+        pub fn set_display_bottom_color(&mut self, rgb: [u8; 3]) -> Result<(), Error> {
+            self.observations.lock().unwrap().backdrop_colors.push(rgb);
             Ok(())
         }
         pub fn draw_sky(&mut self, rgba: u32) -> Result<(), Error> {
@@ -216,6 +221,7 @@ pub mod ui {
             }
             pub mod activity;
             pub mod bcs;
+            pub mod backdrop;
             pub mod damage;
             pub mod presenter;
         }
@@ -639,7 +645,7 @@ mod scheduling {
         let dusk = u32::from_le_bytes([255, 51, 38, 255]);
         presenter.submit_sky(1, size, day);
         wait(|| presenter.scene_published_revision() == 1);
-        assert_eq!(scene_state.lock().unwrap().sky_colors, [day]);
+        assert_eq!(scene_state.lock().unwrap().sky_colors, [0]);
         assert_eq!(ui_state.lock().unwrap().publications, 0);
         presenter.submit_foreground(2, size, plan(1.).foreground);
         wait(|| presenter.foreground_published_revision() == 2);
@@ -650,20 +656,28 @@ mod scheduling {
         presenter.submit_sky(5, size, dusk);
         presenter.submit_foreground(4, size, plan(2.).foreground);
         wait(|| presenter.foreground_published_revision() == 4);
-        assert_eq!(scene_state.lock().unwrap().sky_colors, [day]);
+        assert_eq!(scene_state.lock().unwrap().sky_colors, [0]);
         scene_live.store(true, Ordering::Release);
         wait(|| presenter.scene_published_revision() == 5);
-        assert_eq!(scene_state.lock().unwrap().sky_colors, [day, dusk]);
-        // A new extent needs a fresh complete sky, even with the same colour.
+        assert_eq!(scene_state.lock().unwrap().sky_colors, [0]);
+        // A new extent needs a fresh transparent frame.
         presenter.submit_sky(6, vek::Vec2::new(800, 600), dusk);
         wait(|| presenter.scene_published_revision() == 6);
-        assert_eq!(scene_state.lock().unwrap().sky_colors, [day, dusk, dusk]);
+        assert_eq!(scene_state.lock().unwrap().sky_colors, [0, 0]);
         assert_eq!(scene_state.lock().unwrap().tracked_attempts, 0);
         assert_eq!(ui_state.lock().unwrap().publications, 2);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while scene_state.lock().unwrap().backdrop_colors.len() < 2 {
+            assert!(Instant::now() < deadline, "pending backdrop was not applied while idle");
+            thread::sleep(Duration::from_millis(8));
+        }
+        assert_eq!(scene_state.lock().unwrap().backdrop_colors,
+                   [[36, 99, 191], [255, 51, 38]]);
+        assert_eq!(scene_state.lock().unwrap().sky_colors, [0, 0]);
         // Returning to menu work removes the sky policy, not the UI worker.
         presenter.submit(7, size, plan(3.));
         wait(|| presenter.published_revision() == 7);
-        assert_eq!(scene_state.lock().unwrap().publications, 4);
+        assert_eq!(scene_state.lock().unwrap().publications, 3);
         presenter.check().unwrap();
     }
     #[test]
@@ -677,7 +691,7 @@ mod scheduling {
         presenter.check().unwrap();
         let state = state.lock().unwrap();
         assert_eq!(state.begins, 1);
-        assert_eq!(state.sky_colors, [0xffbf_6324]);
+        assert_eq!(state.sky_colors, [0]);
         assert_eq!(state.publications, 1);
     }
 }

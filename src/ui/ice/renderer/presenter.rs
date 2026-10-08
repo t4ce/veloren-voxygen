@@ -5,6 +5,7 @@
 use super::{
     activity::{ProducerActivity, ProducerCounters, micros},
     bcs::{FramePlan, LayerPlan},
+    backdrop::Backdrop,
     damage::{self, Repaint},
 };
 use crossbeam_queue::ArrayQueue;
@@ -245,6 +246,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     let mut acquired_frame = false;
     let mut region_supported = true;
     let mut previous_sky = None;
+    let mut backdrop = Backdrop::default();
     #[cfg(target_os = "trueos")]
     let mut previous_had_geometry = false;
     #[cfg(target_os = "trueos")]
@@ -270,6 +272,18 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 phase = 0;
             }
         }
+        if let Some(current) = job.as_ref() {
+            backdrop.request(current.sky);
+        }
+        // The display backdrop does not need a scene write lease. Keep the
+        // newest throttled color pending even after its scene has published.
+        if let Some(rgb) = backdrop.take_due(std::time::Instant::now()) {
+            match target.set_display_bottom_color(rgb) {
+                Ok(()) => backdrop.applied(rgb),
+                Err(Error::Busy) => {},
+                Err(error) => return Err(format!("Display backdrop update failed: {error:?}")),
+            }
+        }
         let Some(current) = job.as_ref() else {
             mailbox.wait();
             continue;
@@ -282,7 +296,8 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
             }
             && previous.as_ref().is_some_and(|(size, plan)| {
                 *size == current.size
-                    && previous_sky == current.sky
+                    && (previous_sky == current.sky
+                        || (previous_sky.is_some() && current.sky.is_some()))
                     && plan.viewport == current.plan.viewport
                     && plan.commands == current.plan.commands
                     && current.plan.uploads.iter().all(|upload| {
@@ -415,15 +430,15 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 let commands = repaint
                     .as_ref()
                     .map_or(current.plan.commands.as_slice(), |r| r.commands.as_slice());
-                let result = if let Some(rgba) = current.sky {
+                let result = if current.sky.is_some() {
                     #[cfg(target_os = "trueos")]
                     {
                         let renderer = sky_renderer.as_mut().unwrap();
                         let draw = if let Some(terrain) = current.terrain.as_deref() {
-                            terrain_renderer.as_mut().unwrap().draw(target.render_target(), rgba, terrain)
+                            terrain_renderer.as_mut().unwrap().draw(target.render_target(), terrain)
                         } else if let Some(figure) = current.figure.as_deref() {
-                            renderer.draw_figure(target.render_target(), rgba, figure)
-                        } else { renderer.draw(target.render_target(), rgba) };
+                            renderer.draw_figure(target.render_target(), 0, figure)
+                        } else { renderer.draw(target.render_target(), 0) };
                         draw
                             .map_err(|e| if e == trueos::vgpu::ERR_BUSY { Error::Busy } else {
                                 tracing::error!(target: "voxy_scene_contract", code = e, "Native sky submission failed");
@@ -432,11 +447,10 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     }
                     #[cfg(all(not(target_os = "trueos"), test))]
                     {
-                        target.draw_sky(rgba)
+                        target.draw_sky(0)
                     }
                     #[cfg(all(not(target_os = "trueos"), not(test)))]
                     {
-                        let _ = rgba;
                         Err(Error::InvalidState)
                     }
                 } else {
@@ -482,7 +496,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                             if previous_sky.is_none() {
                                 tracing::info!(target: "voxy_scene_contract", revision = current.revision,
                                     rgba8 = rgba, width = current.size.x, height = current.size.y,
-                                    "Minimal sky GPU frame published to paired background");
+                                    "Transparent scene published over display-engine sky");
                             }
                         }
                         mailbox

@@ -10,7 +10,7 @@
     "particles_chance": 0.0,
     "weapon_trails_enabled": false,
     "max_fps": {
-      "Max": 15
+      "Max": 30
     },
     "max_background_fps": {
       "Max": 5

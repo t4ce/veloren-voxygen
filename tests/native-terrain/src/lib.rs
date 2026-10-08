@@ -272,10 +272,9 @@ mod tests {
         *RECORD.lock().unwrap() = Some(Recorder::default());
         let mut renderer = terrain::NativeTerrain::open().unwrap();
         let mut frame = frame();
-        let sky = u32::from_le_bytes([12, 34, 56, 255]);
-        renderer.draw(123, sky, &frame).unwrap();
+        renderer.draw(123, &frame).unwrap();
         frame.camera[0][0] += 1.;
-        renderer.draw(123, sky, &frame).unwrap();
+        renderer.draw(123, &frame).unwrap();
         {
             let lock = RECORD.lock().unwrap();
             let r = lock.as_ref().unwrap();
@@ -294,7 +293,7 @@ mod tests {
                 (draw.vertex_offset, draw.index_count, draw.topology),
                 (80, 3, 4)
             );
-            assert_eq!(draw.clear_rgba8_srgb, sky);
+            assert_eq!(draw.clear_rgba8_srgb, 0);
             assert_eq!(
                 (draw.texture_width, draw.texture_height, draw.texture_pitch),
                 (512, 512, 2048)
@@ -302,9 +301,9 @@ mod tests {
             assert_eq!(draw.texture_reserved >> INDEXED_DRAW_DEPTH_COMPARE_SHIFT, 3);
         }
         RECORD.lock().unwrap().as_mut().unwrap().busy_import = true;
-        assert_eq!(renderer.draw(123, sky, &frame), Err(ERR_BUSY));
+        assert_eq!(renderer.draw(123, &frame), Err(ERR_BUSY));
         RECORD.lock().unwrap().as_mut().unwrap().busy_import = false;
-        renderer.draw(123, sky, &frame).unwrap();
+        renderer.draw(123, &frame).unwrap();
         drop(renderer);
         assert!(
             RECORD
@@ -322,7 +321,7 @@ mod tests {
             ..Default::default()
         });
         let mut renderer = terrain::NativeTerrain::open().unwrap();
-        assert_eq!(renderer.draw(123, sky, &frame), Err(ERR_IO));
+        assert_eq!(renderer.draw(123, &frame), Err(ERR_IO));
         drop(renderer);
         assert_eq!(
             RECORD
@@ -351,7 +350,7 @@ mod tests {
             ..Default::default()
         });
         let mut renderer = terrain::NativeTerrain::open().unwrap();
-        assert_eq!(renderer.draw(123, sky, &frame), Err(ERR_IO));
+        assert_eq!(renderer.draw(123, &frame), Err(ERR_IO));
         drop(renderer);
         let lock = RECORD.lock().unwrap();
         let r = lock.as_ref().unwrap();
