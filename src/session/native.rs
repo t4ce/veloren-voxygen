@@ -73,9 +73,13 @@ impl PlayState for SessionState {
                 Event::Close => return PlayStateResult::Shutdown,
                 Event::Focused(false) => self.keys = KeyState::default(),
                 Event::Focused(true) => global.window.grab_cursor(true),
-                Event::Resize(size) => self
-                    .camera
-                    .set_aspect_ratio(size.x as f32 / size.y.max(1) as f32),
+                Event::Resize(size) => {
+                    self.camera.set_aspect_ratio(size.x as f32 / size.y.max(1) as f32);
+                    // UI4 commits a paired resize only after both producers
+                    // publish new backing frames. The guarded HUD must still
+                    // publish its transparent foreground at the new extent.
+                    global.window.begin_scene_display();
+                }
                 Event::CursorPan(delta) => self
                     .camera
                     .rotate_by(Vec3::new(delta.x, delta.y, 0.0) * 0.005),

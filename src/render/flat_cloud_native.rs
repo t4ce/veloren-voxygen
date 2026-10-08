@@ -45,7 +45,10 @@ pub(crate) fn from_client(
     }
     params[15] = camera[4][0];
     params[16] = camera[4][1];
-    params[17] = (time.0 % 86400.0) as f32;
+    // Smaller noise-time increments at the existing frame cadence. Keep sun,
+    // weather and camera on their live inputs; only cloud animation is slower.
+    // Scale before wrapping so game midnight does not reset the half-speed phase.
+    params[17] = ((time.0 * 0.5) % 86400.0) as f32;
     params[18] = (time.0 / 86400.0 % 1000.0) as f32;
     params[19..22].copy_from_slice(&sun.into_array());
     params[22] = world.min_chunk_alt();

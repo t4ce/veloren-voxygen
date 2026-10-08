@@ -180,3 +180,12 @@ the existing Flat shader on host Vulkan, allowing hardware filtering quantizatio
 color preservation. Deploy both the rebuilt kernel and `voxy.bp`: blueprint-only
 redeployment cannot add a kernel shader admission. Physical presentation still
 requires testing on the native rig.
+
+
+Native cloud noise runs at half game-time speed, sampled at the existing frame
+cadence (foreground cap 30 FPS). Sun direction, camera and server weather retain
+their live inputs. The kernel emits `voxy-clouds: phase=timing` at Important level
+every 128 successful cloud submissions, with target extent, average phase times,
+average total time and maximum render/total time. GPU polling is included in
+render time. These are submission wall times, excluding blueprint-side packet
+construction/upload and UI4 publication, rather than hardware GPU timestamps.

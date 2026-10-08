@@ -24,6 +24,7 @@ use vek::Vec2;
 
 struct Job {
     revision: u64,
+    force_publication: bool,
     size: Vec2<u32>,
     plan: LayerPlan,
     sky: Option<u32>,
@@ -115,6 +116,7 @@ impl LayeredPresenter {
         // Each bounded mailbox replaces only work which has not acquired a lease.
         self.scene.mailbox.submit(Job {
             revision,
+            force_publication: false,
             size,
             plan: plan.background,
             sky: None,
@@ -127,6 +129,7 @@ impl LayeredPresenter {
         });
         self.foreground.mailbox.submit(Job {
             revision,
+            force_publication: false,
             size,
             plan: plan.foreground,
             sky: None,
@@ -141,6 +144,9 @@ impl LayeredPresenter {
     pub fn clear_foreground(&self, revision: u64, size: Vec2<u32>) {
         self.foreground.mailbox.submit(Job {
             revision,
+            // A new resize backing needs a release even at the same extent
+            // and with the same empty plan as the previous foreground.
+            force_publication: true,
             size,
             plan: LayerPlan::default(),
             sky: None,
@@ -154,15 +160,16 @@ impl LayeredPresenter {
     }
     #[cfg(target_os = "trueos")]
     pub fn submit_figure(&self, revision: u64, size: Vec2<u32>, rgba: u32, figure: Option<Arc<crate::render::figure_preview::Frame>>) {
-        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure, terrain: None, clouds: None });
+        self.scene.mailbox.submit(Job { revision, force_publication: false, size, plan: LayerPlan::default(), sky: Some(rgba), figure, terrain: None, clouds: None });
     }
     #[cfg(target_os = "trueos")]
     pub fn submit_terrain(&self, revision: u64, size: Vec2<u32>, rgba: u32, terrain: Option<Arc<crate::render::terrain_feature::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>) {
-        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure: None, terrain, clouds });
+        self.scene.mailbox.submit(Job { revision, force_publication: false, size, plan: LayerPlan::default(), sky: Some(rgba), figure: None, terrain, clouds });
     }
     pub fn submit_sky(&self, revision: u64, size: Vec2<u32>, rgba: u32) {
         self.scene.mailbox.submit(Job {
             revision,
+            force_publication: false,
             size,
             plan: LayerPlan::default(),
             sky: Some(rgba),
@@ -177,6 +184,7 @@ impl LayeredPresenter {
     pub fn submit_foreground(&self, revision: u64, size: Vec2<u32>, plan: LayerPlan) {
         self.foreground.mailbox.submit(Job {
             revision,
+            force_publication: false,
             size,
             plan,
             sky: None,
@@ -305,6 +313,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
             continue;
         };
         if phase == 0
+            && !current.force_publication
             && scene_repaint_hold.is_none()
             && {
                 #[cfg(target_os = "trueos")] { current.figure.is_none() && current.terrain.is_none() && current.clouds.is_none() && !previous_had_geometry }

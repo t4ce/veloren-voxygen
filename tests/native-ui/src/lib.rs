@@ -618,8 +618,19 @@ mod scheduling {
             scene_state.lock().unwrap().publications,
             background_publications
         );
-        presenter.submit(3, vek::Vec2::new(640, 480), plan(0.0));
-        wait(|| presenter.published_revision() == 3);
+        // The guarded world foreground must publish each resized replacement,
+        // including restore and a fresh epoch at the same extent.
+        for (revision, extent) in [(3,(1280,1440)),(4,(1920,1080)),(5,(640,480)),(6,(640,480))] {
+            let before=ui_state.lock().unwrap().publications;
+            presenter.clear_foreground(revision,vek::Vec2::new(extent.0,extent.1));
+            wait(|| presenter.foreground_published_revision()==revision);
+            let ui=ui_state.lock().unwrap();
+            assert_eq!(ui.publications,before+1,"transparent foreground must release the replacement backing");
+            assert_eq!(ui.extent,Some(extent));
+            assert!(ui.commands.last().unwrap().is_empty());
+        }
+        presenter.submit(7, vek::Vec2::new(640, 480), plan(0.0));
+        wait(|| presenter.published_revision() == 7);
         assert!(!ui_state.lock().unwrap().commands.last().unwrap().is_empty());
     }
 
