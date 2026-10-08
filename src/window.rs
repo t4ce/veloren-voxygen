@@ -312,8 +312,14 @@ impl Window {
         #[cfg(target_os = "trueos")]
         let menu_presenter = {
             use winit::platform::trueos::WindowExtTrueOS;
+            window
+                .trueos_set_resize_aspect_ratio(Some(winit::dpi::PhysicalSize::new(
+                    settings.graphics.window.size[0],
+                    settings.graphics.window.size[1],
+                )))
+                .map_err(|error| Error::BackendError(Box::new(error)))?;
             let size = window.surface_size();
-            let foreground = trueos::ui4_solara_text::SceneTarget::for_window(
+            let foreground = trueos::ui4_winit::SceneTarget::for_window(
                 window.trueos_window_id(),
                 size.width,
                 size.height,
@@ -498,8 +504,16 @@ impl Window {
     pub(crate) fn present_menu(
         &mut self,
         size: Vec2<u32>,
-        plan: crate::ui::ice::renderer::bcs::FramePlan,
+        mut plan: crate::ui::ice::renderer::bcs::FramePlan,
     ) -> Result<(), String> {
+        use winit::platform::trueos::WindowExtTrueOS;
+        let viewport = self.window.trueos_content_viewport();
+        plan.place_in_viewport(
+            viewport.position.x,
+            viewport.position.y,
+            viewport.size.width,
+            viewport.size.height,
+        );
         self.menu_presenter.check()?;
         if self.menu_handoff.is_none() {
             self.menu_revision += 1;

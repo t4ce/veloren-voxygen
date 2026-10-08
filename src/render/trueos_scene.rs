@@ -22,7 +22,7 @@ fn resolve_background(window: u32) -> Result<u32, String> {
     {
         // Extent is only local bookkeeping here; surface configuration supplies
         // the actual size once a scene execution device exists.
-        trueos::ui4_solara_text::SceneTarget::for_window(window, 1, 1)
+        trueos::ui4_winit::SceneTarget::for_window(window, 1, 1)
             .and_then(|foreground| foreground.background())
             .map(|background| background.render_target())
             .map_err(|error| format!("TRUEOS scene background target: {error:?}"))

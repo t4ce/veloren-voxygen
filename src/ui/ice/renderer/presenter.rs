@@ -17,7 +17,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use trueos::ui4_solara_text::{Damage, Error, SceneTarget, SpriteBackend};
+use trueos::ui4_winit::{Damage, Error, SceneTarget, SpriteBackend};
 use vek::Vec2;
 
 struct Job {
@@ -168,6 +168,9 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     let mut uploaded = HashMap::new();
     let mut previous: Option<(Vec2<u32>, LayerPlan)> = None;
     let mut preceding_damage = None;
+    // When policy changes without a new allocation, remove old content from
+    // every member of the background's triple-buffered ring exactly once.
+    let mut scene_repaint_hold: Option<(Damage, u8)> = None;
     let mut repaint: Option<Repaint> = None;
     let mut job: Option<Job> = None;
     let mut phase = 0;
@@ -197,8 +200,10 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
             continue;
         };
         if phase == 0
+            && scene_repaint_hold.is_none()
             && previous.as_ref().is_some_and(|(size, plan)| {
                 *size == current.size
+                    && plan.viewport == current.plan.viewport
                     && plan.commands == current.plan.commands
                     && current.plan.uploads.iter().all(|upload| {
                         plan.uploads.iter().any(|previous| {
@@ -231,6 +236,31 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                                 .is_some_and(|(size, _)| *size == current.size)
                         }),
                     ));
+                }
+                if name == "scene" && region_supported {
+                    if let Some(content) = current.plan.viewport {
+                        if let Some((old_size, old_plan)) = &previous {
+                            if *old_size != current.size {
+                                scene_repaint_hold = None;
+                            } else if old_plan.viewport != current.plan.viewport {
+                                let old_region = old_plan
+                                    .viewport
+                                    .unwrap_or(Damage::full(current.size.x, current.size.y));
+                                let old_region = scene_repaint_hold
+                                    .map_or(old_region, |(held, _)| {
+                                        damage::union(held, old_region)
+                                    });
+                                scene_repaint_hold = Some((damage::union(old_region, content), 3));
+                            }
+                        }
+                        let region = scene_repaint_hold
+                            .map_or(content, |(held, _)| damage::union(held, content));
+                        repaint = Some(Repaint {
+                            changed: region,
+                            region,
+                            commands: current.plan.commands.clone(),
+                        });
+                    }
                 }
                 target
                     .set_extent(current.size.x, current.size.y)
@@ -351,6 +381,11 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 }
             }
             _ => {
+                if name == "scene" {
+                    scene_repaint_hold = scene_repaint_hold.and_then(|(region, remaining)| {
+                        (remaining > 1).then_some((region, remaining.saturating_sub(1)))
+                    });
+                }
                 preceding_damage = repaint.as_ref().map(|r| r.changed);
                 previous = Some((current.size, current.plan.clone()));
                 repaint = None;

@@ -1,5 +1,8 @@
 #[cfg(target_os = "trueos")]
 mod trueos_scene;
+#[cfg(target_os = "trueos")]
+#[allow(dead_code)] // Fixed skybox package; runtime admission is the next slice.
+pub(crate) mod native_skybox;
 pub mod bound;
 mod buffer;
 pub mod consts;

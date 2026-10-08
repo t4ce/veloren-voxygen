@@ -66,3 +66,33 @@ The baker includes a `trueos-bringup` variant alongside the existing variants,
 reading the inverse toggles from the same JSON. After changing pipeline settings,
 update the bake mapping if needed and rebake. These SPIR-V artifacts do not grant
 native TRUEOS GPU admission or complete the game-scene backend port.
+
+## Native skybox slice
+
+`bake_skybox_native.py` compiles the exact `trueos-bringup` skybox SPIR-V
+pair through instrumented Mesa/ANV for ADL-S `8086:4680`. Its mandatory no-op
+DRM shim allows compilation and capture without submitting GPU work. It keeps
+the native stage binaries, IGA decodes, compiler state captures, hashes, and
+provenance in `native/skybox`. Apply `mesa-skybox-push-capture.patch` to the
+instrumented Mesa tree and rebuild ANV before baking; it captures the promoted
+Globals uniform ranges rather than deriving them from assembly guesses.
+
+```
+python3 shaderbin/bake_skybox_native.py
+python3 shaderbin/bake_skybox_native.py --verify
+cargo test --manifest-path tests/scene-contract/Cargo.toml
+```
+
+The fixed contract is a 12-byte position vertex, one Globals UBO, no samplers,
+one sample, back-face culling, and reverse `Depth32Float` depth. The capture uses
+the renderer's preferred `Rgba16Float` scene colour and `Rgba8Uint` material
+attachment. The VS promotes Globals bytes 128..224; the PS promotes bytes
+256..288. `src/render/native_skybox.rs` preserves these ranges verbatim.
+
+The skybox preserves destination alpha, so its scene colour still needs the
+minimal composition path, which sets alpha to one, before presentation.
+Runtime shader admission, composition execution, and submission to the paired
+UI4 background are not implemented by this bake. Metadata deliberately records
+native execution admission and host/bare-metal render verification as false.
+The Iced character-selection foreground is not changed by this slice. Its
+existing full-scene startup gate is also still in place.

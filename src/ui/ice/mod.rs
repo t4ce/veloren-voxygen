@@ -39,6 +39,8 @@ pub struct IcedUi {
     last_native_primitive: Option<renderer::primitive::Primitive>,
     #[cfg(target_os = "trueos")]
     native_activity: renderer::activity::UiActivity,
+    #[cfg(target_os = "trueos")]
+    native_origin: Vec2<f32>,
 }
 impl IcedUi {
     pub fn new(
@@ -71,6 +73,8 @@ impl IcedUi {
             last_native_primitive: None,
             #[cfg(target_os = "trueos")]
             native_activity: renderer::activity::UiActivity::default(),
+            #[cfg(target_os = "trueos")]
+            native_origin: Vec2::zero(),
         })
     }
 
@@ -88,6 +92,8 @@ impl IcedUi {
             last_native_primitive: None,
             #[cfg(target_os = "trueos")]
             native_activity: renderer::activity::UiActivity::default(),
+            #[cfg(target_os = "trueos")]
+            native_origin: Vec2::zero(),
         }
     }
 
@@ -220,7 +226,65 @@ impl IcedUi {
         self.scale_changed |= self.scale.scale_factor_changed(scale_factor);
     }
 
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn set_native_origin(&mut self, origin: Vec2<f32>) {
+        if origin != self.native_origin {
+            let delta = (origin - self.native_origin) / self.scale.scale_factor_physical() as f32;
+            self.cursor_position -= delta;
+            for event in &mut self.events {
+                let position = match event {
+                    Event::Mouse(mouse::Event::CursorMoved { position })
+                    | Event::Touch(iced::touch::Event::FingerPressed { position, .. })
+                    | Event::Touch(iced::touch::Event::FingerMoved { position, .. })
+                    | Event::Touch(iced::touch::Event::FingerLifted { position, .. }) => {
+                        Some(position)
+                    }
+                    _ => None,
+                };
+                if let Some(position) = position {
+                    position.x -= delta.x;
+                    position.y -= delta.y;
+                }
+            }
+            self.native_origin = origin;
+            self.last_native_primitive = None;
+        }
+    }
+
     pub fn handle_event(&mut self, event: Event) {
+        #[cfg(target_os = "trueos")]
+        let event = {
+            let scale = self.scale.scale_factor_logical() as f32;
+            let local = |position: iced::Point| {
+                iced::Point::new(
+                    position.x / scale
+                        - self.native_origin.x / self.scale.scale_factor_physical() as f32,
+                    position.y / scale
+                        - self.native_origin.y / self.scale.scale_factor_physical() as f32,
+                )
+            };
+            match event {
+                Event::Touch(iced::touch::Event::FingerPressed { id, position }) => {
+                    Event::Touch(iced::touch::Event::FingerPressed {
+                        id,
+                        position: local(position),
+                    })
+                }
+                Event::Touch(iced::touch::Event::FingerMoved { id, position }) => {
+                    Event::Touch(iced::touch::Event::FingerMoved {
+                        id,
+                        position: local(position),
+                    })
+                }
+                Event::Touch(iced::touch::Event::FingerLifted { id, position }) => {
+                    Event::Touch(iced::touch::Event::FingerLifted {
+                        id,
+                        position: local(position),
+                    })
+                }
+                other => other,
+            }
+        };
         use iced::window;
         match event {
             // Intercept resizing events
@@ -235,6 +299,11 @@ impl IcedUi {
                 let scale = self.scale.scale_factor_logical() as f32;
                 let x = position.x / scale;
                 let y = position.y / scale;
+                #[cfg(target_os = "trueos")]
+                let (x, y) = (
+                    x - self.native_origin.x / self.scale.scale_factor_physical() as f32,
+                    y - self.native_origin.y / self.scale.scale_factor_physical() as f32,
+                );
                 // TODO: determine why iced moved cursor position out of the `Cache` and if we
                 // may need to handle this in a different way to address
                 // whatever issue iced was trying to address

@@ -1,0 +1,205 @@
+{
+  "schema": "voxy-native-skybox-v1",
+  "target": {
+    "vendor_id": 32902,
+    "device_id": 18048,
+    "name": "Intel(R) UHD Graphics 770 (ADL-S GT1)"
+  },
+  "source_profile": "trueos-bringup",
+  "source_stages": [
+    {
+      "bytes": 1824,
+      "file": "skybox-vert.trueos-bringup.spv",
+      "name": "skybox-vert",
+      "profile": "trueos-bringup",
+      "sha256": "003fb08b6e660d03515f2b0c07002615c0932d73529c8ef671c5c166308395c6",
+      "source_sha256": "39260d90891d812f7845f37d164d9dcb572ff56ec9553ba61d38714e27ea4445",
+      "stage": "vert"
+    },
+    {
+      "bytes": 1808,
+      "file": "skybox-frag.trueos-bringup.spv",
+      "name": "skybox-frag",
+      "profile": "trueos-bringup",
+      "sha256": "483972a1e905c2e8c671d843e43c5ff4b66fed791c424cb6f54fa15f9698a08e",
+      "source_sha256": "d3d383a45b6fe8241c49a5a10fc781e0e5180e0e3e9cf319ca1450589a746d51",
+      "stage": "frag"
+    }
+  ],
+  "new_native_compilation": true,
+  "native_execution_admitted": false,
+  "host_render_verified": false,
+  "baremetal_render_verified": false,
+  "vertex_stride": 12,
+  "entry_points": [
+    "main",
+    "main"
+  ],
+  "color_formats": [
+    "Rgba16Float",
+    "Rgba8Uint"
+  ],
+  "depth_format": "Depth32Float",
+  "depth_compare": "GreaterEqual",
+  "depth_clear": 0,
+  "sample_count": 1,
+  "cull_mode": "Back",
+  "front_face": "Ccw",
+  "uniform": {
+    "set": 0,
+    "binding": 0,
+    "layout": "Voxy Globals std140"
+  },
+  "composition": {
+    "preserve_scene_alpha": true,
+    "clouds_bareminimum_sets_alpha": 1,
+    "requires_composition_before_ui4_publication": true
+  },
+  "vs_state": {
+    "ver": 12,
+    "verx10": 120,
+    "max_threads": 546,
+    "dispatch_grf_start": 2,
+    "urb_read_length": 1,
+    "urb_entry_64b": 1,
+    "vue_slots": 2,
+    "position_slot": 1,
+    "vf_packing0": 7,
+    "uses_vertexid": 0,
+    "uses_instanceid": 0,
+    "binding_table_entries": 2,
+    "sampler_count": 0,
+    "scratch_bytes": 0
+  },
+  "ps_state": {
+    "ver": 12,
+    "verx10": 120,
+    "dispatch8": 1,
+    "dispatch16": 1,
+    "dispatch32": 0,
+    "grf_start8": 2,
+    "grf_start16": 2,
+    "grf_start32": 0,
+    "offset16": 256,
+    "num_varying_inputs": 0,
+    "barycentric_interp_modes": 0,
+    "uses_vmask": 1,
+    "uses_src_depth": 0,
+    "uses_src_w": 0,
+    "uses_depth_w_coefficients": 0,
+    "uses_pc_bary_coefficients": 0,
+    "uses_npc_bary_coefficients": 0,
+    "computed_depth_mode": 0,
+    "computed_stencil": 0,
+    "flat_inputs": 0,
+    "binding_table_entries": 3,
+    "sampler_prefetch_count": 0,
+    "sampler_count": 0,
+    "push_bytes": 32,
+    "scratch_bytes": 0
+  },
+  "executables": {
+    "0": {
+      "stage": "vertex",
+      "name": "vertex",
+      "description": "SIMD8 vertex shader",
+      "simd_width": 8,
+      "statistics": {
+        "Instruction Count": 19,
+        "SEND Count": 1,
+        "Loop Count": 0,
+        "Cycle Count": 73,
+        "Spill Count": 0,
+        "Fill Count": 0,
+        "Scratch Memory Size": 0,
+        "GRF registers": 0,
+        "Max dispatch width": 8,
+        "Max live registers": 15,
+        "Workgroup Memory Size": 0,
+        "Non SSA regs after NIR": 4,
+        "Source hash": 4069134624
+      }
+    },
+    "1": {
+      "stage": "fragment",
+      "name": "SIMD8 fragment",
+      "description": "SIMD8 fragment shader",
+      "simd_width": 8,
+      "statistics": {
+        "Instruction Count": 16,
+        "SEND Count": 1,
+        "Loop Count": 0,
+        "Cycle Count": 60,
+        "Spill Count": 0,
+        "Fill Count": 0,
+        "Scratch Memory Size": 0,
+        "GRF registers": 0,
+        "Max dispatch width": 16,
+        "Max live registers": 9,
+        "Workgroup Memory Size": 0,
+        "Non SSA regs after NIR": 2,
+        "Source hash": 2843408102
+      }
+    },
+    "2": {
+      "stage": "fragment",
+      "name": "SIMD16 fragment",
+      "description": "SIMD16 fragment shader",
+      "simd_width": 16,
+      "statistics": {
+        "Instruction Count": 19,
+        "SEND Count": 1,
+        "Loop Count": 0,
+        "Cycle Count": 82,
+        "Spill Count": 0,
+        "Fill Count": 0,
+        "Scratch Memory Size": 0,
+        "GRF registers": 0,
+        "Max dispatch width": 16,
+        "Max live registers": 10,
+        "Workgroup Memory Size": 0,
+        "Non SSA regs after NIR": 2,
+        "Source hash": 2843408102
+      }
+    }
+  },
+  "vs_push_ranges": [
+    {
+      "slot": 0,
+      "set": 0,
+      "index": 0,
+      "start": 4,
+      "length": 3,
+      "dynamic_offset_index": 255
+    }
+  ],
+  "ps_push_ranges": [
+    {
+      "slot": 0,
+      "set": 0,
+      "index": 0,
+      "start": 8,
+      "length": 1,
+      "dynamic_offset_index": 255
+    }
+  ],
+  "native_stages": {
+    "skybox.vs.simd8.bin": {
+      "bytes": 232,
+      "sha256": "be31d30e2683096eb5c8ce4ff81bfa9fb48bad55ae4af2ed1102a55053a5f85a"
+    },
+    "skybox.ps.simd8.bin": {
+      "bytes": 240,
+      "sha256": "20f40bcc8c685c7ea50c8560d21e387b02f4ef31e4d002beacf114996ab7d839"
+    },
+    "skybox.ps.simd16.bin": {
+      "bytes": 296,
+      "sha256": "d325bec9d3c4f971adb94096bb1c20a478a1cec7ccec638beb500993be639be1"
+    }
+  },
+  "presentation": {
+    "target": "paired UI4 background",
+    "buffering": "streaming/triple",
+    "implemented": false
+  }
+}

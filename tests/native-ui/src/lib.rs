@@ -14,7 +14,7 @@ pub struct Rectangle {
     pub width: f32,
     pub height: f32,
 }
-pub mod ui4_solara_text {
+pub mod ui4_winit {
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub enum SpriteBackend {
         Bcs0,
@@ -215,7 +215,7 @@ mod scheduling {
             bcs::{FramePlan, LayerPlan},
             presenter::LayeredPresenter,
         },
-        ui4_solara_text::*,
+        ui4_winit::*,
     };
     use std::{
         sync::{
@@ -277,6 +277,7 @@ mod scheduling {
         FramePlan {
             foreground: LayerPlan {
                 uploads: vec![],
+                viewport: None,
                 commands: vec![SpriteCommand {
                     quad,
                     backend: SpriteBackend::Bcs0,
@@ -285,6 +286,90 @@ mod scheduling {
             background: LayerPlan::default(),
         }
     }
+    #[test]
+    fn full_size_buffers_only_draw_and_clear_the_centered_content_viewport() {
+        let (scene, scene_state, _) = target(true);
+        let (foreground, ui_state, _) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        let viewport = Damage {
+            x: 0,
+            y: 360,
+            width: 1280,
+            height: 720,
+        };
+        for revision in 1..=3 {
+            let mut frame = plan(revision as f32);
+            frame.background = frame.foreground.clone();
+            let count = frame.foreground.commands.len();
+            frame.place_in_viewport(0, 360, 1280, 720);
+            assert_eq!(frame.foreground.commands.len(), count);
+            assert_eq!(frame.background.commands.len(), count);
+            presenter.submit(revision, vek::Vec2::new(1280, 1440), frame);
+            wait(|| presenter.published_revision() == revision);
+        }
+        let scene = scene_state.lock().unwrap();
+        assert!(scene.clear_regions.iter().all(|region| *region == viewport));
+        assert_eq!(scene.clear_regions.len(), 3);
+        assert!(scene.damages.iter().all(|region| *region == viewport));
+        for commands in scene
+            .commands
+            .iter()
+            .chain(ui_state.lock().unwrap().commands.iter())
+        {
+            for command in commands {
+                for corner in [
+                    command.quad.c0,
+                    command.quad.c1,
+                    command.quad.c2,
+                    command.quad.c3,
+                ] {
+                    assert!(corner.x >= 0. && corner.x <= 1280.);
+                    assert!(corner.y >= 360. && corner.y <= 1080.);
+                }
+            }
+        }
+        presenter.check().unwrap();
+    }
+
+    #[test]
+    fn changing_content_policy_clears_old_pixels_in_each_background_buffer_once() {
+        let (scene, state, _) = target(true);
+        let (foreground, _, _) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        for revision in 1..=5 {
+            let mut frame = plan(revision as f32);
+            frame.background = frame.foreground.clone();
+            let y = if revision == 1 { 0 } else { 4 };
+            frame.place_in_viewport(0, y, 8, 4);
+            presenter.submit(revision, vek::Vec2::new(8, 8), frame);
+            wait(|| presenter.published_revision() == revision);
+        }
+        let regions = &state.lock().unwrap().clear_regions;
+        assert_eq!(regions.len(), 5);
+        assert_eq!(
+            regions[0],
+            Damage {
+                x: 0,
+                y: 0,
+                width: 8,
+                height: 4
+            }
+        );
+        for region in &regions[1..4] {
+            assert_eq!(*region, Damage::full(8, 8));
+        }
+        assert_eq!(
+            regions[4],
+            Damage {
+                x: 0,
+                y: 4,
+                width: 8,
+                height: 4
+            }
+        );
+        presenter.check().unwrap();
+    }
+
     #[test]
     fn unsupported_region_runtime_uses_full_frames_without_an_extra_lease() {
         let (scene, _, _) = target(true);

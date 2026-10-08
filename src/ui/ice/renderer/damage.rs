@@ -2,7 +2,7 @@
 //! Two foreground buffers alternate: repaint the preceding publication's
 //! damage too, since the newly leased buffer still contains the older UI.
 use super::bcs::LayerPlan;
-use trueos::ui4_solara_text::{Damage, SpriteCommand};
+use trueos::ui4_winit::{Damage, SpriteCommand};
 
 pub(crate) struct Repaint {
     pub changed: Damage,
@@ -165,7 +165,7 @@ fn clip(mut command: SpriteCommand, region: Damage) -> Option<SpriteCommand> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use trueos::ui4_solara_text::{SpriteBackend, SpriteCorner, SpriteQuad};
+    use trueos::ui4_winit::{SpriteBackend, SpriteCorner, SpriteQuad};
     fn rect(x: u32, y: u32, width: u32, height: u32) -> Damage {
         Damage {
             x,
@@ -193,6 +193,7 @@ mod tests {
         LayerPlan {
             commands,
             uploads: vec![],
+            viewport: None,
         }
     }
     fn diff(old: &LayerPlan, new: &LayerPlan) -> Repaint {

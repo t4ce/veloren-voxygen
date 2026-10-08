@@ -1,0 +1,28 @@
+--- a/src/intel/vulkan/genX_shader.c
++++ b/src/intel/vulkan/genX_shader.c
+@@ -606,6 +606,12 @@
+                  vs_prog_data->vf_component_packing[0],
+                  vs_prog_data->uses_vertexid, vs_prog_data->uses_instanceid,
+                  shader->bind_map.surface_count, get_sampler_count(shader), vs_prog_data->base.base.total_scratch);
++         for (unsigned i = 0; i < ARRAY_SIZE(shader->bind_map.push_ranges); i++) {
++            const struct anv_push_range *range = &shader->bind_map.push_ranges[i];
++            fprintf(file, "TRUEOS_PUSH_RANGE stage=%s slot=%u set=%u index=%u start=%u length=%u dynamic_offset_index=%u\n",
++                    "vertex", i, range->set, range->index, range->start, range->length,
++                    range->dynamic_offset_index);
++         }
+          fprintf(file, "VUE_MAP");
+          for (unsigned i = 0; i < 4; i++)
+             fprintf(file, " location%u_slot=%d", i,
+@@ -1108,6 +1114,12 @@
+                  wm_prog_data->flat_inputs,
+                  shader->bind_map.surface_count, get_sampler_count(shader),
+                  shader->bind_map.sampler_count, wm_prog_data->base.push_sizes[0], wm_prog_data->base.total_scratch);
++         for (unsigned i = 0; i < ARRAY_SIZE(shader->bind_map.push_ranges); i++) {
++            const struct anv_push_range *range = &shader->bind_map.push_ranges[i];
++            fprintf(file, "TRUEOS_PUSH_RANGE stage=%s slot=%u set=%u index=%u start=%u length=%u dynamic_offset_index=%u\n",
++                    "fragment", i, range->set, range->index, range->start, range->length,
++                    range->dynamic_offset_index);
++         }
+          fprintf(file, "URB_SETUP");
+          for (unsigned i = 0; i < 4; i++)
+             fprintf(file, " location%u_attribute=%d", i,

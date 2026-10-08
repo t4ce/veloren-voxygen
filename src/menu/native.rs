@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use trueos::ui4_solara_text::SceneTarget;
+use trueos::ui4_winit::SceneTarget;
 use vek::Vec2;
 use winit::{
     application::ApplicationHandler,
@@ -155,6 +155,11 @@ impl App {
         state.presenter.check()?;
         state.activity.ticks += 1;
         {
+            let viewport = state.window.trueos_content_viewport();
+            state.ui.set_native_origin(Vec2::new(
+                viewport.position.x as f32,
+                viewport.position.y as f32,
+            ));
             let size = state.window.surface_size();
             let size = Vec2::new(size.width, size.height);
             if size.x == 0 || size.y == 0 {
@@ -259,7 +264,7 @@ impl App {
                 &self.settings,
                 &self.runtime,
                 &mut state.clipboard,
-                size,
+                Vec2::new(viewport.size.width, viewport.size.height),
                 dt,
             )?;
             let elapsed = micros(maintain_started.elapsed());
@@ -331,9 +336,11 @@ impl App {
                             }
                         };
                         self.settings.save_to_file_warn(&self.config_dir);
-                        self.portal_credentials = Some(Arc::new(crate::server_portal::PortalCredentials::new(
-                            username.clone(), password.clone(),
-                        )));
+                        self.portal_credentials =
+                            Some(Arc::new(crate::server_portal::PortalCredentials::new(
+                                username.clone(),
+                                password.clone(),
+                            )));
                         self.init = Some(ClientInit::new(
                             connection,
                             username,
@@ -370,7 +377,13 @@ impl App {
                     }
                 }
             }
-            if let Some(plan) = plan {
+            if let Some(mut plan) = plan {
+                plan.place_in_viewport(
+                    viewport.position.x,
+                    viewport.position.y,
+                    viewport.size.width,
+                    viewport.size.height,
+                );
                 state.revision += 1;
                 state.presenter.submit(state.revision, size, plan);
                 if rendered_connecting {
@@ -419,6 +432,12 @@ impl ApplicationHandler for App {
                     )
                     .map_err(|e| e.to_string())?,
             );
+            window
+                .trueos_set_resize_aspect_ratio(Some(winit::dpi::PhysicalSize::new(
+                    self.settings.graphics.window.size[0],
+                    self.settings.graphics.window.size[1],
+                )))
+                .map_err(|error| error.to_string())?;
             let size = window.surface_size();
             let size = Vec2::new(size.width, size.height);
             let target = SceneTarget::for_window(window.trueos_window_id(), size.x, size.y)

@@ -4,7 +4,7 @@
 use super::{activity::PreparationActivity, primitive::Primitive};
 use crate::ui::graphic;
 use alloc::{sync::Arc, vec::Vec};
-use trueos::ui4_solara_text::{SpriteBackend, SpriteCommand, SpriteCorner, SpriteQuad};
+use trueos::ui4_winit::{SpriteBackend, SpriteCommand, SpriteCorner, SpriteQuad};
 use vek::{Aabr, Rgba};
 
 #[derive(Clone)]
@@ -16,12 +16,38 @@ pub(crate) struct Upload {
 pub(crate) struct LayerPlan {
     pub uploads: Vec<Upload>,
     pub commands: Vec<SpriteCommand>,
+    pub viewport: Option<trueos::ui4_winit::Damage>,
 }
 #[derive(Clone, Default)]
 pub(crate) struct FramePlan {
     pub foreground: LayerPlan,
     pub background: LayerPlan,
 }
+impl FramePlan {
+    /// Translate content into its viewport without adding draw commands for margins.
+    pub(crate) fn place_in_viewport(&mut self, x: u32, y: u32, width: u32, height: u32) {
+        for layer in [&mut self.foreground, &mut self.background] {
+            layer.viewport = Some(trueos::ui4_winit::Damage {
+                x,
+                y,
+                width,
+                height,
+            });
+            for command in &mut layer.commands {
+                for corner in [
+                    &mut command.quad.c0,
+                    &mut command.quad.c1,
+                    &mut command.quad.c2,
+                    &mut command.quad.c3,
+                ] {
+                    corner.x += x as f32;
+                    corner.y += y as f32;
+                }
+            }
+        }
+    }
+}
+
 struct Asset {
     graphic: graphic::Id,
     sprite: u32,

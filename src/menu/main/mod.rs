@@ -61,6 +61,19 @@ pub struct MainMenuState {
 }
 
 impl MainMenuState {
+    /// Client destruction waits for network disconnect. Cancel initialization
+    /// immediately, but retire a connected client outside the window event loop.
+    fn retire_init(&mut self, runtime: &runtime::Runtime) {
+        if let InitState::Pipeline(client, _) = core::mem::replace(&mut self.init, InitState::None)
+        {
+            runtime.spawn_blocking(move || {
+                tracing::info!("Retiring failed or cancelled login client outside the UI thread");
+                drop(client);
+                tracing::info!("Login client retirement complete");
+            });
+        }
+    }
+
     /// Create a new `MainMenuState`.
     pub fn new(global_state: &mut GlobalState) -> Self {
         Self {
@@ -183,7 +196,7 @@ impl PlayState for MainMenuState {
                     // init contains InitState::Client(ClientInit), which spawns a thread which
                     // contains a TcpStream::connect() call This call is
                     // blocking TODO fix when the network rework happens
-                    self.init = InitState::None;
+                    self.retire_init(&global_state.tokio_runtime);
                     self.main_menu_ui.cancel_connection();
                     #[cfg(target_os = "trueos")]
                     {
@@ -252,15 +265,22 @@ impl PlayState for MainMenuState {
                     &global_state.tokio_runtime,
                     global_state.settings.graphics.render_mode.clone(),
                 ) {
-                    self.init = InitState::None;
+                    // This client has not entered InitState::Pipeline yet.
+                    global_state
+                        .tokio_runtime
+                        .spawn_blocking(move || drop(client));
+                    self.retire_init(&global_state.tokio_runtime);
+                    global_state.window.resume_menu();
                     self.main_menu_ui.show_info(error);
+                    self.main_menu_ui.invalidate_native();
+                    tracing::info!("Graphics startup failure queued for main-menu notification");
                     return PlayStateResult::Continue;
                 }
                 self.init =
                     InitState::Pipeline(Box::new(client), hud::PersistedHudState::default());
             }
             Some(InitMsg::Done(Err(e))) => {
-                self.init = InitState::None;
+                self.retire_init(&global_state.tokio_runtime);
                 error!(?e, "Client Init failed raw error");
                 let e = get_client_init_msg_error(e, &global_state.i18n);
                 // Log error for possible additional use later or in case that the error
@@ -309,7 +329,7 @@ impl PlayState for MainMenuState {
                                         .get_msg("main-login-server_shut_down")
                                         .into_owned(),
                                 );
-                                self.init = InitState::None;
+                                self.retire_init(&global_state.tokio_runtime);
                             }
                             crate::client::Event::Chat(m) => {
                                 if let InitState::Pipeline(client, persisted_state) = &mut self.init
@@ -338,7 +358,7 @@ impl PlayState for MainMenuState {
                     error!(?err, "[main menu] Failed to tick the client");
                     global_state.info_message =
                         Some(get_client_msg_error(err, None, &global_state.i18n.read()));
-                    self.init = InitState::None;
+                    self.retire_init(&global_state.tokio_runtime);
                 }
             }
         }
@@ -350,8 +370,11 @@ impl PlayState for MainMenuState {
                 Ok(status) => status,
                 Err(error) => {
                     tracing::error!(%error, "Scene startup failed after successful login");
-                    self.init = InitState::None;
+                    self.retire_init(&global_state.tokio_runtime);
+                    global_state.window.resume_menu();
                     self.main_menu_ui.show_info(error);
+                    self.main_menu_ui.invalidate_native();
+                    tracing::info!("Graphics startup failure queued for main-menu notification");
                     return PlayStateResult::Continue;
                 }
             };

@@ -880,6 +880,11 @@ impl MainMenuUi {
     }
 
     #[cfg(target_os = "trueos")]
+    pub fn set_native_origin(&mut self, origin: vek::Vec2<f32>) {
+        self.ui.set_native_origin(origin);
+    }
+
+    #[cfg(target_os = "trueos")]
     pub fn maintain_native(
         &mut self,
         settings: &Settings,
@@ -1056,11 +1061,17 @@ impl MainMenuUi {
             if size.x == 0 || size.y == 0 {
                 return Vec::new();
             }
+            use winit::platform::trueos::WindowExtTrueOS;
+            let viewport = global_state.window.window().trueos_content_viewport();
+            self.set_native_origin(vek::Vec2::new(
+                viewport.position.x as f32,
+                viewport.position.y as f32,
+            ));
             return match self.maintain_native(
                 &global_state.settings,
                 &global_state.tokio_runtime,
                 &mut global_state.clipboard,
-                size,
+                vek::Vec2::new(viewport.size.width, viewport.size.height),
                 dt,
             ) {
                 Ok((events, plan)) => {

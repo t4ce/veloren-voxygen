@@ -213,7 +213,7 @@ where
             _ => None,
         };
         if let (Some(position), Some(dismiss)) = (press_position, &self.on_click_outside) {
-            if layout.bounds().contains(position) && !over_layout.bounds().contains(position) {
+            if !over_layout.bounds().contains(position) {
                 messages.push(dismiss());
                 return iced::event::Status::Captured;
             }
