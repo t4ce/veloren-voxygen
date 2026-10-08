@@ -49,9 +49,9 @@
     "push_bytes": 0,
     "scratch_bytes": 0
   },
-  "native_execution_admitted": false,
   "source_sha256": "4494f46baa143936bca833519df7b7272c906b206a9e5b5aab91178ed0592083",
   "fragment_sha256": "89d30aa4ad982295edf24d2125675a9ed1df3c0f778159f89c054794b712d1eb",
   "fragment_bytes": 13872,
-  "reference_source_sha256": "3f7b728d0971095252b063585b1e27d138576759d87a95d6b90bb1f2e1bc55ed"
+  "reference_source_sha256": "3f7b728d0971095252b063585b1e27d138576759d87a95d6b90bb1f2e1bc55ed",
+  "hardware_execution_verified": false
 }

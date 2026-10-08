@@ -11,7 +11,7 @@ pub(crate) fn from_client(
     client: &crate::client::Client,
     camera: [[f32; 4]; 5],
     ambiance: f32,
-) -> Frame {
+) -> Option<Frame> {
     use common::assets::AssetExt;
     static NOISE: std::sync::OnceLock<image::RgbaImage> = std::sync::OnceLock::new();
     let noise = NOISE.get_or_init(|| {
@@ -27,6 +27,15 @@ pub(crate) fn from_client(
         .ecs()
         .read_resource::<common::resources::TimeOfDay>();
     let sun = time.get_sun_dir();
+    // Until the client has a valid world/camera, keep the scene transparent.
+    if world.chunk_size().x == 0 || world.chunk_size().y == 0
+        || !camera.iter().flatten().all(|v| v.is_finite())
+        || camera[4][0] <= 0.0 || camera[4][1] <= 0.0
+        || !time.0.is_finite() || !ambiance.is_finite()
+        || !world.min_chunk_alt().is_finite() || !world.max_chunk_alt().is_finite()
+    {
+        return None;
+    }
     let width = noise.width().max(weather.size().x).max(32);
     let height = 1 + noise.height() + weather.size().y.max(1);
     let mut pixels = vec![0u8; width as usize * height as usize * 4];
@@ -62,11 +71,11 @@ pub(crate) fn from_client(
         let index = ((1 + noise.height() + pos.y as u32) * width + pos.x as u32) as usize * 4;
         pixels[index..index + 4].copy_from_slice(&cell.cloud.to_le_bytes());
     }
-    Frame {
+    Some(Frame {
         pixels: pixels.into(),
         width,
         height,
-    }
+    })
 }
 
 pub(crate) struct NativeClouds {

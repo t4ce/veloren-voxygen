@@ -49,7 +49,7 @@ impl SessionState {
             global.settings.networking.lossy_terrain_compression,
         );
         tracing::info!(
-            "Native world session entered; renderer=sky+terrain avatar=guarded conrod=guarded camera=voxy controls=client-controller"
+            "Native world session entered; renderer=flat-clouds+terrain avatar=guarded conrod=guarded camera=voxy controls=client-controller"
         );
         Self {
             client,
@@ -243,10 +243,10 @@ impl PlayState for SessionState {
                 deps.view_mat_inv, self.camera.get_focus_pos(), self.camera.get_effective_fov(),
                 size.width as f32 / size.height.max(1) as f32,
             );
-            let clouds = std::sync::Arc::new(crate::render::flat_cloud_native::from_client(
+            let clouds = crate::render::flat_cloud_native::from_client(
                 &client, cloud_camera, global.settings.graphics.ambiance,
-            ));
-            if let Err(error) = global.window.present_terrain_scene(sun_z, terrain, Some(clouds)) {
+            ).map(std::sync::Arc::new);
+            if let Err(error) = global.window.present_terrain_scene(sun_z, terrain, clouds) {
                 tracing::error!(%error, "Native world presentation failed");
             }
         }

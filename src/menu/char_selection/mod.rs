@@ -321,10 +321,10 @@ impl PlayState for CharSelectionState {
                     (global_state.settings.graphics.fov as f32).to_radians(),
                     extent.width as f32 / extent.height.max(1) as f32,
                 );
-                let clouds = std::sync::Arc::new(crate::render::flat_cloud_native::from_client(
+                let clouds = crate::render::flat_cloud_native::from_client(
                     &client, camera, global_state.settings.graphics.ambiance,
-                ));
-                let result = global_state.window.present_terrain_scene(time.get_sun_dir().z, None, Some(clouds));
+                ).map(std::sync::Arc::new);
+                let result = global_state.window.present_terrain_scene(time.get_sun_dir().z, None, clouds);
                 if let Err(error) = result {
                     self.char_selection_ui.display_error(error);
                 }

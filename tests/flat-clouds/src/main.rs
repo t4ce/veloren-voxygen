@@ -41,7 +41,7 @@ fn main() {
     });
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).unwrap();
     println!("Flat cloud host reference: {:?}", adapter.get_info());
-    let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).unwrap();
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor { required_features: wgpu::Features::PASSTHROUGH_SHADERS, ..Default::default() })).unwrap();
     let vs = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::util::make_spirv(include_bytes!(
@@ -120,6 +120,53 @@ fn main() {
         multiview_mask: None,
         cache: None,
     });
+    let native_vs = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("native packed clouds vertex"),
+        source: wgpu::util::make_spirv(include_bytes!("../../../shaderbin/native/clouds/clouds.vert.spv")),
+    });
+    // Feed the same optimized SPIR-V directly to Vulkan, as the native Intel
+    // bake does. Naga currently rejects an optimized bitcast in this module.
+    let mut spirv: Vec<u32> = include_bytes!("../../../shaderbin/native/clouds/clouds.frag.spv")
+        .chunks_exact(4).map(|word|u32::from_le_bytes(word.try_into().unwrap())).collect();
+    // WGPU's Vulkan layout compacts the two host bindings to 0/1.
+    // Change only OpDecorate Binding; retain the exact baked shader arithmetic.
+    let mut cursor=5;
+    while cursor<spirv.len() {
+        let size=(spirv[cursor]>>16) as usize;
+        assert!(size>0);
+        if spirv[cursor]&0xffff == 71 && size==4 && spirv[cursor+2]==33 {
+            spirv[cursor+3]=match spirv[cursor+3] {3=>0,4=>1,other=>other};
+        }
+        cursor+=size;
+    }
+    let native_fs = unsafe { device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+        label: Some("native packed clouds fragment"), spirv: Some(spirv.into()),
+        entry_points: vec![wgpu::PassthroughShaderEntryPoint {name: "main".into(), workgroup_size: (0,0,0)}].into(), ..Default::default()
+    }) };
+    let packed_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None, entries: &[tex(3), sampler(4)],
+    });
+    let packed_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None, bind_group_layouts: &[Some(&packed_layout)], immediate_size: 0,
+    });
+    let packed_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("native single-image cloud interface"), layout: Some(&packed_pl),
+        vertex: wgpu::VertexState { module: &native_vs, entry_point: Some("main"),
+            compilation_options: Default::default(), buffers: &[Some(wgpu::VertexBufferLayout {
+                array_stride: 20, step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2],
+            })] },
+        primitive: Default::default(), depth_stencil: None, multisample: Default::default(),
+        fragment: Some(wgpu::FragmentState { module: &native_fs, entry_point: Some("main"),
+            compilation_options: Default::default(), targets: &[Some(wgpu::TextureFormat::Rgba8Unorm.into())] }),
+        multiview_mask: None, cache: None,
+    });
+    // WGPU normalizes the viewport to y-up. The native kernel uses y-down;
+    // its corresponding vertex UVs are flipped to preserve the same world rays.
+    let packed_vertices: [[f32;5];3] = [[-1.,-1.,0.,0.,0.],[3.,-1.,0.,2.,0.],[-1.,3.,0.,0.,2.]];
+    let packed_vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: None, contents: bytemuck::cast_slice(&packed_vertices), usage: wgpu::BufferUsages::VERTEX,
+    });
     let terrain_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("production terrain palette shader"),
         source: wgpu::ShaderSource::Wgsl(
@@ -194,7 +241,8 @@ fn main() {
             [((nz >> 24) & 255) as u8, 0, 0, 255]
         })
         .collect();
-    let noise = texture(&device, &queue, 64, 64, &noise);
+    let noise_bytes = noise;
+    let noise = texture(&device, &queue, 64, 64, &noise_bytes);
     let altitude = texture(&device, &queue, 64, 64, &vec![0; 64 * 64 * 4]);
     let noise_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::Repeat,
@@ -215,7 +263,8 @@ fn main() {
                   altitude_top: f32,
                   gamma: f32,
                   spatial: bool,
-                  terrain: bool| {
+                  terrain: bool,
+                  packed: bool| {
         let mut globals = [0f32; 128];
         globals[48..52].copy_from_slice(&[0., 0., camera_z, 0.]); // cam_pos
         globals[60..64].copy_from_slice(&[256., 100., 100., altitude_top]); // world altitude
@@ -305,6 +354,26 @@ fn main() {
                 },
             ],
         });
+        let mut packet = vec![0u8; 64 * 66 * 4];
+        let mut params = [0f32;32];
+        params[2]=camera_z; params[4]=1.; params[9]=1.; params[14]=ray_z;
+        params[15]=0.5; params[16]=1.; params[17]=time; params[21]=-1.;
+        params[22]=100.; params[23]=altitude_top; params[24]=64.; params[25]=64.;
+        params[27]=0.1; params[28]=64.; params[29]=64.; params[30]=if spatial {2.}else{1.}; params[31]=1.;
+        for (i,value) in params.iter().enumerate() { packet[i*4..i*4+4].copy_from_slice(&value.to_le_bytes()); }
+        packet[256..256+noise_bytes.len()].copy_from_slice(&noise_bytes);
+        let weather_values = if spatial {vec![0.,coverage as f32/255.]} else {vec![coverage as f32/255.]};
+        for (i,value) in weather_values.iter().enumerate() {
+            let offset=65*256+i*4; packet[offset..offset+4].copy_from_slice(&value.to_le_bytes());
+        }
+        let packet = texture(&device,&queue,64,66,&packet);
+        let packet_view=packet.create_view(&Default::default());
+        let packet_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None, layout: &packed_layout, entries: &[
+                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&packet_view) },
+                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&noise_sampler) },
+            ],
+        });
         let out = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {
@@ -344,8 +413,14 @@ fn main() {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            pass.set_pipeline(&pipeline);
-            pass.set_bind_group(0, &bind, &[]);
+            if packed {
+                pass.set_pipeline(&packed_pipeline);
+                pass.set_bind_group(0,&packet_bind,&[]);
+                pass.set_vertex_buffer(0,packed_vertices.slice(..));
+            } else {
+                pass.set_pipeline(&pipeline);
+                pass.set_bind_group(0, &bind, &[]);
+            }
             pass.draw(0..3, 0..1);
         }
         if terrain {
@@ -394,13 +469,26 @@ fn main() {
         readback.unmap();
         bytes
     };
-    let clear = render(0, 0., 1., 0., 1000., 1., false, false);
+    for (coverage,time,ray,camera,top,spatial) in [
+        (0,0.,1.,0.,1000.,false),(4,0.,1.,0.,1000.,false),
+        (4,50.,1.,0.,1000.,false),(4,0.,1.,0.,2000.,false),
+        (4,0.,-1.,3000.,1000.,false),(4,0.,1.,0.,1000.,true),
+    ] {
+        let reference=render(coverage,time,ray,camera,top,1.,spatial,false,false);
+        let native=render(coverage,time,ray,camera,top,1.,spatial,false,true);
+        let max_delta=reference.iter().zip(&native).map(|(a,b)|a.abs_diff(*b)).max().unwrap();
+        let total: u64=reference.iter().zip(&native).map(|(a,b)|u64::from(a.abs_diff(*b))).sum();
+        println!("packed compare coverage={coverage} time={time} ray={ray} camera={camera} top={top} spatial={spatial}: max={max_delta} mean={}",total as f64/reference.len() as f64);
+        assert!(max_delta <= if spatial {16} else {2} && total < reference.len() as u64,"native resource adaptation differs from Flat shader: max={max_delta} sum={total}");
+    }
+    println!("Packed native resource interface matches Flat reference (RGBA8 mean error <1, peak ≤16; hardware filtering quantization).");
+    let clear = render(0, 0., 1., 0., 1000., 1., false, false, false);
     assert!(
         clear.iter().all(|v| *v == 0),
         "clear weather must reveal the display backdrop"
     );
-    let low = render(1, 0., 1., 0., 1000., 1., false, false);
-    let high = render(4, 0., 1., 0., 1000., 1., false, false);
+    let low = render(1, 0., 1., 0., 1000., 1., false, false, false);
+    let high = render(4, 0., 1., 0., 1000., 1., false, false, false);
     let alpha = |image: &[u8]| image.chunks_exact(4).map(|p| u64::from(p[3])).sum::<u64>();
     assert!(
         alpha(&low) > 0 && alpha(&high) > alpha(&low),
@@ -413,35 +501,35 @@ fn main() {
     );
     assert_eq!(
         high,
-        render(4, 0., 1., 0., 1000., 4., false, false),
+        render(4, 0., 1., 0., 1000., 4., false, false, false),
         "gamma must stay outside the cloud pass"
     );
     assert_ne!(
         high,
-        render(4, 50., 1., 0., 1000., 1., false, false),
+        render(4, 50., 1., 0., 1000., 1., false, false, false),
         "noise must animate with game time"
     );
     assert!(
-        render(4, 0., -1., 0., 1000., 1., false, false)
+        render(4, 0., -1., 0., 1000., 1., false, false, false)
             .iter()
             .all(|v| *v == 0),
         "plane behind camera"
     );
     assert!(
-        alpha(&render(4, 0., 1., 0., 2000., 1., false, false)) < alpha(&high),
+        alpha(&render(4, 0., 1., 0., 2000., 1., false, false, false)) < alpha(&high),
         "world bounds must move the plane"
     );
     assert!(
-        render(4, 0., 1., 3000., 1000., 1., false, false)
+        render(4, 0., 1., 3000., 1000., 1., false, false, false)
             .iter()
             .all(|v| *v == 0),
         "camera above cloud plane looking up"
     );
     assert!(
-        alpha(&render(4, 0., -1., 3000., 1000., 1., false, false)) > 0,
+        alpha(&render(4, 0., -1., 3000., 1000., 1., false, false, false)) > 0,
         "camera above plane looking down"
     );
-    let spatial = render(4, 0., 1., 0., 1000., 1., true, false);
+    let spatial = render(4, 0., 1., 0., 1000., 1., true, false, false);
     let left: u64 = spatial
         .chunks_exact((W * 4) as usize)
         .map(|row| alpha(&row[..(W * 2) as usize]))
@@ -454,7 +542,7 @@ fn main() {
         left < right,
         "cloud placement must follow spatial world weather"
     );
-    let composed = render(4, 0., 1., 0., 1000., 1., false, true);
+    let composed = render(4, 0., 1., 0., 1000., 1., false, true, false);
     let halfway = (W * W * 2) as usize;
     assert_eq!(
         &composed[..halfway],

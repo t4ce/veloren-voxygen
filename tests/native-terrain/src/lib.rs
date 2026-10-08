@@ -3,6 +3,9 @@
 extern crate self as trueos;
 #[path = "../../../src/render/terrain_feature.rs"]
 mod terrain;
+#[cfg(target_os = "trueos")]
+#[path = "../target/cloud_transport.rs"]
+mod clouds;
 mod terrain_preview {
     pub const ATLAS_SIZE: u32 = 512;
     pub const MAX_VERTICES: usize = 600_000;
@@ -24,6 +27,8 @@ pub mod vgpu {
     pub const BUFFER_USAGE_INDEX: u32 = 4;
     pub const PRIMITIVE_TOPOLOGY_TRIANGLE_LIST: u32 = 4;
     pub const SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64: u64 = 0xF84D_E655_632E_F102;
+    pub const SHADER_PACKAGE_VOXY_FLAT_CLOUD_FNV1A64: u64 = 0x07442C9AD2E3AAF8;
+    pub const INDEXED_DRAW_LOAD_COLOR: u32 = 1;
     pub const INDEXED_DRAW_DRAWABLE_DEPTH: u32 = 1 << 1;
     pub const INDEXED_DRAW_DEPTH_TEST: u32 = 1 << 2;
     pub const INDEXED_DRAW_DEPTH_WRITE: u32 = 1 << 3;
@@ -74,6 +79,7 @@ pub mod vgpu {
         pub texture_height: u32,
         pub texture_pitch: u32,
         pub texture_reserved: u32,
+        pub sampler_flags: u32,
     }
     #[derive(Default)]
     pub struct Recorder {
@@ -99,7 +105,7 @@ pub mod vgpu {
             Ok(Queue)
         }
         pub fn create_shader_module(self, digest: u64) -> Result<ShaderModule, i32> {
-            assert_eq!(digest, SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64);
+            assert!(digest == SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64 || digest == SHADER_PACKAGE_VOXY_FLAT_CLOUD_FNV1A64);
             Ok(ShaderModule)
         }
         pub fn create_render_pipeline(
@@ -108,7 +114,8 @@ pub mod vgpu {
             stride: u32,
             flags: u32,
         ) -> Result<RenderPipeline, i32> {
-            assert_eq!((stride, flags), (32, 0));
+            assert!(stride==32 || stride==20);
+            assert_eq!(flags, 0);
             Ok(RenderPipeline)
         }
         pub fn create_buffer(self, size: usize, _: u32) -> Result<Buffer, i32> {
@@ -270,6 +277,30 @@ mod tests {
     fn uploads_are_reused_and_gpu_ownership_survives_busy_and_failure() {
         use vgpu::*;
         *RECORD.lock().unwrap() = Some(Recorder::default());
+        let cloud_frame=clouds::Frame {pixels: vec![0u8;32*3*4].into(),width:32,height:3};
+        let mut cloud_renderer=clouds::NativeClouds::open().unwrap();
+        cloud_renderer.draw(123,&cloud_frame).unwrap();
+        cloud_renderer.draw(123,&cloud_frame).unwrap();
+        {
+            let record=RECORD.lock().unwrap(); let r=record.as_ref().unwrap();
+            assert_eq!(r.buffers.len(),3,"fullscreen buffers and packet reused");
+            assert_eq!(r.writes.len(),4,"only the dynamic packet is rewritten");
+            assert_eq!(r.draws[0].clear_rgba8_srgb,0);
+            assert_eq!(r.draws[0].texture_reserved,0,"clouds do not load or write depth");
+            assert_eq!(r.draws[0].index_count,3);
+        }
+        RECORD.lock().unwrap().as_mut().unwrap().busy_import=true;
+        assert_eq!(cloud_renderer.draw(123,&cloud_frame),Err(ERR_BUSY));
+        RECORD.lock().unwrap().as_mut().unwrap().busy_import=false;
+        cloud_renderer.draw(123,&cloud_frame).unwrap();
+        drop(cloud_renderer);
+        assert!(RECORD.lock().unwrap().as_ref().unwrap().buffers.iter().all(Option::is_none));
+        *RECORD.lock().unwrap()=Some(Recorder {fail_wait:true,..Default::default()});
+        let mut cloud_renderer=clouds::NativeClouds::open().unwrap();
+        assert_eq!(cloud_renderer.draw(123,&cloud_frame),Err(ERR_IO));
+        drop(cloud_renderer);
+        assert!(!RECORD.lock().unwrap().as_ref().unwrap().events.contains(&"destroy-buffer"),"ambiguous completion keeps GPU ownership");
+        *RECORD.lock().unwrap()=Some(Recorder::default());
         let mut renderer = terrain::NativeTerrain::open().unwrap();
         let mut frame = frame();
         renderer.draw(123, &frame, false).unwrap();
@@ -298,6 +329,14 @@ mod tests {
                 (draw.texture_width, draw.texture_height, draw.texture_pitch),
                 (512, 512, 2048)
             );
+            assert_eq!(draw.texture_reserved >> INDEXED_DRAW_DEPTH_COMPARE_SHIFT, 3);
+        }
+        renderer.draw(123, &frame, true).unwrap();
+        {
+            let record = RECORD.lock().unwrap();
+            let draw = record.as_ref().unwrap().draws.last().unwrap();
+            assert_ne!(draw.texture_reserved & INDEXED_DRAW_LOAD_COLOR, 0);
+            assert_ne!(draw.texture_reserved & INDEXED_DRAW_CLEAR_DEPTH, 0);
             assert_eq!(draw.texture_reserved >> INDEXED_DRAW_DEPTH_COMPARE_SHIFT, 3);
         }
         RECORD.lock().unwrap().as_mut().unwrap().busy_import = true;

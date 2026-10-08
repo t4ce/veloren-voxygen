@@ -3,7 +3,7 @@
 The packed RGBA8 input carries exact f32 frame/weather values and the original
 noise pixels. This fits the existing typed native sampled-draw capability.
 """
-import hashlib, importlib.util, json, os, re, shutil, struct, subprocess
+import hashlib, importlib.util, json, os, re, shutil, struct, subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OS = ROOT.parent / "TRUEOS"
@@ -80,6 +80,27 @@ void main() {
     color=vec4(clamp(cloud.rgb,vec3(0),vec3(cloud.a)),cloud.a);
 }
 """
+if "--verify" in sys.argv:
+    meta=json.loads((OUT/"metadata.json").read_text())
+    assert meta["physical_target"] == dict(vendor=0x8086,device=0x4680,revision=0x0c)
+    assert meta["source_sha256"] == hashlib.sha256((prefix+source).encode()).hexdigest()
+    assert meta["reference_source_sha256"] == hashlib.sha256((ROOT/"shaderbin/cloud-flat.glsl").read_bytes()).hexdigest()
+    assert meta["fragment_sha256"] == hashlib.sha256((OUT/"clouds.ps.simd16.bin").read_bytes()).hexdigest()
+    digest=0xcbf29ce484222325
+    for b in b"voxy-flat-cloud-v1\0"+(OUT/"clouds.vert.spv").read_bytes()+(OUT/"clouds.frag.spv").read_bytes():
+        digest=((digest^b)*0x100000001b3)&0xffffffffffffffff
+    assert meta["package"] == f"0x{digest:016X}"
+    generated=(OS/"crates/trueos-shader/generated_voxy_flat_cloud.rs").read_text()
+    assert f"0x{digest:016X}" in generated
+    for stage,artifact in [("VS","clouds.vs.simd8.bin"),("PS","clouds.ps.simd16.bin")]:
+        body=re.search(r"static "+stage+r":.*?= \[(.*?)\];",generated,re.S)[1]
+        words=[int(word,16) for word in re.findall(r"0x[0-9A-F]+",body)]
+        assert struct.pack("<"+"I"*len(words),*words)==(OUT/artifact).read_bytes()
+    for sdk in [OS/"crates/trueos-v/src/vgpu.rs",ROOT.parent/"TRUEOS-Blueprints/crates/trueos-v/src/vgpu.rs"]:
+        match=re.search(r"SHADER_PACKAGE_VOXY_FLAT_CLOUD_FNV1A64: u64 = (0x[0-9A-Fa-f_]+)",sdk.read_text())
+        assert int(match[1].replace("_",""),16)==digest
+    print("Verified native Flat cloud sources, package, kernel ISA and SDK contract: "+meta["package"])
+    sys.exit(0)
 OUT.mkdir(parents=True,exist_ok=True); WORK.mkdir(parents=True,exist_ok=True)
 (OUT/"clouds.frag").write_text(prefix+source)
 vs_source=OS/"tools/clip-position3-uv-bake/shaders/clip_position3_uv.vert"
@@ -151,10 +172,11 @@ rust+=f"""pub(crate) static PIPELINE: TrianglePipeline = TrianglePipeline {{
 """
 (OS/"crates/trueos-shader/generated_voxy_flat_cloud.rs").write_text(rust)
 meta=dict(package=f"0x{digest:016X}",physical_target=dict(vendor=0x8086,device=0x4680,revision=0x0c),
-    vertex_state=vstate,fragment_state=pstate, native_execution_admitted=False,
+    vertex_state=vstate,fragment_state=pstate, hardware_execution_verified=False,
     source_sha256=hashlib.sha256((prefix+source).encode()).hexdigest(),
     fragment_sha256=hashlib.sha256(pcode).hexdigest(),fragment_bytes=len(pcode),
     reference_source_sha256=hashlib.sha256((ROOT/"shaderbin/cloud-flat.glsl").read_bytes()).hexdigest())
 (OUT/"metadata.json").write_text(json.dumps(meta,indent=2)+"\n")
 shutil.copy2(ps,OUT/"clouds.frag.spv")
+shutil.copy2(vs,OUT/"clouds.vert.spv")
 print("Baked Flat clouds: native ADL-S package",hex(digest),"fragment",len(pcode),"bytes")

@@ -155,3 +155,28 @@ Character list operations remain active; world entry and spectating report
 that world rendering is unavailable in this sky-only build. The full scene
 adapter remains unimplemented. Build validation and host tests do not establish
 bare-metal presentation; verify the new Blueprint on the native rig separately.
+
+
+## Admitted native Flat cloud layer
+
+The native renderer now draws the existing Flat cloud plane as a transparent,
+premultiplied RGBA8 layer before terrain. Terrain loads that color and clears
+only its depth. ICED remains in the foreground. The display helper supplies the
+sky backdrop; the cloud shader applies no gamma. Avatar and Conrod remain guarded.
+Character selection draws clouds and sky; world entry adds synchronized terrain.
+
+The sealed cloud package targets Intel ADL-S `8086:4680`, revision `0C`. Its
+original noise image, exact floating-point weather coverage, world altitude,
+time and camera inputs share one packed sampled image. Coverage and placement
+remain controlled by server weather. Clear weather correctly produces no clouds.
+Invalid world/camera data leaves the cloud layer transparent until synchronization.
+
+Bake with `python3 shaderbin/bake_flat_cloud_native.py`; verify shipped sources,
+ISA and both SDK package constants with `--verify`. The bake uses the compile-only
+Intel driver shim and captures native fixed-function shader metadata. It does not
+execute on the physical GPU. `tests/flat-clouds` compares the packed SPIR-V against
+the existing Flat shader on host Vulkan, allowing hardware filtering quantization.
+`tests/native-terrain/run.py` checks native cloud transport ownership and terrain
+color preservation. Deploy both the rebuilt kernel and `voxy.bp`: blueprint-only
+redeployment cannot add a kernel shader admission. Physical presentation still
+requires testing on the native rig.
