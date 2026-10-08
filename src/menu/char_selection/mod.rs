@@ -23,6 +23,10 @@ use ui::CharSelectionUi;
 
 pub struct CharSelectionState {
     char_selection_ui: CharSelectionUi,
+    #[cfg(target_os = "trueos")]
+    logging_out: bool,
+    #[cfg(target_os = "trueos")]
+    logout_revision: Option<u64>,
     client: Rc<RefCell<Client>>,
     persisted_state: Rc<RefCell<hud::PersistedHudState>>,
     #[cfg(not(target_os = "trueos"))]
@@ -52,6 +56,10 @@ impl CharSelectionState {
 
         Self {
             char_selection_ui,
+            #[cfg(target_os = "trueos")]
+            logging_out: false,
+            #[cfg(target_os = "trueos")]
+            logout_revision: None,
             client,
             persisted_state,
             #[cfg(not(target_os = "trueos"))]
@@ -105,6 +113,29 @@ impl PlayState for CharSelectionState {
 
     fn tick(&mut self, global_state: &mut GlobalState, events: Vec<WinEvent>) -> PlayStateResult {
         span!(_guard, "tick", "<CharSelectionState as PlayState>::tick");
+        #[cfg(target_os = "trueos")]
+        if self.logging_out {
+            // Ignore input while retiring this state. Keep its client/resources
+            // alive until the status panel reaches the foreground presenter.
+            if self.logout_revision.is_some_and(|revision| {
+                global_state.window.character_ui_published(revision)
+            }) {
+                tracing::info!("Logout status published; returning to main menu");
+                return PlayStateResult::Pop;
+            }
+            match self.char_selection_ui.maintain_logout(global_state) {
+                Ok(Some(revision)) => {
+                    self.logout_revision.get_or_insert(revision);
+                }
+                Ok(None) => {},
+                Err(error) => {
+                    tracing::error!(%error, "Could not publish logout status");
+                    return PlayStateResult::Pop;
+                }
+            }
+            return PlayStateResult::Continue;
+        }
+
         let client_registered = {
             let client = self.client.borrow();
             client.registered()
@@ -144,6 +175,13 @@ impl PlayState for CharSelectionState {
                 }
                 match event {
                     ui::Event::Logout => {
+                        #[cfg(target_os = "trueos")]
+                        {
+                            self.logging_out = true;
+                            tracing::info!("Logout requested; publishing status before cleanup");
+                            return PlayStateResult::Continue;
+                        }
+                        #[cfg(not(target_os = "trueos"))]
                         return PlayStateResult::Pop;
                     },
                     ui::Event::AddCharacter {

@@ -2038,6 +2038,39 @@ impl CharSelectionUi {
 
     pub fn display_error(&mut self, error: String) { self.error = Some(error); }
 
+    /// No interactive widgets: logout cannot be dismissed or submitted twice.
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn maintain_logout(
+        &mut self,
+        global_state: &mut GlobalState,
+    ) -> Result<Option<u64>, String> {
+        use winit::platform::trueos::WindowExtTrueOS;
+        let viewport = global_state.window.window().trueos_content_viewport();
+        self.ui.set_native_origin(Vec2::new(
+            viewport.position.x as f32,
+            viewport.position.y as f32,
+        ));
+        let panel = Container::new(
+            Text::new("Logging out…")
+                .size(self.controls.fonts.cyri.scale(24))
+                .color(TEXT_COLOR),
+        )
+        .padding(16)
+        .style(style::container::Style::color(Rgba::new(0, 0, 0, 217)));
+        let view: Element<'_, Message> = Container::new(panel)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x()
+            .center_y()
+            .into();
+        let (_, plan) = self.ui.maintain_native(
+            view,
+            Vec2::new(viewport.size.width, viewport.size.height),
+            &mut global_state.clipboard,
+        )?;
+        plan.map(|plan| global_state.window.present_character_ui(plan)).transpose()
+    }
+
     // TODO: do we need whole client here or just character list?
     pub fn maintain(&mut self, global_state: &mut GlobalState, client: &Client) -> Vec<Event> {
         let mut events = Vec::new();

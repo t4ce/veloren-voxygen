@@ -482,7 +482,7 @@ impl Window {
     pub(crate) fn present_character_ui(
         &mut self,
         mut plan: crate::ui::ice::renderer::bcs::FramePlan,
-    ) -> Result<(), String> {
+    ) -> Result<u64, String> {
         use winit::platform::trueos::WindowExtTrueOS;
         let viewport = self.window.trueos_content_viewport();
         plan.place_in_viewport(
@@ -499,7 +499,13 @@ impl Window {
             Vec2::new(size.width, size.height),
             plan.foreground,
         );
-        Ok(())
+        Ok(self.menu_revision)
+    }
+
+    /// A transition may retire its state only after its status panel was published.
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn character_ui_published(&self, revision: u64) -> bool {
+        self.menu_presenter.foreground_published_revision() >= revision
     }
 
     #[cfg(target_os = "trueos")]
