@@ -1,6 +1,7 @@
 //! Mesh and camera preparation shared by Ubuntu and TRUEOS.
 use crate::client::Client;
 use common::{comp, terrain::TerrainGrid, vol::ReadVol};
+#[cfg(not(feature = "terrain-bringup"))]
 use specs::{Join, WorldExt};
 use std::{
     collections::HashMap,
@@ -271,6 +272,7 @@ impl Scene {
             ],
         ];
         let mut overlay = Vec::new();
+        #[cfg(not(feature = "terrain-bringup"))]
         if let Some(client) = client {
             let ecs = client.state().ecs();
             let positions = ecs.read_storage::<comp::Pos>();

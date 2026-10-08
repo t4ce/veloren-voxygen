@@ -295,6 +295,8 @@ impl Mode {
 enum InfoContent {
     Deletion(usize),
     LoadingCharacters,
+    #[cfg(target_os = "trueos")]
+    PreparingCharacter,
     CreatingCharacter,
     EditingCharacter,
     JoiningCharacter,
@@ -311,6 +313,8 @@ struct Controls {
     // Id of the selected character
     selected: Option<CharacterId>,
     default_name: String,
+    #[cfg(target_os = "trueos")]
+    new_character: Option<std::sync::mpsc::Receiver<Result<Mode, String>>>,
     map_img: GraphicId,
     possible_starting_sites: Vec<Marker>,
     world_sz: Vec2<u32>,
@@ -375,6 +379,8 @@ impl Controls {
             mode: Mode::select(Some(InfoContent::LoadingCharacters)),
             selected,
             default_name,
+            #[cfg(target_os = "trueos")]
+            new_character: None,
             map_img,
             possible_starting_sites,
             world_sz,
@@ -834,6 +840,12 @@ impl Controls {
                                 .size(fonts.cyri.scale(24))
                                 .into()
                         },
+                        #[cfg(target_os = "trueos")]
+                        InfoContent::PreparingCharacter => {
+                            Text::new("Preparing character…")
+                                .size(fonts.cyri.scale(24))
+                                .into()
+                        },
                         InfoContent::CreatingCharacter => {
                             Text::new(i18n.get_msg("char_selection-creating_character"))
                                 .size(fonts.cyri.scale(24))
@@ -914,11 +926,7 @@ impl Controls {
                 start_site_idx,
                 hovered_start_site,
             } => {
-                // Keep native creation bring-up limited to the map and bottom controls.
-                // Preserve the left panel without constructing customization widgets.
-                let left_column_content = if cfg!(target_os = "trueos") {
-                    Vec::new()
-                } else {
+                let left_column_content = {
                     let unselected_style = style::button::Style::new(imgs.icon_border)
                         .hover_image(imgs.icon_border_mo)
                         .press_image(imgs.icon_border_press);
@@ -1729,7 +1737,31 @@ impl Controls {
             },
             Message::NewCharacter => {
                 if matches!(&self.mode, Mode::Select { .. }) {
-                    self.mode = Mode::create(self.default_name.clone());
+                    #[cfg(not(target_os = "trueos"))]
+                    {
+                        self.mode = Mode::create(self.default_name.clone());
+                    }
+                    #[cfg(target_os = "trueos")]
+                    if self.new_character.is_none() {
+                        let name = self.default_name.clone();
+                        let (sender, receiver) = std::sync::mpsc::channel();
+                        let worker_sender = sender.clone();
+                        // Starter inventory loads assets before the preview mesh exists.
+                        // Keep that original draft preparation off the UI thread too.
+                        if let Err(error) = std::thread::Builder::new()
+                            .name("voxy-character-draft".into())
+                            .spawn(move || {
+                                tracing::info!("Character draft preparation entered");
+                                let draft = Mode::create(name);
+                                tracing::info!("Character draft preparation ready");
+                                let _ = worker_sender.send(Ok(draft));
+                            })
+                        {
+                            let _ = sender.send(Err(format!("Prepare character: {error}")));
+                        }
+                        self.new_character = Some(receiver);
+                        self.mode = Mode::select(Some(InfoContent::PreparingCharacter));
+                    }
                 }
             },
             Message::CreateCharacter => {
@@ -2080,6 +2112,27 @@ impl CharSelectionUi {
     pub fn maintain(&mut self, global_state: &mut GlobalState, client: &Client) -> Vec<Event> {
         let mut events = Vec::new();
         let i18n = global_state.i18n.read();
+
+        #[cfg(target_os = "trueos")]
+        if let Some(receiver) = &self.controls.new_character {
+            let ready = match receiver.try_recv() {
+                Ok(result) => Some(result),
+                Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    Some(Err("Character draft worker stopped".into()))
+                },
+            };
+            if let Some(result) = ready {
+                self.controls.new_character = None;
+                match result {
+                    Ok(mode) => self.controls.mode = mode,
+                    Err(error) => {
+                        self.controls.mode = Mode::select(None);
+                        self.error = Some(error);
+                    }
+                }
+            }
+        }
 
         #[cfg(not(target_os = "trueos"))]
         let (mut messages, _) = self.ui.maintain(

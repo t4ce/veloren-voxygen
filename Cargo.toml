@@ -22,6 +22,8 @@ default = ["trueos-blueprint"]
 trueos-blueprint = ["picasso-assets"]
 audio = ["dep:kira", "dep:cpal"]
 headless = ["wgpu/wgsl"]
+# Isolated nearby-terrain experiment: excludes menus, figures and entity proxies.
+terrain-bringup = ["headless"]
 picasso-assets = ["common/picasso-assets"]
 noaudio = []
 # Opt-in Conrod HUD/ESC drawing during TRUEOS scene bring-up. Iced is independent.

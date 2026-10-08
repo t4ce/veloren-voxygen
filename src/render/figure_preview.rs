@@ -85,7 +85,13 @@ impl Preview {
                 atlas_size: [extent.x as u32, extent.y as u32],
                 atlas: atlas.col_lights,
             });
-            tracing::info!("Figure preview: selected mesh and atlas ready");
+            let atlas_hash = geometry.atlas.iter().flatten().fold(
+                0xcbf29ce484222325u64,
+                |hash, byte| (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3),
+            );
+            tracing::info!(body = ?key.body, vertices = geometry.vertices.len(),
+                atlas_width = geometry.atlas_size[0], atlas_height = geometry.atlas_size[1],
+                atlas_hash, "Figure preview: selected mesh and atlas ready");
             Ok(geometry)
         })?;
         let Some(geometry) = geometry else {
