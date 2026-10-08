@@ -284,6 +284,16 @@ mod tests {
         {
             let record=RECORD.lock().unwrap(); let r=record.as_ref().unwrap();
             assert_eq!(r.buffers.len(),3,"fullscreen buffers and packet reused");
+            let vertices: Vec<[f32;5]> = r.buffers[0].as_ref().unwrap().chunks_exact(20)
+                .map(|bytes|std::array::from_fn(|i|f32::from_le_bytes(bytes[i*4..i*4+4].try_into().unwrap())))
+                .collect();
+            for vertex in vertices {
+                // Resident GLSL viewport maps clip +Y to screen top.
+                // The shader derives camera-up from 2*uv.y-1.
+                assert_eq!(vertex[4]*2.0-1.0,vertex[1],"cloud ray must follow clip Y");
+                assert_eq!(vertex[3]*2.0-1.0,vertex[0],"cloud ray must follow clip X");
+            }
+
             assert_eq!(r.writes.len(),4,"only the dynamic packet is rewritten");
             assert_eq!(r.draws[0].clear_rgba8_srgb,0);
             assert_eq!(r.draws[0].texture_reserved,0,"clouds do not load or write depth");

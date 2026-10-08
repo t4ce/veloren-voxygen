@@ -161,8 +161,7 @@ fn main() {
             compilation_options: Default::default(), targets: &[Some(wgpu::TextureFormat::Rgba8Unorm.into())] }),
         multiview_mask: None, cache: None,
     });
-    // WGPU normalizes the viewport to y-up. The native kernel uses y-down;
-    // its corresponding vertex UVs are flipped to preserve the same world rays.
+    // Same UV orientation as the resident GLSL draw: +clip Y looks camera-up.
     let packed_vertices: [[f32;5];3] = [[-1.,-1.,0.,0.,0.],[3.,-1.,0.,2.,0.],[-1.,3.,0.,0.,2.]];
     let packed_vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None, contents: bytemuck::cast_slice(&packed_vertices), usage: wgpu::BufferUsages::VERTEX,

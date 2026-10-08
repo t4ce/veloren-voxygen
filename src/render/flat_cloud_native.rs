@@ -132,10 +132,12 @@ impl NativeClouds {
                         return Err(e);
                     }
                 };
+            // The resident GLSL path uses a negative viewport Y scale:
+            // clip +Y is screen top. UV +Y must therefore look camera-up.
             let verts: [[f32; 5]; 3] = [
-                [-1., -1., 0., 0., 1.],
-                [3., -1., 0., 2., 1.],
-                [-1., 3., 0., 0., -1.],
+                [-1., -1., 0., 0., 0.],
+                [3., -1., 0., 2., 0.],
+                [-1., 3., 0., 0., 2.],
             ];
             let upload = (|| {
                 if device.write_buffer(vertices, 0, bytemuck::cast_slice(&verts))? != 60
