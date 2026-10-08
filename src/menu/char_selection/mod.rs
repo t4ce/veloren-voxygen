@@ -30,8 +30,6 @@ pub struct CharSelectionState {
     logging_out: bool,
     #[cfg(target_os = "trueos")]
     logout_revision: Option<u64>,
-    #[cfg(target_os = "trueos")]
-    preview: crate::render::figure_preview::Preview,
     client: Rc<RefCell<Client>>,
     persisted_state: Rc<RefCell<hud::PersistedHudState>>,
     #[cfg(not(target_os = "trueos"))]
@@ -65,8 +63,6 @@ impl CharSelectionState {
             logging_out: false,
             #[cfg(target_os = "trueos")]
             logout_revision: None,
-            #[cfg(target_os = "trueos")]
-            preview: Default::default(),
             client,
             persisted_state,
             #[cfg(not(target_os = "trueos"))]
@@ -317,11 +313,8 @@ impl PlayState for CharSelectionState {
                     .ecs()
                     .read_resource::<common::resources::TimeOfDay>();
                 let _sky_progress = crate::selection_progress::stage(crate::selection_progress::Stage::SkyMailbox);
-                let (body, inventory) = Self::get_humanoid_body_inventory(&self.char_selection_ui, &client);
-                let size = global_state.window.window().surface_size();
-                let figure = body.map(|body| self.preview.frame(body, inventory,
-                    vek::Vec2::new(size.width, size.height), client.state().get_time() as f32, time.get_sun_dir().z)).transpose().map(Option::flatten);
-                let result = figure.and_then(|figure| global_state.window.present_character_scene(time.get_sun_dir().z, figure));
+                // Avatar preparation and drawing stay guarded during terrain bring-up.
+                let result = global_state.window.present_sky(time.get_sun_dir().z);
                 if let Err(error) = result {
                     self.char_selection_ui.display_error(error);
                 }

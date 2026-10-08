@@ -472,9 +472,27 @@ impl SpriteRenderContext {
         Self::prepare(renderer.max_texture_size())
     }
 
-    /// Begin CPU sprite meshing before a scene device is needed. GPU uploads
-    /// still happen only when a scene invokes the returned closure.
+    /// Prepare world sprites. TRUEOS starts CPU meshing on first scene use;
+    /// desktop starts eagerly. GPU uploads happen when the closure is invoked.
     pub fn prepare(max_texture_size: u32) -> SpriteRenderContextLazy {
+        #[cfg(target_os = "trueos")]
+        {
+            // TRUEOS menus and character selection do not consume world sprites.
+            // Keep this dormant until world entry: an unused eager worker also
+            // forces menu shutdown to join all sprite meshing work.
+            let mut prepared: Option<SpriteRenderContextLazy> = None;
+            Box::new(move |renderer| {
+                let prepared = prepared.get_or_insert_with(|| {
+                    Self::prepare_started(max_texture_size.min(renderer.max_texture_size()))
+                });
+                prepared(renderer)
+            })
+        }
+        #[cfg(not(target_os = "trueos"))]
+        Self::prepare_started(max_texture_size)
+    }
+
+    fn prepare_started(max_texture_size: u32) -> SpriteRenderContextLazy {
         struct SpriteWorkerResponse {
             //sprite_config: Arc<SpriteSpec>,
             sprite_data: HashMap<SpriteKind, FilteredSpriteData>,
@@ -484,7 +502,8 @@ impl SpriteRenderContext {
             sprite_mesh: Mesh<SpriteVertex>,
         }
 
-        let join_handle = std::thread::spawn(move || {
+        let worker = std::thread::Builder::new().name("voxy-sprites".into());
+        let join_handle = worker.spawn(move || {
             prof_span!("mesh all sprites");
             // Load all the sprite config data.
             let sprite_config =
@@ -597,7 +616,8 @@ impl SpriteRenderContext {
                 sprite_atlas_size,
                 sprite_mesh,
             }
-        });
+        })
+        .expect("Failed to start world sprite preparation worker");
 
         // The menu may never consume prepared sprites. Retain ownership of
         // that finite worker so native shutdown cannot acknowledge a detached

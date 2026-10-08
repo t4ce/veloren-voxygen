@@ -10,7 +10,7 @@ use std::{
 };
 use vek::{Rgb, Vec2, Vec3, Vec4};
 
-pub(super) fn placement(display_width: u32, display_height: u32) -> (i32, i32, u32, u32) {
+pub(crate) fn placement(display_width: u32, display_height: u32) -> (i32, i32, u32, u32) {
     let units = (display_width / 32).min(display_height / 18).clamp(1, 80);
     let (width, height) = (units * 16, units * 9);
     (
@@ -23,8 +23,8 @@ pub(super) fn placement(display_width: u32, display_height: u32) -> (i32, i32, u
 
 const RADIUS: i32 = 40;
 const VERTICAL_RADIUS: i32 = 32;
-pub(super) const MAX_VERTICES: usize = 600_000;
-pub(super) const ATLAS_SIZE: u32 = 512;
+pub(crate) const MAX_VERTICES: usize = 600_000;
+pub(crate) const ATLAS_SIZE: u32 = 512;
 const MESH_INTERVAL: Duration = Duration::from_millis(500);
 const PROXY_COLOR: [u8; 3] = [230, 140, 64];
 
@@ -34,11 +34,11 @@ const _: () = assert!(MAX_VERTICES / 6 + 1 <= (ATLAS_SIZE * ATLAS_SIZE) as usize
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub(super) struct Vertex {
+pub(crate) struct Vertex {
     // Homogeneous world position (w=1).
-    pub(super) position: [f32; 4],
+    pub(crate) position: [f32; 4],
     // Normalized texel-center UV, followed by the opaque vertex contract 0,1.
-    pub(super) atlas_uv: [f32; 4],
+    pub(crate) atlas_uv: [f32; 4],
 }
 
 struct Mesh {
@@ -93,7 +93,7 @@ fn face_color(color: Rgb<u8>, side: usize) -> [u8; 3] {
     [color.r, color.g, color.b].map(|channel| (channel as f32 * factor).round() as u8)
 }
 
-pub(super) struct Scene {
+pub(crate) struct Scene {
     terrain: Mesh,
     pending_mesh: Option<mpsc::Receiver<Mesh>>,
     next_mesh: Instant,
@@ -143,23 +143,23 @@ impl MeshSource {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct FrameInfo {
-    pub(super) terrain_revision: u64,
-    pub(super) terrain_vertices: u32,
-    pub(super) overlay_vertices: u32,
-    pub(super) position: Option<Vec3<f32>>,
+pub(crate) struct FrameInfo {
+    pub(crate) terrain_revision: u64,
+    pub(crate) terrain_vertices: u32,
+    pub(crate) overlay_vertices: u32,
+    pub(crate) position: Option<Vec3<f32>>,
 }
 
-pub(super) struct PreparedFrame<'a> {
-    pub(super) camera: [[f32; 4]; 5],
-    pub(super) terrain: &'a [Vertex],
-    pub(super) atlas: &'a [[u8; 4]],
-    pub(super) overlay: Vec<Vertex>,
-    pub(super) revision: u64,
+pub(crate) struct PreparedFrame<'a> {
+    pub(crate) camera: [[f32; 4]; 5],
+    pub(crate) terrain: &'a [Vertex],
+    pub(crate) atlas: &'a [[u8; 4]],
+    pub(crate) overlay: Vec<Vertex>,
+    pub(crate) revision: u64,
 }
 
 impl Scene {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             terrain: Mesh {
                 vertices: Vec::new(),
@@ -183,13 +183,34 @@ impl Scene {
                 .is_none_or(|source| !source.matches(terrain, center))
     }
 
-    pub(super) fn prepare(
+    pub(crate) fn prepare(
         &mut self,
         client: Option<&Client>,
         yaw: f32,
         pitch: f32,
         width: u32,
         height: u32,
+    ) -> PreparedFrame<'_> {
+        self.prepare_inner(client, yaw, pitch, width, height, true)
+    }
+
+    pub(crate) fn prepare_terrain(
+        &mut self,
+        client: Option<&Client>,
+        width: u32,
+        height: u32,
+    ) -> PreparedFrame<'_> {
+        self.prepare_inner(client, 0.0, 0.0, width, height, false)
+    }
+
+    fn prepare_inner(
+        &mut self,
+        client: Option<&Client>,
+        yaw: f32,
+        pitch: f32,
+        width: u32,
+        height: u32,
+        proxies: bool,
     ) -> PreparedFrame<'_> {
         let position = client.and_then(Client::position);
         if position.is_none() {
@@ -206,7 +227,7 @@ impl Scene {
         if let Some(mesh) = self.pending_mesh.as_ref().and_then(|r| r.try_recv().ok()) {
             self.pending_mesh = None;
             if mesh.truncated && !self.terrain.truncated {
-                super::connection_progress(format_args!(
+                connection_progress(format_args!(
                     "Voxygen geometry: mesh budget reached; some geometry omitted"
                 ));
             }
@@ -214,7 +235,7 @@ impl Scene {
             self.terrain = mesh;
             self.revision = self.revision.wrapping_add(1);
             if was_empty != self.terrain.vertices.is_empty() {
-                super::connection_progress(format_args!(
+                connection_progress(format_args!(
                     "Voxygen terrain: revision={} vertices={} ready={} truncated={} palette_colors={}",
                     self.revision,
                     self.terrain.vertices.len(),
@@ -227,7 +248,7 @@ impl Scene {
         if let (Some(client), Some(position)) = (client, position) {
             if self.terrain.vertices.is_empty() && Instant::now() >= self.next_missing_log {
                 self.next_missing_log = Instant::now() + Duration::from_secs(5);
-                super::connection_progress(format_args!(
+                connection_progress(format_args!(
                     "Voxygen terrain waiting: position={position:?} loaded_chunks={} revision={} pending_mesh={}",
                     client.state().terrain().iter().count(),
                     self.revision,
@@ -271,9 +292,11 @@ impl Scene {
                 256.0,
             ],
         ];
+        #[cfg(feature = "terrain-bringup")]
+        let _ = proxies;
         let mut overlay = Vec::new();
         #[cfg(not(feature = "terrain-bringup"))]
-        if let Some(client) = client {
+        if let Some(client) = client.filter(|_| proxies) {
             let ecs = client.state().ecs();
             let positions = ecs.read_storage::<comp::Pos>();
             let bodies = ecs.read_storage::<comp::Body>();
@@ -297,6 +320,13 @@ impl Scene {
             revision: self.revision,
         }
     }
+}
+
+fn connection_progress(message: std::fmt::Arguments<'_>) {
+    #[cfg(feature = "headless")]
+    crate::headless::connection_progress(message);
+    #[cfg(not(feature = "headless"))]
+    tracing::info!(target: "voxy_scene_contract", "{message}");
 }
 
 // Faces share vertices conceptually; expand triangles to avoid an index buffer.
@@ -595,7 +625,12 @@ mod tests {
                 "../../../TRUEOS-Blueprints/crates/trueos-wgpu/src/voxy_headless_textured.wgsl"
             )
         );
-        assert_eq!(super::super::shader::fnv1a64(shader), 0xF84D_E655_632E_F102);
+        assert_eq!(
+            shader.iter().fold(0xcbf29ce484222325u64, |hash, byte| (hash
+                ^ u64::from(*byte))
+            .wrapping_mul(0x100000001b3)),
+            0xF84D_E655_632E_F102
+        );
         let source = std::str::from_utf8(shader).unwrap();
         assert_eq!(
             source.matches("var atlas_texture: texture_2d<f32>").count(),

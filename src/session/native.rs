@@ -1,11 +1,11 @@
-//! Connected-world control path for the admitted sky and figure renderer.
+//! Connected-world control path for the admitted sky and terrain renderer.
 use crate::{
     Direction, GlobalState, PlayState, PlayStateResult,
     client::{Client, Event as ClientEvent},
     game_input::GameInput,
     hud::PersistedHudState,
     key_state::KeyState,
-    render::{Drawer, GlobalsBindGroup, figure_preview::Preview},
+    render::{Drawer, GlobalsBindGroup},
     scene::camera::{Camera, CameraMode},
     settings::Settings,
     window::Event,
@@ -19,7 +19,11 @@ pub struct SessionState {
     client: Rc<RefCell<Client>>,
     camera: Camera,
     keys: KeyState,
-    preview: Preview,
+    terrain: crate::terrain_preview::Scene,
+    geometry: Option<(
+        u64,
+        std::sync::Arc<crate::render::terrain_feature::Geometry>,
+    )>,
     frames: u64,
 }
 impl SessionState {
@@ -45,13 +49,14 @@ impl SessionState {
             global.settings.networking.lossy_terrain_compression,
         );
         tracing::info!(
-            "Native world session entered; renderer=sky+figure camera=voxy controls=client-controller"
+            "Native world session entered; renderer=sky+terrain avatar=guarded conrod=guarded camera=voxy controls=client-controller"
         );
         Self {
             client,
             camera,
             keys: Default::default(),
-            preview: Default::default(),
+            terrain: crate::terrain_preview::Scene::new(),
+            geometry: None,
             frames: 0,
         }
     }
@@ -184,53 +189,57 @@ impl PlayState for SessionState {
                 .read_resource::<common::resources::TimeOfDay>()
                 .get_sun_dir()
                 .z;
-            let frame = match client.current::<comp::Body>() {
-                Some(comp::Body::Humanoid(body))
-                    if self.camera.get_mode() != CameraMode::FirstPerson =>
+            // World position and its containing chunk must have arrived before
+            // requesting a mesh; waiting frames retain just the sky.
+            let synced = client
+                .position()
+                .filter(|position| {
+                    position.into_array().iter().all(|value| value.is_finite())
+                        && client.state().terrain().contains_key_real(
+                            common::terrain::TerrainGrid::chunk_key(
+                                position.map(|v| v.floor() as i32),
+                            ),
+                        )
+                })
+                .is_some();
+            let prepared = self.terrain.prepare_terrain(
+                synced.then_some(&*client),
+                size.width.max(1),
+                size.height.max(1),
+            );
+            let terrain = if prepared.terrain.is_empty() {
+                self.geometry = None;
+                None
+            } else {
+                if self
+                    .geometry
+                    .as_ref()
+                    .is_none_or(|(revision, _)| *revision != prepared.revision)
                 {
-                    let inventories = client.state().ecs().read_storage::<comp::Inventory>();
-                    self.preview.frame(
-                        body,
-                        inventories.get(client.entity()),
-                        Vec2::new(size.width, size.height),
-                        client.state().get_time() as f32,
-                        sun_z,
-                    )
+                    self.geometry = Some((
+                        prepared.revision,
+                        std::sync::Arc::new(crate::render::terrain_feature::Geometry {
+                            vertices: prepared.terrain.into(),
+                            atlas: prepared.atlas.into(),
+                        }),
+                    ));
                 }
-                _ => Ok(None),
+                let deps = self.camera.dependents();
+                // The demo shader uses forward depth and an absolute world eye.
+                // Derive the basis from the same camera inverse used by Voxy,
+                // including roll, third-person distance and collision correction.
+                Some(std::sync::Arc::new(crate::render::terrain_feature::Frame {
+                    geometry: self.geometry.as_ref().unwrap().1.clone(),
+                    camera: crate::render::terrain_feature::camera_from_view(
+                        deps.view_mat_inv,
+                        self.camera.get_focus_pos(),
+                        self.camera.get_effective_fov(),
+                        size.width as f32 / size.height.max(1) as f32,
+                    ),
+                }))
             };
-            match frame {
-                Ok(mut frame) => {
-                    if let Some(frame) = frame.as_mut().and_then(std::sync::Arc::get_mut) {
-                        let deps = self.camera.dependents();
-                        frame.state[128..192].copy_from_slice(bytemuck::bytes_of(
-                            &(deps.proj_mat * deps.view_mat).into_col_arrays(),
-                        ));
-                        let focus = self.camera.get_focus_pos();
-                        frame.state[208..220].copy_from_slice(bytemuck::bytes_of(
-                            &focus.map(f32::trunc).into_array(),
-                        ));
-                        frame.state[224..236].copy_from_slice(bytemuck::bytes_of(
-                            &focus.map(f32::fract).into_array(),
-                        ));
-                        frame.state[640..652]
-                            .copy_from_slice(bytemuck::bytes_of(&position.into_array()));
-                        let ori = client.current::<comp::Ori>().unwrap_or_default();
-                        let rotation = Mat4::from(ori.to_quat())
-                            * Mat4::rotation_z(core::f32::consts::FRAC_PI_2);
-                        for bytes in frame.state[672..].chunks_exact_mut(128) {
-                            let mut bone: anim::FigureBoneData =
-                                bytemuck::pod_read_unaligned(bytes);
-                            bone.0 = (rotation * Mat4::from_col_arrays(bone.0)).into_col_arrays();
-                            bone.1 = (rotation * Mat4::from_col_arrays(bone.1)).into_col_arrays();
-                            bytes.copy_from_slice(bytemuck::bytes_of(&bone));
-                        }
-                    }
-                    if let Err(error) = global.window.present_character_scene(sun_z, frame) {
-                        tracing::error!(%error, "Native world presentation failed");
-                    }
-                }
-                Err(error) => tracing::error!(%error, "Native world avatar preparation failed"),
+            if let Err(error) = global.window.present_terrain_scene(sun_z, terrain) {
+                tracing::error!(%error, "Native world presentation failed");
             }
         }
         client.cleanup();

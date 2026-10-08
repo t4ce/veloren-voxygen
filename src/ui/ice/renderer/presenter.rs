@@ -28,6 +28,8 @@ struct Job {
     sky: Option<u32>,
     #[cfg(target_os = "trueos")]
     figure: Option<Arc<crate::render::figure_preview::Frame>>,
+    #[cfg(target_os = "trueos")]
+    terrain: Option<Arc<crate::render::terrain_feature::Frame>>,
 }
 struct Mailbox {
     latest: ArrayQueue<Job>,
@@ -115,6 +117,8 @@ impl LayeredPresenter {
             sky: None,
             #[cfg(target_os = "trueos")]
             figure: None,
+            #[cfg(target_os = "trueos")]
+            terrain: None,
         });
         self.foreground.mailbox.submit(Job {
             revision,
@@ -123,6 +127,8 @@ impl LayeredPresenter {
             sky: None,
             #[cfg(target_os = "trueos")]
             figure: None,
+            #[cfg(target_os = "trueos")]
+            terrain: None,
         });
     }
     pub fn clear_foreground(&self, revision: u64, size: Vec2<u32>) {
@@ -133,11 +139,17 @@ impl LayeredPresenter {
             sky: None,
             #[cfg(target_os = "trueos")]
             figure: None,
+            #[cfg(target_os = "trueos")]
+            terrain: None,
         });
     }
     #[cfg(target_os = "trueos")]
     pub fn submit_figure(&self, revision: u64, size: Vec2<u32>, rgba: u32, figure: Option<Arc<crate::render::figure_preview::Frame>>) {
-        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure });
+        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure, terrain: None });
+    }
+    #[cfg(target_os = "trueos")]
+    pub fn submit_terrain(&self, revision: u64, size: Vec2<u32>, rgba: u32, terrain: Option<Arc<crate::render::terrain_feature::Frame>>) {
+        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure: None, terrain });
     }
     pub fn submit_sky(&self, revision: u64, size: Vec2<u32>, rgba: u32) {
         self.scene.mailbox.submit(Job {
@@ -147,6 +159,8 @@ impl LayeredPresenter {
             sky: Some(rgba),
             #[cfg(target_os = "trueos")]
             figure: None,
+            #[cfg(target_os = "trueos")]
+            terrain: None,
         });
     }
     pub fn submit_foreground(&self, revision: u64, size: Vec2<u32>, plan: LayerPlan) {
@@ -157,6 +171,8 @@ impl LayeredPresenter {
             sky: None,
             #[cfg(target_os = "trueos")]
             figure: None,
+            #[cfg(target_os = "trueos")]
+            terrain: None,
         });
     }
     pub fn scene_published_revision(&self) -> u64 {
@@ -230,9 +246,11 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     let mut region_supported = true;
     let mut previous_sky = None;
     #[cfg(target_os = "trueos")]
-    let mut previous_had_figure = false;
+    let mut previous_had_geometry = false;
     #[cfg(target_os = "trueos")]
     let mut sky_renderer: Option<crate::render::minimal_sky::NativeSky> = None;
+    #[cfg(target_os = "trueos")]
+    let mut terrain_renderer: Option<crate::render::terrain_feature::NativeTerrain> = None;
     while !mailbox.stopped.load(Ordering::Acquire) {
         mailbox.counters.iterations.fetch_add(1, Ordering::Relaxed);
         if job.is_none() {
@@ -259,7 +277,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         if phase == 0
             && scene_repaint_hold.is_none()
             && {
-                #[cfg(target_os = "trueos")] { current.figure.is_none() && !previous_had_figure }
+                #[cfg(target_os = "trueos")] { current.figure.is_none() && current.terrain.is_none() && !previous_had_geometry }
                 #[cfg(not(target_os = "trueos"))] { true }
             }
             && previous.as_ref().is_some_and(|(size, plan)| {
@@ -288,6 +306,10 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 if current.sky.is_some() && sky_renderer.is_none() {
                     sky_renderer = Some(crate::render::minimal_sky::NativeSky::open()?);
                     tracing::info!(target: "voxy_scene_contract", "Minimal RGBA8 sky device and render queue ready");
+                }
+                #[cfg(target_os = "trueos")]
+                if current.terrain.is_some() && terrain_renderer.is_none() {
+                    terrain_renderer = Some(crate::render::terrain_feature::NativeTerrain::open()?);
                 }
                 if name == "foreground" && region_supported {
                     repaint = Some(damage::prepare(
@@ -397,7 +419,9 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     #[cfg(target_os = "trueos")]
                     {
                         let renderer = sky_renderer.as_mut().unwrap();
-                        let draw = if let Some(figure) = current.figure.as_deref() {
+                        let draw = if let Some(terrain) = current.terrain.as_deref() {
+                            terrain_renderer.as_mut().unwrap().draw(target.render_target(), rgba, terrain)
+                        } else if let Some(figure) = current.figure.as_deref() {
                             renderer.draw_figure(target.render_target(), rgba, figure)
                         } else { renderer.draw(target.render_target(), rgba) };
                         draw
@@ -487,7 +511,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 preceding_damage = repaint.as_ref().map(|r| r.changed);
                 previous_sky = current.sky;
                 #[cfg(target_os = "trueos")]
-                { previous_had_figure = current.figure.is_some(); }
+                { previous_had_geometry = current.figure.is_some() || current.terrain.is_some(); }
                 previous = Some((current.size, current.plan.clone()));
                 repaint = None;
                 job = None;

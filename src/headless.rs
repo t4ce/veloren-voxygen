@@ -20,7 +20,7 @@ mod gpu;
 mod render;
 #[cfg(target_os = "trueos")]
 mod render_trueos;
-mod scene;
+use crate::terrain_preview as scene;
 #[cfg(any(target_os = "trueos", test))]
 pub mod shader;
 #[cfg(target_os = "trueos")]
@@ -40,7 +40,7 @@ const MENU_DELAY: Duration = Duration::from_secs(3);
 
 const FRAME: Duration = Duration::from_nanos(16_666_667);
 
-fn connection_progress(message: std::fmt::Arguments<'_>) {
+pub(crate) fn connection_progress(message: std::fmt::Arguments<'_>) {
     #[cfg(target_os = "trueos")]
     // IMPORTANT survives the GPU diagnostic profile's area filters.
     let _ = trueos::logl::log_record(trueos::logl::level::IMPORTANT, "apps::voxygen", message);
@@ -609,6 +609,12 @@ impl App {
             }
             None => return,
         };
+        // TerrainChanges is a per-tick notification set, not retained history.
+        // This renderer reads TerrainGrid directly, so it has no remaining
+        // consumer of those notifications (including on display-retry ticks).
+        if let Some(client) = self.client.as_mut() {
+            client.cleanup();
+        }
         for event in events {
             match event {
                 Event::Disconnect => {

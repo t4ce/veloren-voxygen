@@ -1,0 +1,10 @@
+[package]
+name = "voxy-native-terrain-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+[workspace]
+[dependencies]
+bytemuck = { version = "1", features = ["derive"] }
+tracing = "0.1"
+vek = "0.17"

@@ -521,6 +521,18 @@ impl Window {
     }
 
     #[cfg(target_os = "trueos")]
+    pub(crate) fn present_terrain_scene(&mut self, sun_z: f32, terrain: Option<Arc<crate::render::terrain_feature::Frame>>) -> Result<(), String> {
+        self.menu_presenter.check()?;
+        self.menu_revision += 1;
+        let size = self.window.surface_size();
+        if size.width != 0 && size.height != 0 {
+            self.menu_presenter.submit_terrain(self.menu_revision, Vec2::new(size.width, size.height),
+                crate::render::minimal_sky::rgba8(sun_z), terrain);
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "trueos")]
     pub(crate) fn present_sky(&mut self, sun_z: f32) -> Result<(), String> {
         self.menu_presenter.check()?;
         self.menu_revision += 1;

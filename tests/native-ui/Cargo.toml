@@ -12,3 +12,4 @@ vek = "0.17"
 glyph_brush = "0.7"
 microfont = { path = "../../../TRUEOS/vendor/microfont" }
 tracing = "0.1"
+crossbeam-queue = "=0.3.12"

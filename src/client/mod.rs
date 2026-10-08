@@ -2408,6 +2408,10 @@ impl Client {
     /// the given duration.
     pub fn tick(&mut self, inputs: ControllerInputs, dt: Duration) -> Result<Vec<Event>, Error> {
         span!(_guard, "tick", "Client::tick");
+        #[cfg(target_os = "trueos")]
+        let tick_started = Instant::now();
+        #[cfg(target_os = "trueos")]
+        let observe_tick = self.tick % 128 == 0;
         // This tick function is the centre of the Veloren universe. Most client-side
         // things are managed from here, and as such it's important that it
         // stays organised. Please consult the core developers before making
@@ -2484,7 +2488,11 @@ impl Client {
         }
 
         // Handle new messages from the server.
+        #[cfg(target_os = "trueos")]
+        let messages_started = Instant::now();
         frontend_events.append(&mut self.handle_new_messages()?);
+        #[cfg(target_os = "trueos")]
+        let messages_us = messages_started.elapsed().as_micros();
 
         // 3) Update client local data
         // Check if the invite has timed out and remove if so
@@ -2516,15 +2524,24 @@ impl Client {
         // 4) Tick the client's LocalState
         #[cfg(target_os = "trueos")]
         let world_progress = crate::selection_progress::stage(crate::selection_progress::Stage::WorldSimulation);
+        #[cfg(target_os = "trueos")]
+        let simulation_started = Instant::now();
+        #[cfg(target_os = "trueos")]
+        let mut simulation_metrics = common_state::StateTickMetrics::default();
         self.state.tick(
             Duration::from_secs_f64(dt.as_secs_f64() * self.dt_adjustment),
             true,
+            #[cfg(target_os = "trueos")]
+            if observe_tick { Some(&mut simulation_metrics) } else { None },
+            #[cfg(not(target_os = "trueos"))]
             None,
             &self.connected_server_constants,
             |_, _| {},
         );
         #[cfg(target_os = "trueos")]
         drop(world_progress);
+        #[cfg(target_os = "trueos")]
+        let simulation_us = simulation_started.elapsed().as_micros();
 
         // TODO: avoid emitting these in the first place OR actually use outcomes
         // generated locally on the client (if they can be deduplicated from
@@ -2535,7 +2552,11 @@ impl Client {
         let _ = self.state.ecs().fetch::<EventBus<Outcome>>().recv_all();
 
         // 5) Terrain
+        #[cfg(target_os = "trueos")]
+        let terrain_started = Instant::now();
         self.tick_terrain()?;
+        #[cfg(target_os = "trueos")]
+        let terrain_us = terrain_started.elapsed().as_micros();
 
         // Send a ping to the server once every second
         if self.state.get_program_time() - self.last_server_ping > 1. {
@@ -2572,6 +2593,17 @@ impl Client {
         */
 
         // 7) Finish the tick, pass control back to the frontend.
+        #[cfg(target_os = "trueos")]
+        if observe_tick {
+            let entities = self.state.ecs().entities().join().count();
+            let chunks = self.state.terrain().iter().count();
+            let changes = self.state.terrain_changes();
+            let _ = trueos::logl::log_record(trueos::logl::level::IMPORTANT, "apps::voxygen",
+                format_args!("Voxygen client tick sample: tick={} total_us={} messages_us={} simulation_us={} terrain_us={} entities={} chunks={} new_chunks={} modified_chunks={} removed_chunks={} simulation_sections={:?}",
+                    self.tick, tick_started.elapsed().as_micros(), messages_us, simulation_us,
+                    terrain_us, entities, chunks, changes.new_chunks.len(),
+                    changes.modified_chunks.len(), changes.removed_chunks.len(), simulation_metrics.timings));
+        }
         self.tick += 1;
         Ok(frontend_events)
     }

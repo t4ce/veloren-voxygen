@@ -634,3 +634,6 @@ impl ExperimentalShader {
 pub(crate) mod figure_preview;
 #[cfg(target_os = "trueos")]
 mod figure_preview_loader;
+
+#[cfg(target_os = "trueos")]
+pub(crate) mod terrain_feature;
