@@ -24,6 +24,7 @@ struct TerrainGrid {
  loaded: HashSet<Vec2<i32>>, blocks: HashMap<Vec3<i32>, Block>,
  air: Block, base: Block, filled_base: bool,
 }
+impl TerrainGrid { fn chunk_size() -> Vec2<u32> { Vec2::new(32,32) } }
 trait ReadVol { fn get(&self, pos: Vec3<i32>) -> Result<&Block, ()>; }
 impl ReadVol for TerrainGrid {
  fn get(&self, pos: Vec3<i32>) -> Result<&Block, ()> {
@@ -56,7 +57,7 @@ tests = r'''
  let mesh=terrain_mesh(&terrain,Vec3::new(16,16,1));
  assert_eq!(mesh.vertices.len(),32*32*6); // only the actual top surface
  assert!(mesh.vertices.iter().all(|v| v.position[2]==1.));
- assert!(mesh.atlas.texels.contains(&[31,140,47,255]));
+ assert!(mesh.atlas.texels.iter().any(|c| c[0].abs_diff(31)<=6 && c[1].abs_diff(140)<=6 && c[2].abs_diff(47)<=6));
 }
 #[test] fn genuine_cliff_against_loaded_air_is_preserved() {
  let mut terrain=grid(); terrain.filled_base=true;
@@ -77,19 +78,64 @@ tests = r'''
  let mesh=terrain_mesh(&terrain,pos);
  assert_eq!(mesh.vertices.len(),36); // includes the face next to the sprite
  assert!(mesh.vertices.chunks_exact(6).any(|face| face.iter().all(|v| v.position[0]==17.)));
- assert!(!mesh.atlas.colors.contains_key(&[0,0,0]));
+ assert!(!mesh.atlas.tiles.contains_key(&[[0,0,0];9]));
 }
 #[test] fn real_black_voxel_color_is_preserved() {
  let mut terrain=grid(); let pos=Vec3::new(16,16,0);
  terrain.blocks.insert(pos,Block(Some(Rgb::zero())));
  let mesh=terrain_mesh(&terrain,pos);
  assert_eq!(mesh.vertices.len(),36);
- assert!(mesh.atlas.colors.contains_key(&[0,0,0]));
+ assert!(mesh.atlas.tiles.contains_key(&[[0,0,0];9]));
  for vertex in &mesh.vertices {
   let x=(vertex.atlas_uv[0]*ATLAS_SIZE as f32).floor() as usize;
   let y=(vertex.atlas_uv[1]*ATLAS_SIZE as f32).floor() as usize;
   assert_eq!(mesh.atlas.texels[y*ATLAS_SIZE as usize+x],[0,0,0,255]);
  }
+}
+
+#[test] fn tiles_follow_face_positions_and_stay_fixed_across_camera_centers() {
+ let mut terrain=grid(); let pos=Vec3::new(16,16,0);
+ terrain.blocks.insert(pos,Block(Some(Rgb::new(120,150,80))));
+ let mesh=terrain_mesh(&terrain,pos);
+ assert_eq!(mesh.vertices.len(),36);
+ let moved=terrain_mesh(&terrain,pos+Vec3::new(2,-3,1));
+ assert_eq!(mesh.atlas.texels,moved.atlas.texels);
+ for (side,face) in mesh.vertices.chunks_exact(6).enumerate() {
+  let expected=face_tile(&corners([16.,16.,0.],[17.,17.,1.]),side,face_color(Rgb::new(120,150,80),side));
+  assert!(expected.iter().any(|c| *c!=expected[0]), "side {side} should have variation");
+  for row in 0..3 { for col in 0..3 {
+   let u=(col as f32+0.5)/3.; let v=(row as f32+0.5)/3.;
+   let uv=std::array::from_fn::<_,2,_>(|axis| face[0].atlas_uv[axis]
+     +(face[1].atlas_uv[axis]-face[0].atlas_uv[axis])*u
+     +(face[5].atlas_uv[axis]-face[0].atlas_uv[axis])*v);
+   let x=(uv[0]*ATLAS_SIZE as f32).floor() as usize;
+   let y=(uv[1]*ATLAS_SIZE as f32).floor() as usize;
+   assert_eq!(&mesh.atlas.texels[y*ATLAS_SIZE as usize+x][..3],&expected[row*3+col]);
+  }}
+ }
+}
+#[test] fn tiles_match_chunk_local_noise_on_negative_and_positive_boundaries() {
+ let color=[120,150,80];
+ for x in [-33,-32,-1,0,31,32] {
+  for side in 0..6 {
+   let a=face_tile(&corners([x as f32,-1.,0.],[x as f32+1.,0.,1.]),side,color);
+   let b=face_tile(&corners([x as f32+32.,31.,0.],[x as f32+33.,32.,1.]),side,color);
+   assert_eq!(a,b);
+  }
+ }
+ // GLSL fract differs from Rust fract for negative values.
+ assert!((terrain_hash([-3.,2.,-1.,0.])-(-0.1630859375)).abs()<0.000001);
+}
+#[test] fn atlas_fits_the_full_face_budget_and_deduplicates_tiles() {
+ let mut atlas=PaletteAtlas::new();
+ for key in 0..MAX_VERTICES as u32/6 {
+  let tile=[[key as u8,(key>>8) as u8,(key>>16) as u8];9];
+  let slot=atlas.tile(tile); assert_eq!(slot,atlas.tile(tile));
+  let x=slot%TILES_PER_ROW*TILE_SIZE; let y=slot/TILES_PER_ROW*TILE_SIZE;
+  assert!(x+3<=ATLAS_SIZE && y+3<=ATLAS_SIZE);
+  assert_eq!(&atlas.texels[((y+2)*ATLAS_SIZE+x+2) as usize][..3],&tile[8]);
+ }
+ assert_eq!(atlas.tiles.len(),MAX_VERTICES/6+1);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='voxy-terrain-mesh-') as directory:

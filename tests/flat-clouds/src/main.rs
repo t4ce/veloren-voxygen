@@ -203,16 +203,23 @@ fn main() {
         usage: wgpu::BufferUsages::UNIFORM,
     });
     let terrain_vertices: [[f32; 8]; 3] = [
-        [-1., -1., 0., 0., 0.5, 0.5, 0., 0.],
-        [3., -1., 0., 0., 0.5, 0.5, 0., 0.],
-        [-1., 3., 0., 0., 0.5, 0.5, 0., 0.],
+        [-1., -1., 0., 0., 3.001/1024., 3.001/1024., 0., 1.],
+        [3., -1., 0., 0., 8.997/1024., 3.001/1024., 0., 1.],
+        [-1., 3., 0., 0., 3.001/1024., 8.997/1024., 0., 1.],
     ];
     let terrain_vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None,
         contents: bytemuck::cast_slice(&terrain_vertices),
         usage: wgpu::BufferUsages::VERTEX,
     });
-    let terrain_atlas = texture(&device, &queue, 1, 1, &[255, 0, 0, 255]);
+    // A full-sized resident atlas, with a 3x3 tile surrounded by sentinel red.
+    let mut atlas_bytes = [255,0,0,255].repeat(1024*1024);
+    for row in 0..3 { for col in 0..3 {
+        let i = (row*3+col) as u8;
+        let offset=((3+row)*1024+3+col)*4;
+        atlas_bytes[offset..offset+4].copy_from_slice(&[140+i,90+i,40+i,255]);
+    }}
+    let terrain_atlas = texture(&device, &queue, 1024, 1024, &atlas_bytes);
     let terrain_atlas_view = terrain_atlas.create_view(&Default::default());
     let terrain_sampler = device.create_sampler(&Default::default());
     let terrain_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -442,6 +449,7 @@ fn main() {
             pass.set_pipeline(&terrain_pipeline);
             pass.set_bind_group(0, &terrain_bind, &[]);
             pass.set_vertex_buffer(0, terrain_vertices.slice(..));
+            pass.set_viewport(0., W as f32/2., W as f32, W as f32/2., 0., 1.);
             pass.set_scissor_rect(0, W / 2, W, W / 2);
             pass.draw(0..3, 0..1);
         }
@@ -548,12 +556,18 @@ fn main() {
         &high[..halfway],
         "uncovered clouds retained"
     );
-    assert!(
-        composed[halfway..]
-            .chunks_exact(4)
-            .all(|p| p == [255, 0, 0, 255]),
-        "opaque terrain must cover the cloud layer"
-    );
+    assert!(composed[halfway..].chunks_exact(4).all(|p|
+        p[0]>=140 && p[0]<=148 && p[1]==p[0]-50 && p[2]==p[0]-100 && p[3]==255),
+        "opaque terrain must cover clouds without leaking adjacent atlas tiles");
+    for row in 0..3 { for col in 0..3 {
+        let x=((col as f32+0.5)*W as f32/3.) as usize;
+        let y=(W/2) as usize+((row as f32+0.5)*(W/2) as f32/3.) as usize;
+        let offset=(y*W as usize+x)*4;
+        let i=((2-row)*3+col) as u8;
+        assert_eq!(&composed[offset..offset+4], &[140+i,90+i,40+i,255],
+            "production terrain shader must resolve all nine atlas cells");
+    }}
+    println!("PASS terrain 3x3 atlas: nine nearest-sampled cells, 1024x1024 texture, opaque composition, no tile bleed");
     println!(
         "PASS transparent Flat: weather coverage, altitude, camera, time, premultiplied output, no shader gamma"
     );

@@ -322,7 +322,7 @@ impl PlayState for CharSelectionState {
                     extent.width as f32 / extent.height.max(1) as f32,
                 );
                 let clouds = crate::render::flat_cloud_native::from_client(
-                    &client, camera, global_state.settings.graphics.ambiance,
+                    &client, camera, global_state.settings.graphics.ambiance, false,
                 ).map(std::sync::Arc::new);
                 let result = global_state.window.present_terrain_scene(time.get_sun_dir().z, None, clouds);
                 if let Err(error) = result {

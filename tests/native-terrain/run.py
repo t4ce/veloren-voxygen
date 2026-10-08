@@ -8,7 +8,7 @@ root = Path(__file__).resolve().parent
 source = (root / '../../src/render/flat_cloud_native.rs').read_text()
 (root / 'target').mkdir(exist_ok=True)
 (root / 'target/cloud_transport.rs').write_text(
-    'pub struct Frame { pub pixels: std::sync::Arc<[u8]>, pub width: u32, pub height: u32 }\n'
+    'pub struct Frame { pub pixels: std::sync::Arc<[u8]>, pub width: u32, pub height: u32, pub camera: [[f32;4];5], pub in_world: bool }\n'
     + source[source.index('pub(crate) struct NativeClouds'):])
 env = os.environ.copy()
 env['RUSTFLAGS'] = ('--cfg target_os="trueos" -Aexplicit_builtin_cfgs_in_flags '

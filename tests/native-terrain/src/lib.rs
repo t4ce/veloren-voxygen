@@ -6,8 +6,10 @@ mod terrain;
 #[cfg(target_os = "trueos")]
 #[path = "../target/cloud_transport.rs"]
 mod clouds;
+#[path = "../../../src/render/cloud_view.rs"]
+mod cloud_view;
 mod terrain_preview {
-    pub const ATLAS_SIZE: u32 = 512;
+    pub const ATLAS_SIZE: u32 = 1024;
     pub const MAX_VERTICES: usize = 600_000;
     #[repr(C)]
     #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -210,7 +212,7 @@ mod tests {
                     3
                 ]
                 .into(),
-                atlas: vec![[31, 140, 47, 255]; 512 * 512].into(),
+                atlas: vec![[31, 140, 47, 255]; 1024 * 1024].into(),
             }),
             camera: terrain::camera(
                 [320., 320., 18.],
@@ -277,7 +279,7 @@ mod tests {
     fn uploads_are_reused_and_gpu_ownership_survives_busy_and_failure() {
         use vgpu::*;
         *RECORD.lock().unwrap() = Some(Recorder::default());
-        let cloud_frame=clouds::Frame {pixels: vec![0u8;32*3*4].into(),width:32,height:3};
+        let cloud_frame=clouds::Frame {pixels: vec![0u8;32*3*4].into(),width:32,height:3,camera: frame().camera,in_world:false};
         let mut cloud_renderer=clouds::NativeClouds::open().unwrap();
         cloud_renderer.draw(123,&cloud_frame).unwrap();
         cloud_renderer.draw(123,&cloud_frame).unwrap();
@@ -298,6 +300,22 @@ mod tests {
             assert_eq!(r.draws[0].clear_rgba8_srgb,0);
             assert_eq!(r.draws[0].texture_reserved,0,"clouds do not load or write depth");
             assert_eq!(r.draws[0].index_count,3);
+        }
+        let mut world_camera=cloud_frame.camera;
+        world_camera[0][0]+=1000.;
+        let world_frame=clouds::Frame {
+            pixels: cloud_frame.pixels.clone(), width: cloud_frame.width, height: cloud_frame.height,
+            camera: world_camera, in_world: true,
+        };
+        cloud_renderer.draw(123,&world_frame).unwrap();
+        {
+            let record=RECORD.lock().unwrap();let r=record.as_ref().unwrap();
+            assert_eq!(r.writes.last().unwrap().2,68,"handoff replaces only the packed camera header");
+            let packet=r.buffers[2].as_ref().unwrap();
+            let value=|i:usize|f32::from_le_bytes(packet[i*4..i*4+4].try_into().unwrap());
+            assert_eq!(value(0),cloud_frame.camera[0][0],"first world draw retains the selection eye");
+            assert_eq!(value(15),cloud_frame.camera[4][0],"focal length keeps the shader ABI slot");
+            assert_eq!(value(16),cloud_frame.camera[4][1],"aspect keeps the shader ABI slot");
         }
         RECORD.lock().unwrap().as_mut().unwrap().busy_import=true;
         assert_eq!(cloud_renderer.draw(123,&cloud_frame),Err(ERR_BUSY));
@@ -327,7 +345,7 @@ mod tests {
                 ]
             );
             assert_eq!(r.writes[0].1, 80);
-            assert_eq!(r.writes[2].2, 512 * 512 * 4);
+            assert_eq!(r.writes[2].2, 1024 * 1024 * 4);
             assert_eq!(&r.buffers[2].as_ref().unwrap()[..4], &[31, 140, 47, 255]);
             let draw = &r.draws[0];
             assert_eq!(
@@ -337,7 +355,7 @@ mod tests {
             assert_eq!(draw.clear_rgba8_srgb, 0);
             assert_eq!(
                 (draw.texture_width, draw.texture_height, draw.texture_pitch),
-                (512, 512, 2048)
+                (1024, 1024, 4096)
             );
             assert_eq!(draw.texture_reserved >> INDEXED_DRAW_DEPTH_COMPARE_SHIFT, 3);
         }

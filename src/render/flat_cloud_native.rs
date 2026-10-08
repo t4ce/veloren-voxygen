@@ -6,11 +6,14 @@ pub(crate) struct Frame {
     pub pixels: Arc<[u8]>,
     pub width: u32,
     pub height: u32,
+    pub camera: [[f32; 4]; 5],
+    pub in_world: bool,
 }
 pub(crate) fn from_client(
     client: &crate::client::Client,
     camera: [[f32; 4]; 5],
     ambiance: f32,
+    in_world: bool,
 ) -> Option<Frame> {
     use common::assets::AssetExt;
     static NOISE: std::sync::OnceLock<image::RgbaImage> = std::sync::OnceLock::new();
@@ -78,6 +81,8 @@ pub(crate) fn from_client(
         pixels: pixels.into(),
         width,
         height,
+        camera,
+        in_world,
     })
 }
 
@@ -90,6 +95,7 @@ pub(crate) struct NativeClouds {
     indices: trueos::vgpu::Buffer,
     pixels: Option<(trueos::vgpu::Buffer, usize)>,
     unknown_completion: bool,
+    view: super::cloud_view::CloudView,
 }
 impl NativeClouds {
     pub fn open() -> Result<Self, String> {
@@ -166,6 +172,7 @@ impl NativeClouds {
                 indices,
                 pixels: None,
                 unknown_completion: false,
+                view: Default::default(),
             })
         })();
         match result {
@@ -194,6 +201,16 @@ impl NativeClouds {
         let pixels = self.pixels.as_ref().unwrap().0;
         if self.device.write_buffer(pixels, 0, &frame.pixels)? != frame.pixels.len() {
             return Err(ERR_IO);
+        }
+        if let Some(camera) = self.view.update(frame.in_world, frame.camera, std::time::Instant::now()) {
+            let mut header = [0f32; 17];
+            for i in 0..4 { header[i*4..i*4+4].copy_from_slice(&camera[i]); }
+            header[15] = camera[4][0];
+            header[16] = camera[4][1];
+            let bytes = bytemuck::cast_slice(&header);
+            if self.device.write_buffer(pixels, 0, bytes)? != bytes.len() {
+                return Err(ERR_IO);
+            }
         }
         let surface = self.device.acquire_ui4_surface(target)?;
         self.unknown_completion = true;

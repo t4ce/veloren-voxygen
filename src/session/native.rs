@@ -248,7 +248,7 @@ impl PlayState for SessionState {
                 size.width as f32 / size.height.max(1) as f32,
             );
             let clouds = crate::render::flat_cloud_native::from_client(
-                &client, cloud_camera, global.settings.graphics.ambiance,
+                &client, cloud_camera, global.settings.graphics.ambiance, true,
             ).map(std::sync::Arc::new);
             if let Err(error) = global.window.present_terrain_scene(sun_z, terrain, clouds) {
                 tracing::error!(%error, "Native world presentation failed");

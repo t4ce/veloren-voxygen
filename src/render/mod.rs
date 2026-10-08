@@ -18,6 +18,8 @@ pub mod mesh;
 pub mod model;
 #[cfg(target_os = "trueos")]
 pub(crate) mod flat_cloud_native;
+#[cfg(target_os = "trueos")]
+pub(crate) mod cloud_view;
 pub mod pipelines;
 pub mod renderer;
 pub mod texture;

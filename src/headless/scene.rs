@@ -24,20 +24,22 @@ pub(crate) fn placement(display_width: u32, display_height: u32) -> (i32, i32, u
 const RADIUS: i32 = 40;
 const VERTICAL_RADIUS: i32 = 32;
 pub(crate) const MAX_VERTICES: usize = 600_000;
-pub(crate) const ATLAS_SIZE: u32 = 512;
+pub(crate) const ATLAS_SIZE: u32 = 1024;
+const TILE_SIZE: u32 = 3;
+const TILES_PER_ROW: u32 = ATLAS_SIZE / TILE_SIZE;
 const MESH_INTERVAL: Duration = Duration::from_millis(500);
 const PROXY_COLOR: [u8; 3] = [230, 140, 64];
 
-// There cannot be more distinct colors than exposed faces. Each face has
-// six vertices; one additional texel is reserved for the entity proxies.
-const _: () = assert!(MAX_VERTICES / 6 + 1 <= (ATLAS_SIZE * ATLAS_SIZE) as usize);
+// Each exposed face needs at most one 3x3 tile, while retaining six vertices.
+// Reserve one uniform tile for guarded entity proxies.
+const _: () = assert!(MAX_VERTICES / 6 + 1 <= (TILES_PER_ROW * TILES_PER_ROW) as usize);
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct Vertex {
     // Homogeneous world position (w=1).
     pub(crate) position: [f32; 4],
-    // Normalized texel-center UV, followed by the opaque vertex contract 0,1.
+    // Normalized atlas UV (interpolated across each 3x3 tile), then 0,1.
     pub(crate) atlas_uv: [f32; 4],
 }
 
@@ -50,26 +52,43 @@ struct Mesh {
 struct PaletteAtlas {
     texels: Vec<[u8; 4]>,
     colors: HashMap<[u8; 3], u32>,
+    tiles: HashMap<[[u8; 3]; 9], u32>,
 }
 
 impl PaletteAtlas {
     fn new() -> Self {
-        let mut texels = vec![[0, 0, 0, 255]; (ATLAS_SIZE * ATLAS_SIZE) as usize];
-        texels[0] = [PROXY_COLOR[0], PROXY_COLOR[1], PROXY_COLOR[2], 255];
-        Self {
-            texels,
-            colors: HashMap::from([(PROXY_COLOR, 0)]),
-        }
+        let mut atlas = Self {
+            texels: vec![[0, 0, 0, 255]; (ATLAS_SIZE * ATLAS_SIZE) as usize],
+            colors: HashMap::new(),
+            tiles: HashMap::new(),
+        };
+        atlas.color_uv(PROXY_COLOR);
+        atlas
+    }
+
+    fn tile(&mut self, colors: [[u8; 3]; 9]) -> u32 {
+        let next = self.tiles.len() as u32;
+        *self.tiles.entry(colors).or_insert_with(|| {
+            assert!(
+                next < TILES_PER_ROW * TILES_PER_ROW,
+                "terrain tile capacity"
+            );
+            let x = next % TILES_PER_ROW * TILE_SIZE;
+            let y = next / TILES_PER_ROW * TILE_SIZE;
+            for (i, color) in colors.iter().enumerate() {
+                let offset = (y + i as u32 / TILE_SIZE) * ATLAS_SIZE + x + i as u32 % TILE_SIZE;
+                self.texels[offset as usize] = [color[0], color[1], color[2], 255];
+            }
+            next
+        })
     }
 
     fn color_uv(&mut self, color: [u8; 3]) -> [f32; 4] {
-        let next = self.colors.len() as u32;
-        let index = *self.colors.entry(color).or_insert_with(|| {
-            assert!(next < ATLAS_SIZE * ATLAS_SIZE, "terrain palette capacity");
-            self.texels[next as usize] = [color[0], color[1], color[2], 255];
-            next
-        });
-        atlas_uv(index)
+        let index = self.tile([color; 9]);
+        self.colors.insert(color, index);
+        atlas_uv(
+            (index / TILES_PER_ROW * TILE_SIZE) * ATLAS_SIZE + index % TILES_PER_ROW * TILE_SIZE,
+        )
     }
 }
 
@@ -91,6 +110,50 @@ fn face_color(color: Rgb<u8>, side: usize) -> [u8; 3] {
         _ => 1.0,
     };
     [color.r, color.g, color.b].map(|channel| (channel as f32 * factor).round() as u8)
+}
+
+// Voxygen terrain-frag.glsl / include/random.glsl: one sample per third of
+// a voxel face. GLSL fract uses floor, including for negative coordinates.
+fn terrain_hash(mut p: [f32; 4]) -> f32 {
+    fn fract(x: f32) -> f32 {
+        x - x.floor()
+    }
+    for value in &mut p {
+        *value = (fract(*value * 0.3183099 + 0.1) - fract(*value + 23.22121)) * 17.0;
+    }
+    (fract(p[0] * p[1] * (1.0 - p[2]) * p[3] * (p[0] + p[1] + p[2] + p[3])) - 0.5) * 2.0
+}
+
+fn face_tile(corners: &[[f32; 4]; 8], side: usize, color: [u8; 3]) -> [[u8; 3]; 9] {
+    let origin = corners[FACES[side][0]];
+    let u = corners[FACES[side][1]];
+    let v = corners[FACES[side][3]];
+    let chunk_size = TerrainGrid::chunk_size();
+    // The original noise is chunk-local in X/Y, absolute in Z. Select the
+    // owning voxel, not the adjacent chunk on a positive boundary face.
+    let chunk_origin = [
+        (corners[0][0] / chunk_size.x as f32).floor() * chunk_size.x as f32,
+        (corners[0][1] / chunk_size.y as f32).floor() * chunk_size.y as f32,
+        0.0,
+    ];
+    std::array::from_fn(|i| {
+        let mut p = [0.0; 4];
+        for axis in 0..3 {
+            let position = origin[axis]
+                + (u[axis] - origin[axis]) * ((i % 3) as f32 + 0.5) / 3.0
+                + (v[axis] - origin[axis]) * ((i / 3) as f32 + 0.5) / 3.0;
+            p[axis] = ((position - chunk_origin[axis]) * 3.0 - NEIGHBORS[side][axis] as f32 * 0.5)
+                .floor();
+        }
+        let noise = terrain_hash(p);
+        // Retain the existing base brightness/axis contrast. The Ubuntu
+        // sqrt-space variation is normalized by its zero-noise brightness;
+        // its full lighting pass is not part of this minimal renderer.
+        color.map(|channel| {
+            let delta = (channel as f32 / 255.0).sqrt() + noise * 0.015 * 1.055;
+            (delta * delta * 255.0).round().clamp(0.0, 255.0) as u8
+        })
+    })
 }
 
 pub(crate) struct Scene {
@@ -367,6 +430,31 @@ fn face(vertices: &mut Vec<Vertex>, corners: &[[f32; 4]; 8], side: usize, atlas_
     }
 }
 
+fn tiled_face(vertices: &mut Vec<Vertex>, corners: &[[f32; 4]; 8], side: usize, tile: u32) {
+    let x = (tile % TILES_PER_ROW * TILE_SIZE) as f32;
+    let y = (tile / TILES_PER_ROW * TILE_SIZE) as f32;
+    // Nearest sampling gives three equal cells. Tiny inset keeps even corner
+    // samples inside their own tile instead of bleeding into a neighbor.
+    const INSET: f32 = 0.001;
+    let uv = [
+        [INSET, INSET],
+        [3.0 - INSET, INSET],
+        [3.0 - INSET, 3.0 - INSET],
+        [INSET, 3.0 - INSET],
+    ];
+    for index in [0, 1, 2, 0, 2, 3] {
+        vertices.push(Vertex {
+            position: corners[FACES[side][index]],
+            atlas_uv: [
+                (x + uv[index][0]) / ATLAS_SIZE as f32,
+                (y + uv[index][1]) / ATLAS_SIZE as f32,
+                0.0,
+                1.0,
+            ],
+        });
+    }
+}
+
 fn cuboid(vertices: &mut Vec<Vertex>, min: [f32; 3], max: [f32; 3], atlas_uv: [f32; 4]) {
     let corners = corners(min, max);
     for side in 0..6 {
@@ -430,8 +518,8 @@ fn voxel_mesh_with_air(
                             truncated: true,
                         };
                     }
-                    let uv = atlas.color_uv(face_color(color, side));
-                    face(&mut vertices, &corners, side, uv);
+                    let tile = atlas.tile(face_tile(&corners, side, face_color(color, side)));
+                    tiled_face(&mut vertices, &corners, side, tile);
                 }
             }
         }
@@ -590,10 +678,18 @@ mod tests {
             .iter()
             .map(|vertex| sampled_texel(&mesh, vertex))
             .collect();
-        assert!(colors.contains(&[31, 140, 47, 255]));
-        assert!(colors.contains(&[200, 100, 50, 255]));
-        assert!(colors.contains(&[140, 70, 35, 255]));
-        assert!(colors.contains(&[164, 82, 41, 255]));
+        for base in [
+            [31u8, 140, 47],
+            [200, 100, 50],
+            [140, 70, 35],
+            [164, 82, 41],
+        ] {
+            assert!(
+                colors
+                    .iter()
+                    .any(|color| (0..3).all(|axis| color[axis].abs_diff(base[axis]) <= 8))
+            );
+        }
         for vertex in &mesh.vertices {
             assert_eq!(vertex.position[3], 1.0);
             assert_eq!(vertex.atlas_uv[2..], [0.0, 1.0]);
@@ -612,7 +708,7 @@ mod tests {
         assert_eq!(atlas.color_uv([10, 20, 30]), first);
         assert_eq!(atlas.colors.len(), 2);
         assert_eq!(atlas.texels[0], [230, 140, 64, 255]);
-        assert_eq!(atlas.texels[1], [10, 20, 30, 255]);
+        assert_eq!(atlas.texels[3], [10, 20, 30, 255]);
         for index in [0, ATLAS_SIZE - 1, ATLAS_SIZE, ATLAS_SIZE * ATLAS_SIZE - 1] {
             let uv = atlas_uv(index);
             assert_eq!(

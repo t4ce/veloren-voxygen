@@ -189,3 +189,24 @@ every 128 successful cloud submissions, with target extent, average phase times,
 average total time and maximum render/total time. GPU polling is included in
 render time. These are submission wall times, excluding blueprint-side packet
 construction/upload and UI4 publication, rather than hardware GPU timestamps.
+
+
+The native cloud renderer carries the last visible camera across selection/world
+handoffs. It blends the eye, orientation and focal length in four 100 ms steps,
+then follows the live camera directly. Orientation uses quaternion interpolation
+so opposite viewing directions keep a valid basis. This affects only the cloud
+view: terrain controls and the display background color retain their live paths.
+
+Native terrain faces use 3x3 atlas tiles for the small color variations from
+Voxygen's `terrain-frag.glsl` / `include/random.glsl`. The worker evaluates the
+original chunk-local, normal-offset hash at the nine cell centers. Its sqrt-space
+noise strength is retained, normalized around our existing axis-shaded base RGB
+rather than importing the full renderer's lighting brightness. UVs interpolate
+across each tile with nearest sampling and a tiny edge inset. The admitted
+textured shader and six vertices per face stay unchanged. The atlas is now
+1024x1024 (4 MiB), sufficient for all 100,000 budgeted faces plus the proxy tile;
+identical nine-color tiles share storage. Camera movement does not reseed noise.
+`tests/terrain-mesh/run.py` checks cell mapping, stable placement, negative/chunk
+boundaries, deduplication, full-budget capacity and existing occlusion guards.
+The host GPU proof in `tests/flat-clouds` also checks all nine sampled cells in a
+full-sized atlas and cloud composition without neighboring tile bleed.
