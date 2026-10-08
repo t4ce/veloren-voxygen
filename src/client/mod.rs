@@ -3296,10 +3296,20 @@ impl Client {
         prof_span!("handle_ping_msg");
         match msg {
             PingMsg::Ping => {
+                #[cfg(target_os = "trueos")]
+                tracing::info!("Native client server ping received");
                 self.send_msg_err(PingMsg::Pong)?;
             },
             PingMsg::Pong => {
                 self.last_server_pong = self.state.get_program_time();
+                #[cfg(target_os = "trueos")]
+                {
+                    static PONGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                    let pongs = PONGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    if pongs <= 3 || pongs % 16 == 0 {
+                        tracing::info!(pongs, program_time = self.last_server_pong, "Native client pong received");
+                    }
+                }
                 self.last_ping_delta = self.state.get_program_time() - self.last_server_ping;
 
                 // Maintain the correct number of deltas for calculating the rolling average
@@ -3316,12 +3326,17 @@ impl Client {
 
     fn handle_messages(&mut self, frontend_events: &mut Vec<Event>) -> Result<u64, Error> {
         let mut cnt = 0;
+        // Joining introduces continuous entity/terrain traffic. Each stream
+        // gets a turn before returning to input and display on TRUEOS.
+        let stream_budget = if cfg!(target_os = "trueos") { 8 } else { usize::MAX };
         loop {
+            #[cfg(not(target_os = "trueos"))]
             let cnt_start = cnt;
 
             #[cfg(target_os = "trueos")]
             let general_progress = crate::selection_progress::stage(crate::selection_progress::Stage::GeneralMessages);
-            while let Some(msg) = self.general_stream.try_recv()? {
+            for _ in 0..stream_budget {
+                let Some(msg) = self.general_stream.try_recv()? else { break; };
                 cnt += 1;
                 self.handle_server_msg(frontend_events, msg)?;
             }
@@ -3329,7 +3344,8 @@ impl Client {
             drop(general_progress);
             #[cfg(target_os = "trueos")]
             let ping_progress = crate::selection_progress::stage(crate::selection_progress::Stage::PingMessages);
-            while let Some(msg) = self.ping_stream.try_recv()? {
+            for _ in 0..stream_budget {
+                let Some(msg) = self.ping_stream.try_recv()? else { break; };
                 cnt += 1;
                 self.handle_ping_msg(msg)?;
             }
@@ -3337,7 +3353,8 @@ impl Client {
             drop(ping_progress);
             #[cfg(target_os = "trueos")]
             let character_progress = crate::selection_progress::stage(crate::selection_progress::Stage::CharacterMessages);
-            while let Some(msg) = self.character_screen_stream.try_recv()? {
+            for _ in 0..stream_budget {
+                let Some(msg) = self.character_screen_stream.try_recv()? else { break; };
                 cnt += 1;
                 self.handle_server_character_screen_msg(frontend_events, msg)?;
             }
@@ -3345,7 +3362,8 @@ impl Client {
             drop(character_progress);
             #[cfg(target_os = "trueos")]
             let in_game_progress = crate::selection_progress::stage(crate::selection_progress::Stage::InGameMessages);
-            while let Some(msg) = self.in_game_stream.try_recv()? {
+            for _ in 0..stream_budget {
+                let Some(msg) = self.in_game_stream.try_recv()? else { break; };
                 cnt += 1;
                 self.handle_server_in_game_msg(frontend_events, msg)?;
             }
@@ -3353,7 +3371,7 @@ impl Client {
             drop(in_game_progress);
             #[cfg(target_os = "trueos")]
             let terrain_progress = crate::selection_progress::stage(crate::selection_progress::Stage::TerrainMessages);
-            loop {
+            for _ in 0..stream_budget {
                 // Keep the decode backlog bounded; leave excess messages in the stream.
                 #[cfg(target_os = "trueos")]
                 if self.terrain_decode_queue.len() >= 32 { break; }
@@ -3365,7 +3383,8 @@ impl Client {
             drop(terrain_progress);
 
             #[cfg(target_os = "trueos")]
-            if self.terrain_decode_queue.len() >= 32 { return Ok(cnt); }
+            return Ok(cnt);
+            #[cfg(not(target_os = "trueos"))]
             if cnt_start == cnt {
                 return Ok(cnt);
             }
@@ -3404,6 +3423,8 @@ impl Client {
             && self.state.get_program_time() - self.last_server_pong
                 > self.client_timeout.as_secs() as f64
         {
+            #[cfg(target_os = "trueos")]
+            tracing::warn!(program_time = self.state.get_program_time(), last_pong = self.last_server_pong, last_ping = self.last_server_ping, "Native client server timeout");
             return Err(Error::ServerTimeout);
         }
 

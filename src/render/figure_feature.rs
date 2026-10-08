@@ -30,16 +30,45 @@ impl FigureFeature {
         atlas_size: [u32; 2],
         atlas_pixels: &[[u8; 4]],
     ) -> Result<Self, &'static str> {
-        Self::with_color_format(device, queue, globals_layout, vertices, atlas_size, atlas_pixels, COLOR_FORMAT)
+        Self::with_color_format(
+            device,
+            queue,
+            globals_layout,
+            vertices,
+            atlas_size,
+            atlas_pixels,
+            COLOR_FORMAT,
+        )
     }
 
-    pub fn new_scanout(device: &wgpu::Device, queue: &wgpu::Queue, globals_layout: &wgpu::BindGroupLayout,
-        vertices: &[[u32; 2]], atlas_size: [u32; 2], atlas_pixels: &[[u8; 4]]) -> Result<Self, &'static str> {
-        Self::with_color_format(device, queue, globals_layout, vertices, atlas_size, atlas_pixels, wgpu::TextureFormat::Rgba8Unorm)
+    pub fn new_scanout(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        globals_layout: &wgpu::BindGroupLayout,
+        vertices: &[[u32; 2]],
+        atlas_size: [u32; 2],
+        atlas_pixels: &[[u8; 4]],
+    ) -> Result<Self, &'static str> {
+        Self::with_color_format(
+            device,
+            queue,
+            globals_layout,
+            vertices,
+            atlas_size,
+            atlas_pixels,
+            wgpu::TextureFormat::Rgba8Unorm,
+        )
     }
 
-    fn with_color_format(device: &wgpu::Device, queue: &wgpu::Queue, globals_layout: &wgpu::BindGroupLayout,
-        vertices: &[[u32; 2]], atlas_size: [u32; 2], atlas_pixels: &[[u8; 4]], color_format: wgpu::TextureFormat) -> Result<Self, &'static str> {
+    fn with_color_format(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        globals_layout: &wgpu::BindGroupLayout,
+        vertices: &[[u32; 2]],
+        atlas_size: [u32; 2],
+        atlas_pixels: &[[u8; 4]],
+        color_format: wgpu::TextureFormat,
+    ) -> Result<Self, &'static str> {
         let [width, height] = atlas_size;
         if vertices.is_empty() || vertices.len() % 4 != 0 {
             return Err("figure requires packed four-vertex quads");

@@ -9,10 +9,13 @@ use crate::{
     },
     render::{Drawer, GlobalsBindGroup},
     scene::simple::{self as scene, Scene},
-    session::SessionState,
     settings::Settings,
     window::Event as WinEvent,
 };
+#[cfg(not(target_os = "trueos"))]
+use crate::session::SessionState;
+#[cfg(target_os = "trueos")]
+use crate::session::native::SessionState;
 use alloc::rc::Rc;
 use common::{comp, event::UpdateCharacterMetadata, resources::DeltaTime};
 use common_base::span;
@@ -172,7 +175,6 @@ impl PlayState for CharSelectionState {
                 .maintain(global_state, &self.client.borrow());
             #[cfg(target_os = "trueos")]
             drop(ui_progress);
-
             for event in events {
                 match event {
                     ui::Event::Logout => {
@@ -318,7 +320,7 @@ impl PlayState for CharSelectionState {
                 let (body, inventory) = Self::get_humanoid_body_inventory(&self.char_selection_ui, &client);
                 let size = global_state.window.window().surface_size();
                 let figure = body.map(|body| self.preview.frame(body, inventory,
-                    vek::Vec2::new(size.width, size.height), client.state().get_time() as f32, time.get_sun_dir().z)).transpose();
+                    vek::Vec2::new(size.width, size.height), client.state().get_time() as f32, time.get_sun_dir().z)).transpose().map(Option::flatten);
                 let result = figure.and_then(|figure| global_state.window.present_character_scene(time.get_sun_dir().z, figure));
                 if let Err(error) = result {
                     self.char_selection_ui.display_error(error);

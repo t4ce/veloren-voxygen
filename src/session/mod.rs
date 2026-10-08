@@ -1,6 +1,8 @@
 pub mod interactable;
 pub mod settings_change;
 mod target;
+#[cfg(target_os = "trueos")]
+pub(crate) mod native;
 
 use crate::server_portal::{DisplayFade, PortalCamera, PortalTransfer};
 use crate::portal_timeline::{CameraStage, Cinematic};

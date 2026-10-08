@@ -632,3 +632,5 @@ impl ExperimentalShader {
 
 #[cfg(target_os = "trueos")]
 pub(crate) mod figure_preview;
+#[cfg(target_os = "trueos")]
+mod figure_preview_loader;

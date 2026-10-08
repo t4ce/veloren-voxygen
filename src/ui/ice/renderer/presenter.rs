@@ -230,6 +230,8 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     let mut region_supported = true;
     let mut previous_sky = None;
     #[cfg(target_os = "trueos")]
+    let mut previous_had_figure = false;
+    #[cfg(target_os = "trueos")]
     let mut sky_renderer: Option<crate::render::minimal_sky::NativeSky> = None;
     while !mailbox.stopped.load(Ordering::Acquire) {
         mailbox.counters.iterations.fetch_add(1, Ordering::Relaxed);
@@ -257,7 +259,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         if phase == 0
             && scene_repaint_hold.is_none()
             && {
-                #[cfg(target_os = "trueos")] { current.figure.is_none() }
+                #[cfg(target_os = "trueos")] { current.figure.is_none() && !previous_had_figure }
                 #[cfg(not(target_os = "trueos"))] { true }
             }
             && previous.as_ref().is_some_and(|(size, plan)| {
@@ -484,6 +486,8 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 }
                 preceding_damage = repaint.as_ref().map(|r| r.changed);
                 previous_sky = current.sky;
+                #[cfg(target_os = "trueos")]
+                { previous_had_figure = current.figure.is_some(); }
                 previous = Some((current.size, current.plan.clone()));
                 repaint = None;
                 job = None;

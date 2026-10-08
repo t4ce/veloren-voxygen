@@ -262,14 +262,32 @@ fn prove_figure(
         &pixels,
     )
     .unwrap();
-    let scanout = figure_feature::FigureFeature::new_scanout(device, queue, scene.globals_layout(), &vertices, [4, 2], &pixels).unwrap();
+    let scanout = figure_feature::FigureFeature::new_scanout(
+        device,
+        queue,
+        scene.globals_layout(),
+        &vertices,
+        [4, 2],
+        &pixels,
+    )
+    .unwrap();
     let direct = texture(device, 32, 32, wgpu::TextureFormat::Rgba8Unorm);
     let material = texture(device, 32, 32, wgpu::TextureFormat::Rgba8Uint);
     let depth = texture(device, 32, 32, wgpu::TextureFormat::Depth32Float);
-    let globals_buffer = device.create_buffer(&wgpu::BufferDescriptor { label: None, size: 512,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
-    let globals_bind = device.create_bind_group(&wgpu::BindGroupDescriptor { label: None,
-        layout: scene.globals_layout(), entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buffer.as_entire_binding() }] });
+    let globals_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 512,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let globals_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: scene.globals_layout(),
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: globals_buffer.as_entire_binding(),
+        }],
+    });
     let mut globals = [0.0f32; 128];
     for i in 0..4 {
         globals[32 + i * 5] = 1.0;
@@ -301,7 +319,9 @@ fn prove_figure(
             &output.create_view(&Default::default()),
             Some(&figure),
         );
-        scanout.upload_pose(queue, &locals, bytemuck::cast_slice(&bones)).unwrap();
+        scanout
+            .upload_pose(queue, &locals, bytemuck::cast_slice(&bones))
+            .unwrap();
         {
             let color_view = direct.create_view(&Default::default());
             let material_view = material.create_view(&Default::default());
@@ -310,14 +330,38 @@ fn prove_figure(
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("native-format reference: clear plus original figure"),
                 color_attachments: &[
-                    Some(wgpu::RenderPassColorAttachment { view: &color_view, resolve_target: None, depth_slice: None,
-                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: clear[0] as f64 / 255.0, g: clear[1] as f64 / 255.0,
-                            b: clear[2] as f64 / 255.0, a: 1.0 }), store: wgpu::StoreOp::Store } }),
-                    Some(wgpu::RenderPassColorAttachment { view: &material_view, resolve_target: None, depth_slice: None,
-                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT), store: wgpu::StoreOp::Store } }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &color_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: clear[0] as f64 / 255.0,
+                                g: clear[1] as f64 / 255.0,
+                                b: clear[2] as f64 / 255.0,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &material_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
                 ],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment { view: &depth_view,
-                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(0.0), store: wgpu::StoreOp::Store }), stencil_ops: None }),
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 ..Default::default()
             });
             scanout.draw(&mut pass, &globals_bind);
@@ -325,11 +369,18 @@ fn prove_figure(
         queue.submit([encoder.finish()]);
         let reference = readback(device, queue, output, 4);
         let native_format = readback(device, queue, &direct, 4);
-        for y in 0..32 { for x in 0..32 { for channel in 0..4 {
-            let a = native_format[(y * 32 + x) * 4 + channel];
-            let b = reference[((y * 2) * 64 + x * 2) * 4 + channel];
-            assert!(a.abs_diff(b) <= 1, "RGBA8 direct figure differs at {x},{y} channel {channel}: {a} vs {b}");
-        } } }
+        for y in 0..32 {
+            for x in 0..32 {
+                for channel in 0..4 {
+                    let a = native_format[(y * 32 + x) * 4 + channel];
+                    let b = reference[((y * 2) * 64 + x * 2) * 4 + channel];
+                    assert!(
+                        a.abs_diff(b) <= 1,
+                        "RGBA8 direct figure differs at {x},{y} channel {channel}: {a} vs {b}"
+                    );
+                }
+            }
+        }
         reference
     };
     let image = render(0.5, 0.25, 0.0, 0.0);

@@ -570,6 +570,12 @@ impl Window {
         self.sky_start_revision = None;
     }
 
+    /// Start a fresh foreground retirement while preserving the running sky.
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn begin_scene_display(&mut self) {
+        self.menu_handoff = None;
+    }
+
     /// Retire the menu foreground before the first scene frame, without waiting
     /// for GPU fences on the event thread. The scene producer remains idle.
     #[cfg(target_os = "trueos")]

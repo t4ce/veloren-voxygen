@@ -1398,10 +1398,9 @@ impl Controls {
                         let name = self.possible_starting_sites[selected].label.as_ref()
                             .map(|name| i18n.get_content(name))
                             .unwrap_or_else(|| "Unknown".to_string());
-                        let heading = Text::new(i18n.get_msg_ctx(
-                            "char_selection-starting_site_selected",
-                            &i18n::fluent_args! { "name" => name },
-                        ).into_owned())
+                        // Use the same content lookup as the map labels: generated
+                        // town names are plain text; localized labels still resolve.
+                        let heading = Text::new(name)
                             .size(30)
                             .horizontal_alignment(HorizontalAlignment::Center);
                         vec![heading.into(), map]
