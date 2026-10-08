@@ -5121,6 +5121,7 @@ dependencies = [
  "conrod_core",
  "cpal",
  "crossbeam-channel",
+ "crossbeam-queue",
  "crossbeam-utils 0.8.21",
  "directories-next",
  "dot_vox",

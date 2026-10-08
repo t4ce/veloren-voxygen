@@ -7,10 +7,11 @@ use super::{
     bcs::{FramePlan, LayerPlan},
     damage::{self, Repaint},
 };
+use crossbeam_queue::ArrayQueue;
 use std::{
     collections::HashMap,
     sync::{
-        Arc, Condvar, Mutex,
+        Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
@@ -25,37 +26,48 @@ struct Job {
     size: Vec2<u32>,
     plan: LayerPlan,
     sky: Option<u32>,
+    #[cfg(target_os = "trueos")]
+    figure: Option<Arc<crate::render::figure_preview::Frame>>,
 }
-#[derive(Default)]
 struct Mailbox {
-    latest: Mutex<Option<Job>>,
-    wake: Condvar,
+    latest: ArrayQueue<Job>,
     stopped: AtomicBool,
     published_revision: AtomicU64,
     counters: ProducerCounters,
 }
+impl Default for Mailbox {
+    fn default() -> Self {
+        Self {
+            latest: ArrayQueue::new(1),
+            stopped: AtomicBool::new(false),
+            published_revision: AtomicU64::new(0),
+            counters: ProducerCounters::default(),
+        }
+    }
+}
 impl Mailbox {
     fn submit(&self, job: Job) {
-        if self.latest.lock().unwrap().replace(job).is_some() {
+        // Keep only the newest unclaimed frame. A displaced job is dropped after
+        // the queue operation, without holding a mailbox mutex on the UI thread.
+        if self.latest.force_push(job).is_some() {
             self.counters
                 .queued_replacements
                 .fetch_add(1, Ordering::Relaxed);
         }
-        self.wake.notify_one();
+    }
+    fn take(&self) -> Option<Job> {
+        self.latest.pop()
     }
     fn wait(&self) {
-        let guard = self.latest.lock().unwrap();
-        if self.stopped.load(Ordering::Acquire) {
-            return;
+        // Idle and GPU-Busy retries use the native timed sleep path. Submissions
+        // no longer depend on a condvar wake/relock; admission can take one extra
+        // polling interval. An acquired frame is still completed before replacement.
+        if !self.stopped.load(Ordering::Acquire) {
+            thread::sleep(Duration::from_millis(8));
         }
-        let _ = self
-            .wake
-            .wait_timeout(guard, Duration::from_millis(8))
-            .unwrap();
     }
     fn stop(&self) {
         self.stopped.store(true, Ordering::Release);
-        self.wake.notify_all();
     }
 }
 struct Producer {
@@ -101,12 +113,16 @@ impl LayeredPresenter {
             size,
             plan: plan.background,
             sky: None,
+            #[cfg(target_os = "trueos")]
+            figure: None,
         });
         self.foreground.mailbox.submit(Job {
             revision,
             size,
             plan: plan.foreground,
             sky: None,
+            #[cfg(target_os = "trueos")]
+            figure: None,
         });
     }
     pub fn clear_foreground(&self, revision: u64, size: Vec2<u32>) {
@@ -115,7 +131,13 @@ impl LayeredPresenter {
             size,
             plan: LayerPlan::default(),
             sky: None,
+            #[cfg(target_os = "trueos")]
+            figure: None,
         });
+    }
+    #[cfg(target_os = "trueos")]
+    pub fn submit_figure(&self, revision: u64, size: Vec2<u32>, rgba: u32, figure: Option<Arc<crate::render::figure_preview::Frame>>) {
+        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure });
     }
     pub fn submit_sky(&self, revision: u64, size: Vec2<u32>, rgba: u32) {
         self.scene.mailbox.submit(Job {
@@ -123,6 +145,8 @@ impl LayeredPresenter {
             size,
             plan: LayerPlan::default(),
             sky: Some(rgba),
+            #[cfg(target_os = "trueos")]
+            figure: None,
         });
     }
     pub fn submit_foreground(&self, revision: u64, size: Vec2<u32>, plan: LayerPlan) {
@@ -131,6 +155,8 @@ impl LayeredPresenter {
             size,
             plan,
             sky: None,
+            #[cfg(target_os = "trueos")]
+            figure: None,
         });
     }
     pub fn scene_published_revision(&self) -> u64 {
@@ -208,12 +234,12 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     while !mailbox.stopped.load(Ordering::Acquire) {
         mailbox.counters.iterations.fetch_add(1, Ordering::Relaxed);
         if job.is_none() {
-            job = mailbox.latest.lock().unwrap().take();
+            job = mailbox.take();
             phase = 0;
             acquired_frame = false;
         }
         if phase <= 1 && !acquired_frame {
-            if let Some(latest) = mailbox.latest.lock().unwrap().take() {
+            if let Some(latest) = mailbox.take() {
                 if job.is_some() {
                     mailbox
                         .counters
@@ -230,6 +256,10 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         };
         if phase == 0
             && scene_repaint_hold.is_none()
+            && {
+                #[cfg(target_os = "trueos")] { current.figure.is_none() }
+                #[cfg(not(target_os = "trueos"))] { true }
+            }
             && previous.as_ref().is_some_and(|(size, plan)| {
                 *size == current.size
                     && previous_sky == current.sky
@@ -364,7 +394,11 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 let result = if let Some(rgba) = current.sky {
                     #[cfg(target_os = "trueos")]
                     {
-                        sky_renderer.as_ref().unwrap().draw(target.render_target(), rgba)
+                        let renderer = sky_renderer.as_mut().unwrap();
+                        let draw = if let Some(figure) = current.figure.as_deref() {
+                            renderer.draw_figure(target.render_target(), rgba, figure)
+                        } else { renderer.draw(target.render_target(), rgba) };
+                        draw
                             .map_err(|e| if e == trueos::vgpu::ERR_BUSY { Error::Busy } else {
                                 tracing::error!(target: "voxy_scene_contract", code = e, "Native sky submission failed");
                                 Error::InvalidState

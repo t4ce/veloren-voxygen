@@ -49,6 +49,7 @@ common-systems = { package = "veloren-common-systems", path = "common/systems" }
 conrod_core = { path = "vendor/conrod/conrod_core" }
 cpal = { version = "^0.18", optional = true }
 crossbeam-channel = { version = "^0.5.15" }
+crossbeam-queue = { version = "=0.3.12" }
 crossbeam-utils = { version = "^0.8.7" }
 directories-next = { version = "^2.0" }
 dot_vox = { version = "^5.1" }

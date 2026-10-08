@@ -1,0 +1,290 @@
+{
+  "schema": "voxy-native-figure-v1",
+  "target": {
+    "vendor_id": 32902,
+    "device_id": 18048,
+    "name": "Intel(R) UHD Graphics 770 (ADL-S GT1)"
+  },
+  "source_profile": "trueos-bringup",
+  "source_stages": [
+    {
+      "bytes": 3796,
+      "file": "figure-vert.trueos-bringup.spv",
+      "name": "figure-vert",
+      "profile": "trueos-bringup",
+      "sha256": "e647765520ce6532756d902d6e9d5e061e52491127ea130ee7d67ece2a715818",
+      "source_sha256": "82a0ec9046a39b9d135263fd4b71b3a7570fbcc168865997a466b3b393650f02",
+      "stage": "vert"
+    },
+    {
+      "bytes": 4452,
+      "file": "figure-frag.trueos-bringup.spv",
+      "name": "figure-frag",
+      "profile": "trueos-bringup",
+      "sha256": "067efd787276cb0077d70714048eb48c43f9a951ee33d5fb012ebcf6ead51fce",
+      "source_sha256": "784eca366390af4df061808419b96da4c45ce8286e2e7313fbd5adc48c1e7b87",
+      "stage": "frag"
+    }
+  ],
+  "new_native_compilation": true,
+  "native_execution_admitted": false,
+  "host_render_verified": false,
+  "baremetal_render_verified": false,
+  "vertex_stride": 8,
+  "vertex_attributes": [
+    "Uint32",
+    "Uint32"
+  ],
+  "color_formats": [
+    "Rgba16Float",
+    "Rgba8Uint"
+  ],
+  "depth_format": "Depth32Float",
+  "depth_compare": "GreaterEqual",
+  "depth_clear": 0,
+  "sample_count": 1,
+  "cull_mode": "Back",
+  "front_face": "Ccw",
+  "blend": false,
+  "uniforms": [
+    {
+      "set": 0,
+      "binding": 0,
+      "layout": "Voxy Globals std140"
+    },
+    {
+      "set": 3,
+      "binding": 0,
+      "bytes": 144
+    },
+    {
+      "set": 3,
+      "binding": 1,
+      "bytes": 2048
+    }
+  ],
+  "atlas": {
+    "set": 2,
+    "texture_binding": 0,
+    "sampler_binding": 1,
+    "format": "Rgba8Unorm"
+  },
+  "states": {
+    "vertex": {
+      "ver": 12,
+      "verx10": 120,
+      "max_threads": 546,
+      "dispatch_grf_start": 2,
+      "urb_read_length": 1,
+      "urb_entry_64b": 1,
+      "vue_slots": 4,
+      "position_slot": 1,
+      "uv_slot": 2,
+      "vf_packing0": 17,
+      "uses_vertexid": 0,
+      "uses_instanceid": 0,
+      "binding_table_entries": 5,
+      "sampler_count": 0,
+      "scratch_bytes": 0
+    },
+    "fragment": {
+      "ver": 12,
+      "verx10": 120,
+      "dispatch8": 1,
+      "dispatch16": 1,
+      "dispatch32": 0,
+      "grf_start8": 4,
+      "grf_start16": 6,
+      "grf_start32": 0,
+      "offset16": 1408,
+      "num_varying_inputs": 2,
+      "barycentric_interp_modes": 1,
+      "uses_vmask": 1,
+      "uses_src_depth": 0,
+      "uses_src_w": 0,
+      "uses_depth_w_coefficients": 0,
+      "uses_pc_bary_coefficients": 0,
+      "uses_npc_bary_coefficients": 0,
+      "computed_depth_mode": 0,
+      "computed_stencil": 0,
+      "flat_inputs": 0,
+      "binding_table_entries": 5,
+      "sampler_prefetch_count": 0,
+      "sampler_count": 0,
+      "push_bytes": 64,
+      "scratch_bytes": 0
+    }
+  },
+  "push_ranges": {
+    "vertex": [
+      {
+        "slot": 0,
+        "set": 0,
+        "index": 0,
+        "start": 4,
+        "length": 3,
+        "dynamic_offset_index": 255
+      },
+      {
+        "slot": 1,
+        "set": 3,
+        "index": 0,
+        "start": 4,
+        "length": 1,
+        "dynamic_offset_index": 255
+      },
+      {
+        "slot": 2,
+        "set": 0,
+        "index": 0,
+        "start": 0,
+        "length": 0,
+        "dynamic_offset_index": 0
+      },
+      {
+        "slot": 3,
+        "set": 0,
+        "index": 0,
+        "start": 0,
+        "length": 0,
+        "dynamic_offset_index": 0
+      }
+    ],
+    "fragment": [
+      {
+        "slot": 0,
+        "set": 0,
+        "index": 0,
+        "start": 7,
+        "length": 2,
+        "dynamic_offset_index": 255
+      },
+      {
+        "slot": 1,
+        "set": 0,
+        "index": 0,
+        "start": 0,
+        "length": 0,
+        "dynamic_offset_index": 0
+      },
+      {
+        "slot": 2,
+        "set": 0,
+        "index": 0,
+        "start": 0,
+        "length": 0,
+        "dynamic_offset_index": 0
+      },
+      {
+        "slot": 3,
+        "set": 0,
+        "index": 0,
+        "start": 0,
+        "length": 0,
+        "dynamic_offset_index": 0
+      }
+    ]
+  },
+  "state_sha256": {
+    "vertex": "f34540d189e7717d443e83838e780d63b0ef73a73045ce920b962c692ff5e9c1",
+    "fragment": "67e8fe917c2e79496f623f662d873434d73b34c8cc1bb974e476b80db793d1ec"
+  },
+  "executables": {
+    "0": {
+      "stage": "vertex",
+      "name": "vertex",
+      "description": "SIMD8 vertex shader",
+      "simd_width": 8,
+      "statistics": {
+        "Instruction Count": 64,
+        "SEND Count": 6,
+        "Loop Count": 0,
+        "Cycle Count": 352,
+        "Spill Count": 0,
+        "Fill Count": 0,
+        "Scratch Memory Size": 0,
+        "GRF registers": 0,
+        "Max dispatch width": 8,
+        "Max live registers": 24,
+        "Workgroup Memory Size": 0,
+        "Non SSA regs after NIR": 9,
+        "Source hash": 856487925
+      }
+    },
+    "1": {
+      "stage": "fragment",
+      "name": "SIMD8 fragment",
+      "description": "SIMD8 fragment shader",
+      "simd_width": 8,
+      "statistics": {
+        "Instruction Count": 108,
+        "SEND Count": 5,
+        "Loop Count": 0,
+        "Cycle Count": 1086,
+        "Spill Count": 0,
+        "Fill Count": 0,
+        "Scratch Memory Size": 0,
+        "GRF registers": 0,
+        "Max dispatch width": 16,
+        "Max live registers": 19,
+        "Workgroup Memory Size": 0,
+        "Non SSA regs after NIR": 16,
+        "Source hash": 1737706209
+      }
+    },
+    "2": {
+      "stage": "fragment",
+      "name": "SIMD16 fragment",
+      "description": "SIMD16 fragment shader",
+      "simd_width": 16,
+      "statistics": {
+        "Instruction Count": 112,
+        "SEND Count": 5,
+        "Loop Count": 0,
+        "Cycle Count": 1330,
+        "Spill Count": 0,
+        "Fill Count": 0,
+        "Scratch Memory Size": 0,
+        "GRF registers": 0,
+        "Max dispatch width": 16,
+        "Max live registers": 33,
+        "Workgroup Memory Size": 0,
+        "Non SSA regs after NIR": 25,
+        "Source hash": 1737706209
+      }
+    }
+  },
+  "capture_sha256": {
+    "00_vertex_00_Final_NIR.txt": "a555c2a1963f9918053210fc75890ee4b573c806a4e501be498827c1298c547c",
+    "01_fragment_00_Final_NIR.txt": "f1e3fb767fd022a61715acc7e4e8e0509d15cde61d49dc12e58377ead0a35cc3",
+    "02_fragment_00_Final_NIR.txt": "f1e3fb767fd022a61715acc7e4e8e0509d15cde61d49dc12e58377ead0a35cc3",
+    "00_vertex_01_Shader_push_map.txt": "1169d93ba452acc18542b8b9d268fbc652742ec74fafc96152f6b38ac9de1d73",
+    "01_fragment_01_Shader_push_map.txt": "f23ff6d48659c96477f93b554011ed22e093011176174f34fbcdbef1b6b289e4",
+    "02_fragment_01_Shader_push_map.txt": "f23ff6d48659c96477f93b554011ed22e093011176174f34fbcdbef1b6b289e4"
+  },
+  "extraction": {
+    "source": "instrumented ANV shader serializer",
+    "header": "little-endian stage:u32, program_size:u32",
+    "vs_executable_bytes": 776,
+    "ps8_executable_bytes": 1392,
+    "ps16_offset": 1408,
+    "ps16_executable_bytes": 1544,
+    "inter_executable_padding": "checked zero, excluded",
+    "serialized_trailer_hex": "6000002000000000",
+    "serialized_trailer": "checked exact, excluded from executable stages"
+  },
+  "native_stages": {
+    "figure.vs.simd8.bin": {
+      "bytes": 776,
+      "sha256": "6d8b189ecd7b48a9a2ad3e0ee695a828fd3c1093526f502539306af706fba0cc"
+    },
+    "figure.ps.simd8.bin": {
+      "bytes": 1392,
+      "sha256": "a58c32294b625efb0287b884c4530255fbcc4838ce7c70d9bc5275116c4aecf5"
+    },
+    "figure.ps.simd16.bin": {
+      "bytes": 1544,
+      "sha256": "a7223b7db82bd7317458d58a8214fe92f1f7019c3410bde842fe26856128fe52"
+    }
+  }
+}

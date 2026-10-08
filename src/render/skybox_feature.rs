@@ -1,4 +1,4 @@
-//! Independent draw of the shipped bring-up skybox and display-copy shader.
+//! Fixed selection scene: shipped bring-up skybox, optional figure, and display copy.
 //! Keeps the original HDR/material/depth targets without creating game pipelines.
 //! Device admission and UI4 leases belong to the platform, not this draw node.
 
@@ -12,6 +12,7 @@ const GLOBALS_CAPACITY: u64 = 512;
 pub struct SkyboxFeature {
     globals: wgpu::Buffer,
     globals_bind: wgpu::BindGroup,
+    globals_layout: wgpu::BindGroupLayout,
     vertices: wgpu::Buffer,
     vertex_count: u32,
     skybox: wgpu::RenderPipeline,
@@ -237,6 +238,7 @@ impl SkyboxFeature {
         Ok(Self {
             globals,
             globals_bind,
+            globals_layout,
             vertices: vertex_buffer,
             vertex_count,
             skybox,
@@ -259,9 +261,24 @@ impl SkyboxFeature {
     }
 
     pub fn encode(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::TextureView) {
+        self.encode_with_figure(encoder, output, None);
+    }
+
+    pub fn globals_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.globals_layout
+    }
+
+    /// Figure and sky share HDR/material/reverse-depth attachments; display
+    /// samples their combined color directly, without the redundant clouds copy.
+    pub fn encode_with_figure(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        output: &wgpu::TextureView,
+        figure: Option<&super::figure_feature::FigureFeature>,
+    ) {
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("skybox HDR scene"),
+                label: Some("minimal selection HDR scene"),
                 color_attachments: &[
                     Some(attachment(&self.color_view)),
                     Some(attachment(&self.material)),
@@ -278,13 +295,16 @@ impl SkyboxFeature {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            if let Some(figure) = figure {
+                figure.draw(&mut pass, &self.globals_bind);
+            }
             pass.set_pipeline(&self.skybox);
             pass.set_bind_group(0, &self.globals_bind, &[]);
             pass.set_vertex_buffer(0, self.vertices.slice(..));
             pass.draw(0..self.vertex_count, 0..1);
         }
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("skybox opaque display copy"),
+            label: Some("minimal selection opaque display copy"),
             color_attachments: &[Some(attachment(output))],
             depth_stencil_attachment: None,
             timestamp_writes: None,

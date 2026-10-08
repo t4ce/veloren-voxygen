@@ -5,6 +5,8 @@ mod trueos_scene;
 pub(crate) mod native_skybox;
 #[allow(dead_code)] // Independently verified draw node; native device hookup follows.
 pub(crate) mod skybox_feature;
+#[allow(dead_code)] // Fixed figure slice; native execution admission is separate.
+pub(crate) mod figure_feature;
 pub(crate) mod minimal_sky;
 pub mod bound;
 mod buffer;
@@ -627,3 +629,6 @@ impl ExperimentalShader {
         }
     }
 }
+
+#[cfg(target_os = "trueos")]
+pub(crate) mod figure_preview;

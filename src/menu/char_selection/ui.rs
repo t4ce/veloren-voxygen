@@ -914,418 +914,424 @@ impl Controls {
                 start_site_idx,
                 hovered_start_site,
             } => {
-                let unselected_style = style::button::Style::new(imgs.icon_border)
-                    .hover_image(imgs.icon_border_mo)
-                    .press_image(imgs.icon_border_press);
-
-                let selected_style = style::button::Style::new(imgs.icon_border_pressed)
-                    .hover_image(imgs.icon_border_mo)
-                    .press_image(imgs.icon_border_press);
-
-                let icon_button = |button, selected, msg, img| {
-                    Container::new(
-                        Button::<_, IcedRenderer>::new(
-                            button,
-                            Space::new(Length::Units(60), Length::Units(60)),
-                        )
-                        .style(if selected {
-                            selected_style
-                        } else {
-                            unselected_style
-                        })
-                        .on_press(msg),
-                    )
-                    .style(style::container::Style::image(img))
-                };
-                let icon_button_tooltip = |button, selected, msg, img, tooltip_i18n_key| {
-                    icon_button(button, selected, msg, img).with_tooltip(
-                        tooltip_manager,
-                        move || {
-                            let tooltip_text = i18n.get_msg(tooltip_i18n_key);
-                            tooltip::text(&tooltip_text, tooltip_style)
-                        },
-                    )
-                };
-
-                // TODO: tooltips
-                let (tool, species, body_type) = if character_id.is_some() {
-                    (Column::new(), Column::new(), Row::new())
+                // Keep native creation bring-up limited to the map and bottom controls.
+                // Preserve the left panel without constructing customization widgets.
+                let left_column_content = if cfg!(target_os = "trueos") {
+                    Vec::new()
                 } else {
-                    let (body_m_ico, body_f_ico) = match body.species {
-                        humanoid::Species::Human => (imgs.human_m, imgs.human_f),
-                        humanoid::Species::Orc => (imgs.orc_m, imgs.orc_f),
-                        humanoid::Species::Dwarf => (imgs.dwarf_m, imgs.dwarf_f),
-                        humanoid::Species::Elf => (imgs.elf_m, imgs.elf_f),
-                        humanoid::Species::Draugr => (imgs.draugr_m, imgs.draugr_f),
-                        humanoid::Species::Danari => (imgs.danari_m, imgs.danari_f),
+                    let unselected_style = style::button::Style::new(imgs.icon_border)
+                        .hover_image(imgs.icon_border_mo)
+                        .press_image(imgs.icon_border_press);
+
+                    let selected_style = style::button::Style::new(imgs.icon_border_pressed)
+                        .hover_image(imgs.icon_border_mo)
+                        .press_image(imgs.icon_border_press);
+
+                    let icon_button = |button, selected, msg, img| {
+                        Container::new(
+                            Button::<_, IcedRenderer>::new(
+                                button,
+                                Space::new(Length::Units(60), Length::Units(60)),
+                            )
+                            .style(if selected {
+                                selected_style
+                            } else {
+                                unselected_style
+                            })
+                            .on_press(msg),
+                        )
+                        .style(style::container::Style::image(img))
                     };
-                    let [body_m_button, body_f_button] = body_type_buttons;
-                    let body_type = Row::with_children(vec![
-                        icon_button(
-                            body_m_button,
-                            matches!(body.body_type, humanoid::BodyType::Male),
-                            Message::BodyType(humanoid::BodyType::Male),
-                            body_m_ico,
+                    let icon_button_tooltip = |button, selected, msg, img, tooltip_i18n_key| {
+                        icon_button(button, selected, msg, img).with_tooltip(
+                            tooltip_manager,
+                            move || {
+                                let tooltip_text = i18n.get_msg(tooltip_i18n_key);
+                                tooltip::text(&tooltip_text, tooltip_style)
+                            },
                         )
-                        .into(),
-                        icon_button(
-                            body_f_button,
-                            matches!(body.body_type, humanoid::BodyType::Female),
-                            Message::BodyType(humanoid::BodyType::Female),
-                            body_f_ico,
-                        )
-                        .into(),
-                    ])
-                    .spacing(1);
-                    let (human_icon, orc_icon, dwarf_icon, elf_icon, draugr_icon, danari_icon) =
-                        match body.body_type {
-                            humanoid::BodyType::Male => (
-                                self.imgs.human_m,
-                                self.imgs.orc_m,
-                                self.imgs.dwarf_m,
-                                self.imgs.elf_m,
-                                self.imgs.draugr_m,
-                                self.imgs.danari_m,
-                            ),
-                            humanoid::BodyType::Female => (
-                                self.imgs.human_f,
-                                self.imgs.orc_f,
-                                self.imgs.dwarf_f,
-                                self.imgs.elf_f,
-                                self.imgs.draugr_f,
-                                self.imgs.danari_f,
-                            ),
-                        };
-                    let [
-                        human_button,
-                        orc_button,
-                        dwarf_button,
-                        elf_button,
-                        draugr_button,
-                        danari_button,
-                    ] = species_buttons;
-                    let species = Column::with_children(vec![
-                        Row::with_children(vec![
-                            icon_button_tooltip(
-                                human_button,
-                                matches!(body.species, humanoid::Species::Human),
-                                Message::Species(humanoid::Species::Human),
-                                human_icon,
-                                "common-species-human",
-                            )
-                            .into(),
-                            icon_button_tooltip(
-                                orc_button,
-                                matches!(body.species, humanoid::Species::Orc),
-                                Message::Species(humanoid::Species::Orc),
-                                orc_icon,
-                                "common-species-orc",
-                            )
-                            .into(),
-                            icon_button_tooltip(
-                                dwarf_button,
-                                matches!(body.species, humanoid::Species::Dwarf),
-                                Message::Species(humanoid::Species::Dwarf),
-                                dwarf_icon,
-                                "common-species-dwarf",
-                            )
-                            .into(),
-                        ])
-                        .spacing(1)
-                        .into(),
-                        Row::with_children(vec![
-                            icon_button_tooltip(
-                                elf_button,
-                                matches!(body.species, humanoid::Species::Elf),
-                                Message::Species(humanoid::Species::Elf),
-                                elf_icon,
-                                "common-species-elf",
-                            )
-                            .into(),
-                            icon_button_tooltip(
-                                draugr_button,
-                                matches!(body.species, humanoid::Species::Draugr),
-                                Message::Species(humanoid::Species::Draugr),
-                                draugr_icon,
-                                "common-species-draugr",
-                            )
-                            .into(),
-                            icon_button_tooltip(
-                                danari_button,
-                                matches!(body.species, humanoid::Species::Danari),
-                                Message::Species(humanoid::Species::Danari),
-                                danari_icon,
-                                "common-species-danari",
-                            )
-                            .into(),
-                        ])
-                        .spacing(1)
-                        .into(),
-                    ])
-                    .spacing(1);
-                    let [
-                        sword_button,
-                        swords_button,
-                        axe_button,
-                        hammer_button,
-                        bow_button,
-                        staff_button,
-                    ] = tool_buttons;
-                    let tool = Column::with_children(vec![
-                        Row::with_children(vec![
-                            icon_button_tooltip(
-                                sword_button,
-                                *mainhand == Some(STARTER_SWORD),
-                                Message::Tool((Some(STARTER_SWORD), None)),
-                                imgs.sword,
-                                "common-weapons-greatsword",
-                            )
-                            .into(),
-                            icon_button_tooltip(
-                                hammer_button,
-                                *mainhand == Some(STARTER_HAMMER),
-                                Message::Tool((Some(STARTER_HAMMER), None)),
-                                imgs.hammer,
-                                "common-weapons-hammer",
-                            )
-                            .into(),
-                            icon_button_tooltip(
-                                axe_button,
-                                *mainhand == Some(STARTER_AXE),
-                                Message::Tool((Some(STARTER_AXE), None)),
-                                imgs.axe,
-                                "common-weapons-axe",
-                            )
-                            .into(),
-                        ])
-                        .spacing(1)
-                        .into(),
-                        Row::with_children(vec![
-                            icon_button_tooltip(
-                                swords_button,
-                                *mainhand == Some(STARTER_SWORDS),
-                                Message::Tool((Some(STARTER_SWORDS), Some(STARTER_SWORDS))),
-                                imgs.swords,
-                                "common-weapons-shortswords",
-                            )
-                            .into(),
-                            icon_button_tooltip(
-                                bow_button,
-                                *mainhand == Some(STARTER_BOW),
-                                Message::Tool((Some(STARTER_BOW), None)),
-                                imgs.bow,
-                                "common-weapons-bow",
-                            )
-                            .into(),
-                            icon_button_tooltip(
-                                staff_button,
-                                *mainhand == Some(STARTER_STAFF),
-                                Message::Tool((Some(STARTER_STAFF), None)),
-                                imgs.staff,
-                                "common-weapons-staff",
-                            )
-                            .into(),
-                        ])
-                        .spacing(1)
-                        .into(),
-                    ])
-                    .spacing(1);
+                    };
 
-                    (tool, species, body_type)
-                };
-
-                const SLIDER_TEXT_SIZE: u16 = 20;
-                const SLIDER_CURSOR_SIZE: (u16, u16) = (9, 21);
-                const SLIDER_BAR_HEIGHT: u16 = 9;
-                const SLIDER_BAR_PAD: u16 = 5;
-                // Height of interactable area
-                const SLIDER_HEIGHT: u16 = 30;
-
-                fn char_slider<'a>(
-                    text: String,
-                    state: &'a mut slider::State,
-                    max: u8,
-                    selected_val: u8,
-                    on_change: impl 'static + Fn(u8) -> Message,
-                    (fonts, imgs): (&Fonts, &Imgs),
-                ) -> Element<'a, Message> {
-                    Column::with_children(vec![
-                        Text::new(text)
-                            .size(fonts.cyri.scale(SLIDER_TEXT_SIZE))
-                            .into(),
-                        Slider::new(state, 0..=max, selected_val, on_change)
-                            .height(SLIDER_HEIGHT)
-                            .style(style::slider::Style::images(
-                                imgs.slider_indicator,
-                                imgs.slider_range,
-                                SLIDER_BAR_PAD,
-                                SLIDER_CURSOR_SIZE,
-                                SLIDER_BAR_HEIGHT,
-                            ))
-                            .into(),
-                    ])
-                    .align_items(Align::Center)
-                    .into()
-                }
-                fn char_slider_greyable<'a>(
-                    active: bool,
-                    text: String,
-                    state: &'a mut slider::State,
-                    max: u8,
-                    selected_val: u8,
-                    on_change: impl 'static + Fn(u8) -> Message,
-                    (fonts, imgs): (&Fonts, &Imgs),
-                ) -> Element<'a, Message> {
-                    if active {
-                        char_slider(text, state, max, selected_val, on_change, (fonts, imgs))
+                    // TODO: tooltips
+                    let (tool, species, body_type) = if character_id.is_some() {
+                        (Column::new(), Column::new(), Row::new())
                     } else {
+                        let (body_m_ico, body_f_ico) = match body.species {
+                            humanoid::Species::Human => (imgs.human_m, imgs.human_f),
+                            humanoid::Species::Orc => (imgs.orc_m, imgs.orc_f),
+                            humanoid::Species::Dwarf => (imgs.dwarf_m, imgs.dwarf_f),
+                            humanoid::Species::Elf => (imgs.elf_m, imgs.elf_f),
+                            humanoid::Species::Draugr => (imgs.draugr_m, imgs.draugr_f),
+                            humanoid::Species::Danari => (imgs.danari_m, imgs.danari_f),
+                        };
+                        let [body_m_button, body_f_button] = body_type_buttons;
+                        let body_type = Row::with_children(vec![
+                            icon_button(
+                                body_m_button,
+                                matches!(body.body_type, humanoid::BodyType::Male),
+                                Message::BodyType(humanoid::BodyType::Male),
+                                body_m_ico,
+                            )
+                            .into(),
+                            icon_button(
+                                body_f_button,
+                                matches!(body.body_type, humanoid::BodyType::Female),
+                                Message::BodyType(humanoid::BodyType::Female),
+                                body_f_ico,
+                            )
+                            .into(),
+                        ])
+                        .spacing(1);
+                        let (human_icon, orc_icon, dwarf_icon, elf_icon, draugr_icon, danari_icon) =
+                            match body.body_type {
+                                humanoid::BodyType::Male => (
+                                    self.imgs.human_m,
+                                    self.imgs.orc_m,
+                                    self.imgs.dwarf_m,
+                                    self.imgs.elf_m,
+                                    self.imgs.draugr_m,
+                                    self.imgs.danari_m,
+                                ),
+                                humanoid::BodyType::Female => (
+                                    self.imgs.human_f,
+                                    self.imgs.orc_f,
+                                    self.imgs.dwarf_f,
+                                    self.imgs.elf_f,
+                                    self.imgs.draugr_f,
+                                    self.imgs.danari_f,
+                                ),
+                            };
+                        let [
+                            human_button,
+                            orc_button,
+                            dwarf_button,
+                            elf_button,
+                            draugr_button,
+                            danari_button,
+                        ] = species_buttons;
+                        let species = Column::with_children(vec![
+                            Row::with_children(vec![
+                                icon_button_tooltip(
+                                    human_button,
+                                    matches!(body.species, humanoid::Species::Human),
+                                    Message::Species(humanoid::Species::Human),
+                                    human_icon,
+                                    "common-species-human",
+                                )
+                                .into(),
+                                icon_button_tooltip(
+                                    orc_button,
+                                    matches!(body.species, humanoid::Species::Orc),
+                                    Message::Species(humanoid::Species::Orc),
+                                    orc_icon,
+                                    "common-species-orc",
+                                )
+                                .into(),
+                                icon_button_tooltip(
+                                    dwarf_button,
+                                    matches!(body.species, humanoid::Species::Dwarf),
+                                    Message::Species(humanoid::Species::Dwarf),
+                                    dwarf_icon,
+                                    "common-species-dwarf",
+                                )
+                                .into(),
+                            ])
+                            .spacing(1)
+                            .into(),
+                            Row::with_children(vec![
+                                icon_button_tooltip(
+                                    elf_button,
+                                    matches!(body.species, humanoid::Species::Elf),
+                                    Message::Species(humanoid::Species::Elf),
+                                    elf_icon,
+                                    "common-species-elf",
+                                )
+                                .into(),
+                                icon_button_tooltip(
+                                    draugr_button,
+                                    matches!(body.species, humanoid::Species::Draugr),
+                                    Message::Species(humanoid::Species::Draugr),
+                                    draugr_icon,
+                                    "common-species-draugr",
+                                )
+                                .into(),
+                                icon_button_tooltip(
+                                    danari_button,
+                                    matches!(body.species, humanoid::Species::Danari),
+                                    Message::Species(humanoid::Species::Danari),
+                                    danari_icon,
+                                    "common-species-danari",
+                                )
+                                .into(),
+                            ])
+                            .spacing(1)
+                            .into(),
+                        ])
+                        .spacing(1);
+                        let [
+                            sword_button,
+                            swords_button,
+                            axe_button,
+                            hammer_button,
+                            bow_button,
+                            staff_button,
+                        ] = tool_buttons;
+                        let tool = Column::with_children(vec![
+                            Row::with_children(vec![
+                                icon_button_tooltip(
+                                    sword_button,
+                                    *mainhand == Some(STARTER_SWORD),
+                                    Message::Tool((Some(STARTER_SWORD), None)),
+                                    imgs.sword,
+                                    "common-weapons-greatsword",
+                                )
+                                .into(),
+                                icon_button_tooltip(
+                                    hammer_button,
+                                    *mainhand == Some(STARTER_HAMMER),
+                                    Message::Tool((Some(STARTER_HAMMER), None)),
+                                    imgs.hammer,
+                                    "common-weapons-hammer",
+                                )
+                                .into(),
+                                icon_button_tooltip(
+                                    axe_button,
+                                    *mainhand == Some(STARTER_AXE),
+                                    Message::Tool((Some(STARTER_AXE), None)),
+                                    imgs.axe,
+                                    "common-weapons-axe",
+                                )
+                                .into(),
+                            ])
+                            .spacing(1)
+                            .into(),
+                            Row::with_children(vec![
+                                icon_button_tooltip(
+                                    swords_button,
+                                    *mainhand == Some(STARTER_SWORDS),
+                                    Message::Tool((Some(STARTER_SWORDS), Some(STARTER_SWORDS))),
+                                    imgs.swords,
+                                    "common-weapons-shortswords",
+                                )
+                                .into(),
+                                icon_button_tooltip(
+                                    bow_button,
+                                    *mainhand == Some(STARTER_BOW),
+                                    Message::Tool((Some(STARTER_BOW), None)),
+                                    imgs.bow,
+                                    "common-weapons-bow",
+                                )
+                                .into(),
+                                icon_button_tooltip(
+                                    staff_button,
+                                    *mainhand == Some(STARTER_STAFF),
+                                    Message::Tool((Some(STARTER_STAFF), None)),
+                                    imgs.staff,
+                                    "common-weapons-staff",
+                                )
+                                .into(),
+                            ])
+                            .spacing(1)
+                            .into(),
+                        ])
+                        .spacing(1);
+
+                        (tool, species, body_type)
+                    };
+
+                    const SLIDER_TEXT_SIZE: u16 = 20;
+                    const SLIDER_CURSOR_SIZE: (u16, u16) = (9, 21);
+                    const SLIDER_BAR_HEIGHT: u16 = 9;
+                    const SLIDER_BAR_PAD: u16 = 5;
+                    // Height of interactable area
+                    const SLIDER_HEIGHT: u16 = 30;
+
+                    fn char_slider<'a>(
+                        text: String,
+                        state: &'a mut slider::State,
+                        max: u8,
+                        selected_val: u8,
+                        on_change: impl 'static + Fn(u8) -> Message,
+                        (fonts, imgs): (&Fonts, &Imgs),
+                    ) -> Element<'a, Message> {
                         Column::with_children(vec![
                             Text::new(text)
                                 .size(fonts.cyri.scale(SLIDER_TEXT_SIZE))
-                                .color(DISABLED_TEXT_COLOR)
                                 .into(),
-                            // "Disabled" slider
-                            // TODO: add iced support for disabled sliders (like buttons)
-                            Slider::new(state, 0..=max.into(), selected_val.into(), |_| {
-                                Message::DoNothing
-                            })
-                            .height(SLIDER_HEIGHT)
-                            .style(style::slider::Style {
-                                cursor: style::slider::Cursor::Color(Rgba::zero()),
-                                bar: style::slider::Bar::Image(
+                            Slider::new(state, 0..=max, selected_val, on_change)
+                                .height(SLIDER_HEIGHT)
+                                .style(style::slider::Style::images(
+                                    imgs.slider_indicator,
                                     imgs.slider_range,
-                                    Rgba::from_translucent(255, 51),
                                     SLIDER_BAR_PAD,
-                                ),
-                                labels: false,
-                                ..Default::default()
-                            })
-                            .into(),
+                                    SLIDER_CURSOR_SIZE,
+                                    SLIDER_BAR_HEIGHT,
+                                ))
+                                .into(),
                         ])
                         .align_items(Align::Center)
                         .into()
                     }
-                }
+                    fn char_slider_greyable<'a>(
+                        active: bool,
+                        text: String,
+                        state: &'a mut slider::State,
+                        max: u8,
+                        selected_val: u8,
+                        on_change: impl 'static + Fn(u8) -> Message,
+                        (fonts, imgs): (&Fonts, &Imgs),
+                    ) -> Element<'a, Message> {
+                        if active {
+                            char_slider(text, state, max, selected_val, on_change, (fonts, imgs))
+                        } else {
+                            Column::with_children(vec![
+                                Text::new(text)
+                                    .size(fonts.cyri.scale(SLIDER_TEXT_SIZE))
+                                    .color(DISABLED_TEXT_COLOR)
+                                    .into(),
+                                // "Disabled" slider
+                                // TODO: add iced support for disabled sliders (like buttons)
+                                Slider::new(state, 0..=max.into(), selected_val.into(), |_| {
+                                    Message::DoNothing
+                                })
+                                .height(SLIDER_HEIGHT)
+                                .style(style::slider::Style {
+                                    cursor: style::slider::Cursor::Color(Rgba::zero()),
+                                    bar: style::slider::Bar::Image(
+                                        imgs.slider_range,
+                                        Rgba::from_translucent(255, 51),
+                                        SLIDER_BAR_PAD,
+                                    ),
+                                    labels: false,
+                                    ..Default::default()
+                                })
+                                .into(),
+                            ])
+                            .align_items(Align::Center)
+                            .into()
+                        }
+                    }
 
-                let slider_options = Column::with_children(vec![
-                    char_slider(
-                        i18n.get_msg("char_selection-hair_style").into_owned(),
-                        &mut sliders.hair_style,
-                        body.species.num_hair_styles(body.body_type) - 1,
-                        body.hair_style,
-                        Message::HairStyle,
-                        (fonts, imgs),
-                    ),
-                    char_slider(
-                        i18n.get_msg("char_selection-hair_color").into_owned(),
-                        &mut sliders.hair_color,
-                        body.species.num_hair_colors() - 1,
-                        body.hair_color,
-                        Message::HairColor,
-                        (fonts, imgs),
-                    ),
-                    char_slider(
-                        i18n.get_msg("char_selection-skin").into_owned(),
-                        &mut sliders.skin,
-                        body.species.num_skin_colors() - 1,
-                        body.skin,
-                        Message::Skin,
-                        (fonts, imgs),
-                    ),
-                    char_slider(
-                        i18n.get_msg("char_selection-eyeshape").into_owned(),
-                        &mut sliders.eyes,
-                        body.species.num_eyes(body.body_type) - 1,
-                        body.eyes,
-                        Message::Eyes,
-                        (fonts, imgs),
-                    ),
-                    char_slider(
-                        i18n.get_msg("char_selection-eye_color").into_owned(),
-                        &mut sliders.eye_color,
-                        body.species.num_eye_colors() - 1,
-                        body.eye_color,
-                        Message::EyeColor,
-                        (fonts, imgs),
-                    ),
-                    char_slider_greyable(
-                        body.species.num_accessories(body.body_type) > 1,
-                        i18n.get_msg("char_selection-accessories").into_owned(),
-                        &mut sliders.accessory,
-                        body.species.num_accessories(body.body_type) - 1,
-                        body.accessory,
-                        Message::Accessory,
-                        (fonts, imgs),
-                    ),
-                    char_slider_greyable(
-                        body.species.num_beards(body.body_type) > 1,
-                        i18n.get_msg("char_selection-beard").into_owned(),
-                        &mut sliders.beard,
-                        body.species.num_beards(body.body_type) - 1,
-                        body.beard,
-                        Message::Beard,
-                        (fonts, imgs),
-                    ),
-                    char_slider(
-                        i18n.get_msg("char_selection-height_scale").into_owned(),
-                        &mut sliders.height_scale,
-                        255,
-                        body.height_scale,
-                        Message::HeightScale,
-                        (fonts, imgs),
-                    ),
-                ])
-                .max_width(200)
-                .padding(5);
-
-                let hardcore_checkbox = if character_id.is_some() {
-                    Row::new()
-                } else {
-                    Row::with_children(vec![
-                        Checkbox::new(
-                            *hardcore_enabled,
-                            i18n.get_msg("char_selection-hardcore"),
-                            Message::HardcoreEnabled,
-                        )
-                        .size(32)
-                        .spacing(8)
-                        .text_size(24)
-                        .style(style::checkbox::Style::new(
-                            imgs.icon_border,
-                            self.imgs.hardcore,
-                        ))
-                        .with_tooltip(tooltip_manager, move || {
-                            let tooltip_text = i18n.get_msg("char_selection-hardcore_tooltip");
-                            tooltip::text(&tooltip_text, tooltip_style)
-                        })
-                        .into(),
+                    let slider_options = Column::with_children(vec![
+                        char_slider(
+                            i18n.get_msg("char_selection-hair_style").into_owned(),
+                            &mut sliders.hair_style,
+                            body.species.num_hair_styles(body.body_type) - 1,
+                            body.hair_style,
+                            Message::HairStyle,
+                            (fonts, imgs),
+                        ),
+                        char_slider(
+                            i18n.get_msg("char_selection-hair_color").into_owned(),
+                            &mut sliders.hair_color,
+                            body.species.num_hair_colors() - 1,
+                            body.hair_color,
+                            Message::HairColor,
+                            (fonts, imgs),
+                        ),
+                        char_slider(
+                            i18n.get_msg("char_selection-skin").into_owned(),
+                            &mut sliders.skin,
+                            body.species.num_skin_colors() - 1,
+                            body.skin,
+                            Message::Skin,
+                            (fonts, imgs),
+                        ),
+                        char_slider(
+                            i18n.get_msg("char_selection-eyeshape").into_owned(),
+                            &mut sliders.eyes,
+                            body.species.num_eyes(body.body_type) - 1,
+                            body.eyes,
+                            Message::Eyes,
+                            (fonts, imgs),
+                        ),
+                        char_slider(
+                            i18n.get_msg("char_selection-eye_color").into_owned(),
+                            &mut sliders.eye_color,
+                            body.species.num_eye_colors() - 1,
+                            body.eye_color,
+                            Message::EyeColor,
+                            (fonts, imgs),
+                        ),
+                        char_slider_greyable(
+                            body.species.num_accessories(body.body_type) > 1,
+                            i18n.get_msg("char_selection-accessories").into_owned(),
+                            &mut sliders.accessory,
+                            body.species.num_accessories(body.body_type) - 1,
+                            body.accessory,
+                            Message::Accessory,
+                            (fonts, imgs),
+                        ),
+                        char_slider_greyable(
+                            body.species.num_beards(body.body_type) > 1,
+                            i18n.get_msg("char_selection-beard").into_owned(),
+                            &mut sliders.beard,
+                            body.species.num_beards(body.body_type) - 1,
+                            body.beard,
+                            Message::Beard,
+                            (fonts, imgs),
+                        ),
+                        char_slider(
+                            i18n.get_msg("char_selection-height_scale").into_owned(),
+                            &mut sliders.height_scale,
+                            255,
+                            body.height_scale,
+                            Message::HeightScale,
+                            (fonts, imgs),
+                        ),
                     ])
+                    .max_width(200)
+                    .padding(5);
+
+                    let hardcore_checkbox = if character_id.is_some() {
+                        Row::new()
+                    } else {
+                        Row::with_children(vec![
+                            Checkbox::new(
+                                *hardcore_enabled,
+                                i18n.get_msg("char_selection-hardcore"),
+                                Message::HardcoreEnabled,
+                            )
+                            .size(32)
+                            .spacing(8)
+                            .text_size(24)
+                            .style(style::checkbox::Style::new(
+                                imgs.icon_border,
+                                self.imgs.hardcore,
+                            ))
+                            .with_tooltip(tooltip_manager, move || {
+                                let tooltip_text = i18n.get_msg("char_selection-hardcore_tooltip");
+                                tooltip::text(&tooltip_text, tooltip_style)
+                            })
+                            .into(),
+                        ])
+                    };
+
+                    const CHAR_DICE_SIZE: u16 = 50;
+                    let rand_character = Button::new(
+                        rand_character_button,
+                        Space::new(Length::Units(CHAR_DICE_SIZE), Length::Units(CHAR_DICE_SIZE)),
+                    )
+                    .style(
+                        style::button::Style::new(imgs.dice)
+                            .hover_image(imgs.dice_hover)
+                            .press_image(imgs.dice_press),
+                    )
+                    .on_press(Message::RandomizeCharacter)
+                    .with_tooltip(tooltip_manager, move || {
+                        let tooltip_text = i18n.get_msg("common-rand_appearance");
+                        tooltip::text(&tooltip_text, tooltip_style)
+                    });
+
+                    vec![
+                        body_type.into(),
+                        tool.into(),
+                        species.into(),
+                        slider_options.into(),
+                        hardcore_checkbox.into(),
+                        rand_character.into(),
+                    ]
                 };
-
-                const CHAR_DICE_SIZE: u16 = 50;
-                let rand_character = Button::new(
-                    rand_character_button,
-                    Space::new(Length::Units(CHAR_DICE_SIZE), Length::Units(CHAR_DICE_SIZE)),
-                )
-                .style(
-                    style::button::Style::new(imgs.dice)
-                        .hover_image(imgs.dice_hover)
-                        .press_image(imgs.dice_press),
-                )
-                .on_press(Message::RandomizeCharacter)
-                .with_tooltip(tooltip_manager, move || {
-                    let tooltip_text = i18n.get_msg("common-rand_appearance");
-                    tooltip::text(&tooltip_text, tooltip_style)
-                });
-
-                let left_column_content = vec![
-                    body_type.into(),
-                    tool.into(),
-                    species.into(),
-                    slider_options.into(),
-                    hardcore_checkbox.into(),
-                    rand_character.into(),
-                ];
 
                 let right_column_content = if character_id.is_none() {
                     let map_sz = Vec2::new(500, 500);

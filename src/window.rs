@@ -509,6 +509,18 @@ impl Window {
     }
 
     #[cfg(target_os = "trueos")]
+    pub(crate) fn present_character_scene(&mut self, sun_z: f32, figure: Option<std::sync::Arc<crate::render::figure_preview::Frame>>) -> Result<(), String> {
+        self.menu_presenter.check()?;
+        self.menu_revision += 1;
+        let size = self.window.surface_size();
+        if size.width != 0 && size.height != 0 {
+            self.menu_presenter.submit_figure(self.menu_revision, Vec2::new(size.width, size.height),
+                crate::render::minimal_sky::rgba8(sun_z), figure);
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "trueos")]
     pub(crate) fn present_sky(&mut self, sun_z: f32) -> Result<(), String> {
         self.menu_presenter.check()?;
         self.menu_revision += 1;

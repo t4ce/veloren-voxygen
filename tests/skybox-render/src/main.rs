@@ -9,6 +9,8 @@ macro_rules! span {
 }
 
 mod direct_rgba8;
+#[path = "../../../src/render/figure_feature.rs"]
+mod figure_feature;
 #[path = "../../../src/render/minimal_sky.rs"]
 mod minimal_sky;
 #[path = "../../../src/render/skybox_feature.rs"]
@@ -215,4 +217,154 @@ fn main() {
             "PASS {name}: original cube + baked shaders; HDR preserved; 32x32 scene -> 64x64 opaque display"
         );
     }
+    prove_figure(&device, &queue, &feature, &output);
+}
+
+// Packed quad fixture exercises original vertex decoding, atlas decoding,
+// reverse depth and bone updates. It is not a selected character asset proof.
+fn prove_figure(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    scene: &skybox_feature::SkyboxFeature,
+    output: &wgpu::Texture,
+) {
+    let vertex = |x: f32, y: f32, z: f32, bone: u32, atlas_x: u32| {
+        let pos = (((x * 2.0 + 256.0) as u32) & 511)
+            | ((((y * 2.0 + 256.0) as u32) & 511) << 9)
+            | ((((z * 2.0 + 256.0) as u32) & 511) << 18)
+            | (bone << 27)
+            | (1 << 31);
+        [pos, (atlas_x << 2) | 2] // positive Z normal
+    };
+    let mut vertices = Vec::new();
+    for (bone, atlas_x) in [(0, 0), (1, 2)] {
+        for (x, y) in [(-0.5, -0.5), (0.5, -0.5), (-0.5, 0.5), (0.5, 0.5)] {
+            vertices.push(vertex(x, y, 0.0, bone, atlas_x));
+        }
+    }
+    // Original figure colour/light packing: red at x=0..1, green at x=2..3.
+    let pixels = [
+        [255, 0, 240, 1],
+        [255, 0, 240, 1],
+        [248, 0, 0, 255],
+        [248, 0, 0, 255],
+        [255, 0, 240, 1],
+        [255, 0, 240, 1],
+        [248, 0, 0, 255],
+        [248, 0, 0, 255],
+    ];
+    let figure = figure_feature::FigureFeature::new(
+        device,
+        queue,
+        scene.globals_layout(),
+        &vertices,
+        [4, 2],
+        &pixels,
+    )
+    .unwrap();
+    let scanout = figure_feature::FigureFeature::new_scanout(device, queue, scene.globals_layout(), &vertices, [4, 2], &pixels).unwrap();
+    let direct = texture(device, 32, 32, wgpu::TextureFormat::Rgba8Unorm);
+    let material = texture(device, 32, 32, wgpu::TextureFormat::Rgba8Uint);
+    let depth = texture(device, 32, 32, wgpu::TextureFormat::Depth32Float);
+    let globals_buffer = device.create_buffer(&wgpu::BufferDescriptor { label: None, size: 512,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+    let globals_bind = device.create_bind_group(&wgpu::BindGroupDescriptor { label: None,
+        layout: scene.globals_layout(), entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buffer.as_entire_binding() }] });
+    let mut globals = [0.0f32; 128];
+    for i in 0..4 {
+        globals[32 + i * 5] = 1.0;
+    }
+    globals[70] = -1.0;
+    scene
+        .upload_globals(queue, bytemuck::cast_slice(&globals))
+        .unwrap();
+    queue.write_buffer(&globals_buffer, 0, bytemuck::cast_slice(&globals));
+    let locals = [0u8; figure_feature::LOCALS_BYTES];
+    let mut bones = [0.0f32; 16 * 32];
+    for bone in bones.chunks_exact_mut(32) {
+        for i in 0..4 {
+            bone[i * 5] = 1.0;
+            bone[16 + i * 5] = 1.0;
+        }
+    }
+    let mut render = |front_z: f32, back_z: f32, front_x: f32, back_x: f32| {
+        bones[14] = front_z;
+        bones[32 + 14] = back_z;
+        bones[12] = front_x;
+        bones[32 + 12] = back_x;
+        figure
+            .upload_pose(queue, &locals, bytemuck::cast_slice(&bones))
+            .unwrap();
+        let mut encoder = device.create_command_encoder(&Default::default());
+        scene.encode_with_figure(
+            &mut encoder,
+            &output.create_view(&Default::default()),
+            Some(&figure),
+        );
+        scanout.upload_pose(queue, &locals, bytemuck::cast_slice(&bones)).unwrap();
+        {
+            let color_view = direct.create_view(&Default::default());
+            let material_view = material.create_view(&Default::default());
+            let depth_view = depth.create_view(&Default::default());
+            let clear = minimal_sky::rgba8(-1.0).to_le_bytes();
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("native-format reference: clear plus original figure"),
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment { view: &color_view, resolve_target: None, depth_slice: None,
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: clear[0] as f64 / 255.0, g: clear[1] as f64 / 255.0,
+                            b: clear[2] as f64 / 255.0, a: 1.0 }), store: wgpu::StoreOp::Store } }),
+                    Some(wgpu::RenderPassColorAttachment { view: &material_view, resolve_target: None, depth_slice: None,
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT), store: wgpu::StoreOp::Store } }),
+                ],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment { view: &depth_view,
+                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(0.0), store: wgpu::StoreOp::Store }), stencil_ops: None }),
+                ..Default::default()
+            });
+            scanout.draw(&mut pass, &globals_bind);
+        }
+        queue.submit([encoder.finish()]);
+        let reference = readback(device, queue, output, 4);
+        let native_format = readback(device, queue, &direct, 4);
+        for y in 0..32 { for x in 0..32 { for channel in 0..4 {
+            let a = native_format[(y * 32 + x) * 4 + channel];
+            let b = reference[((y * 2) * 64 + x * 2) * 4 + channel];
+            assert!(a.abs_diff(b) <= 1, "RGBA8 direct figure differs at {x},{y} channel {channel}: {a} vs {b}");
+        } } }
+        reference
+    };
+    let image = render(0.5, 0.25, 0.0, 0.0);
+    let center = (32 * 64 + 32) * 4;
+    assert!(
+        image[center] > 230 && image[center + 1] < 5 && image[center + 2] < 5,
+        "front red figure must occlude back green figure and sky: {:?}",
+        &image[center..center + 4]
+    );
+    assert!(image.chunks_exact(4).all(|pixel| pixel[3] == 255));
+    let image = render(0.25, 0.5, 0.0, 0.0);
+    assert!(
+        image[center + 1] > 230 && image[center] < 5,
+        "changing bone depth must expose green atlas region: {:?}",
+        &image[center..center + 4]
+    );
+    let image = render(0.5, 0.25, 3.0, 3.0);
+    let sky = minimal_sky::rgba8(-1.0).to_le_bytes();
+    assert!(
+        image
+            .chunks_exact(4)
+            .all(|pixel| pixel.iter().zip(sky).all(|(a, b)| a.abs_diff(b) <= 1)),
+        "bone translation outside view must restore sky"
+    );
+    assert!(
+        figure
+            .upload_pose(queue, &locals[..143], bytemuck::cast_slice(&bones))
+            .is_err()
+    );
+    assert!(
+        figure
+            .upload_pose(queue, &locals, bytemuck::cast_slice(&bones[..32]))
+            .is_err()
+    );
+    println!(
+        "PASS figure: original baked pair; packed quads, encoded atlas, shared reverse depth, two bone poses, opaque postprocess output; direct RGBA8 matches within 1/255"
+    );
 }

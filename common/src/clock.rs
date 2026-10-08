@@ -149,6 +149,11 @@ impl Clock {
 
         // Sleep for any remaining time before the next tick
         if let Some(sleep_dur) = self.target_dt.checked_sub(busy_time) {
+            // Native TRUEOS threads already suspend at timed wait boundaries.
+            // Prefer that path to spin_sleep's final precision-yield loop.
+            #[cfg(target_os = "trueos")]
+            std::thread::sleep(sleep_dur);
+            #[cfg(not(target_os = "trueos"))]
             spin_sleep::sleep(sleep_dur);
         }
 
