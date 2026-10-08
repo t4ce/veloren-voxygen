@@ -3,6 +3,9 @@ mod trueos_scene;
 #[cfg(target_os = "trueos")]
 #[allow(dead_code)] // Fixed skybox package; runtime admission is the next slice.
 pub(crate) mod native_skybox;
+#[allow(dead_code)] // Independently verified draw node; native device hookup follows.
+pub(crate) mod skybox_feature;
+pub(crate) mod minimal_sky;
 pub mod bound;
 mod buffer;
 pub mod consts;

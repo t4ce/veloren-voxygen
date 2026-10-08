@@ -95,4 +95,63 @@ Runtime shader admission, composition execution, and submission to the paired
 UI4 background are not implemented by this bake. Metadata deliberately records
 native execution admission and host/bare-metal render verification as false.
 The Iced character-selection foreground is not changed by this slice. Its
-existing full-scene startup gate is also still in place.
+native foreground transport is described below; this baked native pair is
+not used by that transport.
+
+## Fixed skybox draw and host reference
+
+`src/render/skybox_feature.rs` draws only the original skybox mesh and the
+shipped bring-up shaders. It retains `Rgba16Float` colour, `Rgba8Uint` material,
+and reverse `Depth32Float` attachments. The original minimal postprocess copies
+HDR RGB to the display target and makes its alpha opaque. Under `BareMinimum`,
+the intervening clouds pass performs the same copy, so this slice omits it.
+The draw node accepts an existing device and output view; it neither admits a
+TRUEOS execution device nor acquires or publishes a UI4 lease.
+
+The standalone executable includes this draw node and the production skybox
+mesh generator. It runs the actual baked SPIR-V, checks every pixel for day,
+dusk, and night, verifies that dusk's 1.78 red survives the HDR intermediate,
+and checks opaque display output at twice the internal resolution. It requests
+no optional device features. Run the software Vulkan reference explicitly:
+
+```
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json \
+  cargo run --locked --manifest-path tests/skybox-render/Cargo.toml
+```
+
+This is a host render check, independent of the native Intel bake above. It
+does not establish native shader admission, GPU completion, or publication on
+the paired UI4 triple-buffered background.
+
+The same executable also tests `tests/skybox-render/src/direct_rgba8.rs`: the
+unchanged bring-up skybox SPIR-V and original mesh render directly into one
+`Rgba8Unorm` target, with replacement alpha, no material/depth attachments, and
+no postprocess. It compares every output byte with the HDR/copy reference for
+day, dusk, night, and two intermediate sun directions (tolerance one 8-bit
+step, allowing the removed FP16 rounding). This simplification applies only
+to the fixed `BareMinimum` sky-only feature: its fragment colour is uniform
+and its postprocess does not tone-map. General scene HDR must be evaluated
+separately. This experiment still establishes no native TRUEOS execution.
+
+## Post-login native minimal sky
+
+TRUEOS login now starts the bounded `minimal_sky::NativeSky` producer instead
+of constructing all game pipelines. The scene worker opens a vgpu render
+device/queue, imports the existing paired background's RGBA8 write lease,
+submits the GPU-backed full-target clear, and publishes its exact release
+through UI4. Login waits for that first publication. Loader foreground work
+cannot replace the sky background. The existing paired worker keeps the
+triple-buffering, Busy retries, resize, and logout handoff contracts.
+
+`minimal_sky::rgba8` evaluates the shipped `BareMinimum` + Flat-cloud sky
+colour from the connected client's sun direction; it matches the original
+baked shaders' opaque display output in the host render proof. This uniform
+sky uses the kernel's shipped AOT fill implementation, not the native skybox
+VS/PS package. Directional sky features remain outside this fixed profile.
+
+The original character-selection and server-rules Iced widgets use the native
+BCS0 foreground planner/presenter, without constructing figures or LoD scenes.
+Character list operations remain active; world entry and spectating report
+that world rendering is unavailable in this sky-only build. The full scene
+adapter remains unimplemented. Build validation and host tests do not establish
+bare-metal presentation; verify the new Blueprint on the native rig separately.

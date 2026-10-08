@@ -216,9 +216,7 @@ pub enum LastInput {
 pub struct Window {
     renderer: Option<Renderer>,
     #[cfg(target_os = "trueos")]
-    scene_init: Option<std::thread::JoinHandle<Result<Renderer, crate::render::RenderError>>>,
-    #[cfg(target_os = "trueos")]
-    display: winit::event_loop::OwnedDisplayHandle,
+    sky_start_revision: Option<u64>,
     #[cfg(target_os = "trueos")]
     menu_presenter: crate::ui::ice::renderer::presenter::LayeredPresenter,
     #[cfg(target_os = "trueos")]
@@ -383,9 +381,7 @@ impl Window {
         let mut this = Self {
             renderer,
             #[cfg(target_os = "trueos")]
-            scene_init: None,
-            #[cfg(target_os = "trueos")]
-            display: event_loop.owned_display_handle(),
+            sky_start_revision: None,
             #[cfg(target_os = "trueos")]
             menu_presenter,
             #[cfg(target_os = "trueos")]
@@ -453,51 +449,72 @@ impl Window {
     #[cfg(target_os = "trueos")]
     pub fn start_scene_renderer(
         &mut self,
-        runtime: &Arc<tokio::runtime::Runtime>,
-        mode: crate::render::RenderMode,
+        _runtime: &Arc<tokio::runtime::Runtime>,
+        _mode: crate::render::RenderMode,
+        sun_z: f32,
     ) -> Result<(), String> {
-        if self.renderer.is_some() || self.scene_init.is_some() {
-            return Ok(());
+        if self.sky_start_revision.is_none() {
+            self.menu_presenter.check()?;
+            self.menu_revision += 1;
+            let size = self.window.surface_size();
+            self.menu_presenter.submit_sky(
+                self.menu_revision,
+                Vec2::new(size.width.max(1), size.height.max(1)),
+                crate::render::minimal_sky::rgba8(sun_z),
+            );
+            self.sky_start_revision = Some(self.menu_revision);
+            tracing::info!(target: "voxy_scene_contract", "Starting native minimal sky after login; character UI uses BCS0");
         }
-        let window = Arc::clone(&self.window);
-        let display = self.display.clone();
-        let runtime = Arc::clone(runtime);
-        self.scene_init = Some(
-            std::thread::Builder::new()
-                .name("voxy-scene-init".into())
-                .spawn(move || Renderer::new(window, display, mode, &runtime))
-                .map_err(|error| format!("Could not start graphics initialization: {error}"))?,
+        Ok(())
+    }
+
+    /// Ready only after the native sky's exact leased frame has been published.
+    #[cfg(target_os = "trueos")]
+    pub fn poll_scene_renderer(&mut self) -> Result<Option<(usize, usize)>, String> {
+        self.menu_presenter.check()?;
+        let revision = self
+            .sky_start_revision
+            .ok_or("Sky initialization has not started")?;
+        Ok((self.menu_presenter.scene_published_revision() < revision).then_some((0, 1)))
+    }
+
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn present_character_ui(
+        &mut self,
+        mut plan: crate::ui::ice::renderer::bcs::FramePlan,
+    ) -> Result<(), String> {
+        use winit::platform::trueos::WindowExtTrueOS;
+        let viewport = self.window.trueos_content_viewport();
+        plan.place_in_viewport(
+            viewport.position.x,
+            viewport.position.y,
+            viewport.size.width,
+            viewport.size.height,
+        );
+        self.menu_presenter.check()?;
+        self.menu_revision += 1;
+        let size = self.window.surface_size();
+        self.menu_presenter.submit_foreground(
+            self.menu_revision,
+            Vec2::new(size.width, size.height),
+            plan.foreground,
         );
         Ok(())
     }
 
-    /// Poll without joining an unfinished worker or acquiring a scene frame.
     #[cfg(target_os = "trueos")]
-    pub fn poll_scene_renderer(&mut self) -> Result<Option<(usize, usize)>, String> {
-        if let Some(job) = &self.scene_init {
-            if !job.is_finished() {
-                return Ok(Some((0, 0)));
-            }
-            let renderer = self
-                .scene_init
-                .take()
-                .unwrap()
-                .join()
-                .map_err(|_| "Graphics initialization worker stopped unexpectedly".to_string())?
-                .map_err(|error| {
-                    tracing::error!(?error, "Game graphics initialization failed");
-                    "Could not start game graphics.\nThe main menu is still available. Details are in the log."
-                        .to_string()
-                })?;
-            self.renderer = Some(renderer);
-            self.resized = true;
+    pub(crate) fn present_sky(&mut self, sun_z: f32) -> Result<(), String> {
+        self.menu_presenter.check()?;
+        self.menu_revision += 1;
+        let size = self.window.surface_size();
+        if size.width != 0 && size.height != 0 {
+            self.menu_presenter.submit_sky(
+                self.menu_revision,
+                Vec2::new(size.width, size.height),
+                crate::render::minimal_sky::rgba8(sun_z),
+            );
         }
-        let renderer = self
-            .renderer
-            .as_mut()
-            .ok_or("Graphics initialization has not started")?;
-        renderer.poll_pipeline_creation();
-        Ok(renderer.pipeline_creation_status())
+        Ok(())
     }
 
     #[cfg(target_os = "trueos")]
@@ -517,7 +534,14 @@ impl Window {
         self.menu_presenter.check()?;
         if self.menu_handoff.is_none() {
             self.menu_revision += 1;
-            self.menu_presenter.submit(self.menu_revision, size, plan);
+            if self.sky_start_revision.is_some() {
+                // The post-login scene worker owns the background. Loader UI
+                // may continue updating without replacing the admitted sky.
+                self.menu_presenter
+                    .submit_foreground(self.menu_revision, size, plan.foreground);
+            } else {
+                self.menu_presenter.submit(self.menu_revision, size, plan);
+            }
         }
         Ok(())
     }
@@ -525,6 +549,7 @@ impl Window {
     #[cfg(target_os = "trueos")]
     pub fn resume_menu(&mut self) {
         self.menu_handoff = None;
+        self.sky_start_revision = None;
     }
 
     /// Retire the menu foreground before the first scene frame, without waiting

@@ -1937,12 +1937,23 @@ impl CharSelectionUi {
         // TODO: don't add default font twice
         let font = ui::ice::load_font(&i18n.fonts().get("cyri").unwrap().asset_key);
 
+        #[cfg(not(target_os = "trueos"))]
         let mut ui = Ui::new(
             &mut global_state.window,
             font,
             global_state.settings.interface.ui_scale,
         )
         .unwrap();
+        #[cfg(target_os = "trueos")]
+        let mut ui = {
+            let size = global_state.window.window().surface_size();
+            let mut ui = Ui::new_native(
+                vek::Vec2::new(size.width, size.height),
+                global_state.window.window().scale_factor(),
+            );
+            ui.clear_fonts(font);
+            ui
+        };
 
         let fonts = Fonts::load(i18n.fonts(), &mut ui).expect("Impossible to load fonts");
 
@@ -2032,6 +2043,7 @@ impl CharSelectionUi {
         let mut events = Vec::new();
         let i18n = global_state.i18n.read();
 
+        #[cfg(not(target_os = "trueos"))]
         let (mut messages, _) = self.ui.maintain(
             self.controls
                 .view(&global_state.settings, client, &self.error, &i18n),
@@ -2039,6 +2051,35 @@ impl CharSelectionUi {
             None,
             &mut global_state.clipboard,
         );
+
+        #[cfg(target_os = "trueos")]
+        let mut messages = {
+            use winit::platform::trueos::WindowExtTrueOS;
+            let viewport = global_state.window.window().trueos_content_viewport();
+            self.ui.set_native_origin(vek::Vec2::new(
+                viewport.position.x as f32,
+                viewport.position.y as f32,
+            ));
+            match self.ui.maintain_native(
+                self.controls
+                    .view(&global_state.settings, client, &self.error, &i18n),
+                vek::Vec2::new(viewport.size.width, viewport.size.height),
+                &mut global_state.clipboard,
+            ) {
+                Ok((messages, plan)) => {
+                    if let Some(plan) = plan {
+                        if let Err(error) = global_state.window.present_character_ui(plan) {
+                            self.error = Some(error);
+                        }
+                    }
+                    messages
+                }
+                Err(error) => {
+                    self.error = Some(error);
+                    Vec::new()
+                }
+            }
+        };
 
         if self.enter_pressed {
             self.enter_pressed = false;

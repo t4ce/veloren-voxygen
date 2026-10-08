@@ -24,6 +24,7 @@ struct Job {
     revision: u64,
     size: Vec2<u32>,
     plan: LayerPlan,
+    sky: Option<u32>,
 }
 #[derive(Default)]
 struct Mailbox {
@@ -99,11 +100,13 @@ impl LayeredPresenter {
             revision,
             size,
             plan: plan.background,
+            sky: None,
         });
         self.foreground.mailbox.submit(Job {
             revision,
             size,
             plan: plan.foreground,
+            sky: None,
         });
     }
     pub fn clear_foreground(&self, revision: u64, size: Vec2<u32>) {
@@ -111,7 +114,30 @@ impl LayeredPresenter {
             revision,
             size,
             plan: LayerPlan::default(),
+            sky: None,
         });
+    }
+    pub fn submit_sky(&self, revision: u64, size: Vec2<u32>, rgba: u32) {
+        self.scene.mailbox.submit(Job {
+            revision,
+            size,
+            plan: LayerPlan::default(),
+            sky: Some(rgba),
+        });
+    }
+    pub fn submit_foreground(&self, revision: u64, size: Vec2<u32>, plan: LayerPlan) {
+        self.foreground.mailbox.submit(Job {
+            revision,
+            size,
+            plan,
+            sky: None,
+        });
+    }
+    pub fn scene_published_revision(&self) -> u64 {
+        self.scene
+            .mailbox
+            .published_revision
+            .load(Ordering::Acquire)
     }
     pub fn foreground_published_revision(&self) -> u64 {
         self.foreground
@@ -176,6 +202,9 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     let mut phase = 0;
     let mut acquired_frame = false;
     let mut region_supported = true;
+    let mut previous_sky = None;
+    #[cfg(target_os = "trueos")]
+    let mut sky_renderer: Option<crate::render::minimal_sky::NativeSky> = None;
     while !mailbox.stopped.load(Ordering::Acquire) {
         mailbox.counters.iterations.fetch_add(1, Ordering::Relaxed);
         if job.is_none() {
@@ -203,6 +232,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
             && scene_repaint_hold.is_none()
             && previous.as_ref().is_some_and(|(size, plan)| {
                 *size == current.size
+                    && previous_sky == current.sky
                     && plan.viewport == current.plan.viewport
                     && plan.commands == current.plan.commands
                     && current.plan.uploads.iter().all(|upload| {
@@ -222,6 +252,11 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         }
         let result = match phase {
             0 => {
+                #[cfg(target_os = "trueos")]
+                if current.sky.is_some() && sky_renderer.is_none() {
+                    sky_renderer = Some(crate::render::minimal_sky::NativeSky::open()?);
+                    tracing::info!(target: "voxy_scene_contract", "Minimal RGBA8 sky device and render queue ready");
+                }
                 if name == "foreground" && region_supported {
                     repaint = Some(damage::prepare(
                         previous
@@ -326,7 +361,27 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 let commands = repaint
                     .as_ref()
                     .map_or(current.plan.commands.as_slice(), |r| r.commands.as_slice());
-                let result = target.draw_sprite_commands(commands);
+                let result = if let Some(rgba) = current.sky {
+                    #[cfg(target_os = "trueos")]
+                    {
+                        sky_renderer.as_ref().unwrap().draw(target.render_target(), rgba)
+                            .map_err(|e| if e == trueos::vgpu::ERR_BUSY { Error::Busy } else {
+                                tracing::error!(target: "voxy_scene_contract", code = e, "Native sky submission failed");
+                                Error::InvalidState
+                            })
+                    }
+                    #[cfg(all(not(target_os = "trueos"), test))]
+                    {
+                        target.draw_sky(rgba)
+                    }
+                    #[cfg(all(not(target_os = "trueos"), not(test)))]
+                    {
+                        let _ = rgba;
+                        Err(Error::InvalidState)
+                    }
+                } else {
+                    target.draw_sprite_commands(commands)
+                };
                 mailbox
                     .counters
                     .draw_call_us
@@ -363,6 +418,13 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     .fetch_add(micros(call_started.elapsed()), Ordering::Relaxed);
                 match result {
                     Ok(()) => {
+                        if let Some(rgba) = current.sky {
+                            if previous_sky.is_none() {
+                                tracing::info!(target: "voxy_scene_contract", revision = current.revision,
+                                    rgba8 = rgba, width = current.size.x, height = current.size.y,
+                                    "Minimal sky GPU frame published to paired background");
+                            }
+                        }
                         mailbox
                             .published_revision
                             .store(current.revision, Ordering::Release);
@@ -387,6 +449,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     });
                 }
                 preceding_damage = repaint.as_ref().map(|r| r.changed);
+                previous_sky = current.sky;
                 previous = Some((current.size, current.plan.clone()));
                 repaint = None;
                 job = None;
@@ -405,7 +468,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 counter.fetch_add(1, Ordering::Relaxed);
                 // A rejected draw cancels its write lease. Begin a fresh frame;
                 // admission and publish Busy retain their own transaction state.
-                if phase == 2 {
+                if phase == 2 && current.sky.is_none() {
                     phase = 1;
                 }
                 mailbox.wait();

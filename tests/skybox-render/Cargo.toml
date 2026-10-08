@@ -1,0 +1,16 @@
+[package]
+name = "voxy-skybox-render-proof"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+wgpu = { path = "../../../wgpu/wgpu", default-features = false, features = ["std", "vulkan", "spirv"] }
+bytemuck = { version = "1", features = ["derive"] }
+half = "2"
+pollster = "0.4"
+
+[patch.crates-io]
+raw-window-handle = { path = "../../../TRUEOS-Blueprints/vendor/raw-window-handle" }

@@ -25,6 +25,8 @@ use i18n::{LocalizationGuard, LocalizationHandle, fluent_args};
 use std::path::Path;
 use tokio::runtime;
 use tracing::error;
+#[cfg(target_os = "trueos")]
+use specs::WorldExt;
 use ui::{Event as MainMenuEvent, MainMenuUi};
 
 pub use ui::rand_bg_image_spec;
@@ -126,11 +128,15 @@ impl PlayState for MainMenuState {
             }
         }
 
-        // Maintain the UI.
-        for event in self
+        // Maintain the UI before submitting startup login so its first frame is ready.
+        let mut menu_events = self
             .main_menu_ui
-            .maintain(global_state, global_state.clock.real_dt())
-        {
+            .maintain(global_state, global_state.clock.real_dt());
+        #[cfg(target_os = "trueos")]
+        if let Some(event) = self.main_menu_ui.startup_login() {
+            menu_events.push(event);
+        }
+        for event in menu_events {
             match event {
                 MainMenuEvent::LoginAttempt {
                     username,
@@ -261,9 +267,15 @@ impl PlayState for MainMenuState {
                 // Authentication/admission succeeded. Only now may the play
                 // renderer request a GPU device; keep the loader visible.
                 #[cfg(target_os = "trueos")]
+                let sky_sun_z = {
+                    let time = client.state().ecs().read_resource::<common::resources::TimeOfDay>();
+                    time.get_sun_dir().z
+                };
+                #[cfg(target_os = "trueos")]
                 if let Err(error) = global_state.window.start_scene_renderer(
                     &global_state.tokio_runtime,
                     global_state.settings.graphics.render_mode.clone(),
+                    sky_sun_z,
                 ) {
                     // This client has not entered InitState::Pipeline yet.
                     global_state
@@ -401,6 +413,7 @@ impl PlayState for MainMenuState {
 
                     // If the client cannot enter the game but spectate, skip from the character
                     // menu directly to spectating.
+                    #[cfg(not(target_os = "trueos"))]
                     if client.client_type().can_spectate()
                         && !client.client_type().can_enter_character()
                     {

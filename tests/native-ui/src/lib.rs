@@ -82,6 +82,8 @@ pub mod ui4_winit {
         pub extent: Option<(u32, u32)>,
         pub tracked_attempts: usize,
         pub commands: Vec<Vec<SpriteCommand>>,
+        pub sky_colors: Vec<u32>,
+        pub busy_sky: bool,
     }
     pub struct SceneTarget {
         pub observations: std::sync::Arc<std::sync::Mutex<Observations>>,
@@ -142,6 +144,18 @@ pub mod ui4_winit {
             }
             state.draws += 1;
             state.commands.push(commands.to_vec());
+            Ok(())
+        }
+        pub fn draw_sky(&mut self, rgba: u32) -> Result<(), Error> {
+            let mut state = self.observations.lock().unwrap();
+            if !state.lease {
+                return Err(Error::Invalid);
+            }
+            if state.busy_sky {
+                state.busy_sky = false;
+                return Err(Error::Busy);
+            }
+            state.sky_colors.push(rgba);
             Ok(())
         }
         pub fn publish(&mut self, damage: Damage) -> Result<(), Error> {
@@ -613,5 +627,57 @@ mod scheduling {
         let start = Instant::now();
         drop(presenter);
         assert!(start.elapsed() < Duration::from_millis(200));
+    }
+    #[test]
+    fn sky_handoff_preserves_foreground_and_coalesces_only_unleased_background_work() {
+        let (scene, scene_state, scene_live) = target(false);
+        scene_state.lock().unwrap().background = true;
+        let (foreground, ui_state, _) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        let size = vek::Vec2::new(640, 480);
+        let day = u32::from_le_bytes([36, 99, 191, 255]);
+        let dusk = u32::from_le_bytes([255, 51, 38, 255]);
+        presenter.submit_sky(1, size, day);
+        wait(|| presenter.scene_published_revision() == 1);
+        assert_eq!(scene_state.lock().unwrap().sky_colors, [day]);
+        assert_eq!(ui_state.lock().unwrap().publications, 0);
+        presenter.submit_foreground(2, size, plan(1.).foreground);
+        wait(|| presenter.foreground_published_revision() == 2);
+        presenter.submit_sky(3, size, day);
+        wait(|| presenter.scene_published_revision() == 3);
+        assert_eq!(scene_state.lock().unwrap().publications, 1);
+        presenter.submit_sky(4, size, 0xff00_0000);
+        presenter.submit_sky(5, size, dusk);
+        presenter.submit_foreground(4, size, plan(2.).foreground);
+        wait(|| presenter.foreground_published_revision() == 4);
+        assert_eq!(scene_state.lock().unwrap().sky_colors, [day]);
+        scene_live.store(true, Ordering::Release);
+        wait(|| presenter.scene_published_revision() == 5);
+        assert_eq!(scene_state.lock().unwrap().sky_colors, [day, dusk]);
+        // A new extent needs a fresh complete sky, even with the same colour.
+        presenter.submit_sky(6, vek::Vec2::new(800, 600), dusk);
+        wait(|| presenter.scene_published_revision() == 6);
+        assert_eq!(scene_state.lock().unwrap().sky_colors, [day, dusk, dusk]);
+        assert_eq!(scene_state.lock().unwrap().tracked_attempts, 0);
+        assert_eq!(ui_state.lock().unwrap().publications, 2);
+        // Returning to menu work removes the sky policy, not the UI worker.
+        presenter.submit(7, size, plan(3.));
+        wait(|| presenter.published_revision() == 7);
+        assert_eq!(scene_state.lock().unwrap().publications, 4);
+        presenter.check().unwrap();
+    }
+    #[test]
+    fn sky_import_busy_retries_the_same_write_lease() {
+        let (scene, state, _) = target(true);
+        state.lock().unwrap().busy_sky = true;
+        let (foreground, _, _) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        presenter.submit_sky(1, vek::Vec2::new(8, 8), 0xffbf_6324);
+        wait(|| presenter.scene_published_revision() == 1);
+        presenter.check().unwrap();
+        let state = state.lock().unwrap();
+        assert_eq!(state.begins, 1);
+        assert_eq!(state.sky_colors, [0xffbf_6324]);
+        assert_eq!(state.publications, 1);
     }
 }

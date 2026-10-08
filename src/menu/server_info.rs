@@ -1,4 +1,5 @@
 use super::{char_selection::CharSelectionState, dummy_scene::Scene};
+use crate::client::ServerInfo;
 use crate::{
     Direction, GlobalState, PlayState, PlayStateResult,
     menu::main::get_client_msg_error,
@@ -12,20 +13,19 @@ use crate::{
     },
     window::{self, Event},
 };
-use crate::client::ServerInfo;
 use common::{
     assets::{self, AssetExt},
     comp,
 };
 use common_base::span;
 use common_net::msg::server::ServerDescription;
+use core::{hash::Hash, hash::Hasher};
 use i18n::LocalizationHandle;
 use iced::{
     Align, Column, Container, HorizontalAlignment, Length, Row, Scrollable, VerticalAlignment,
     button, scrollable,
 };
 use std::collections::hash_map::DefaultHasher;
-use core::{hash::Hash, hash::Hasher};
 use tracing::error;
 
 image_ids_ice! {
@@ -53,6 +53,7 @@ pub struct Controls {
 
 pub struct ServerInfoState {
     ui: Ui,
+    #[cfg(not(target_os = "trueos"))]
     scene: Scene,
     controls: Controls,
     char_select: Option<CharSelectionState>,
@@ -98,12 +99,23 @@ impl ServerInfoState {
         // TODO: don't add default font twice
         let font = load_font(&i18n.fonts().get("cyri").unwrap().asset_key);
 
+        #[cfg(not(target_os = "trueos"))]
         let mut ui = Ui::new(
             &mut global_state.window,
             font,
             global_state.settings.interface.ui_scale,
         )
         .unwrap();
+        #[cfg(target_os = "trueos")]
+        let mut ui = {
+            let size = global_state.window.window().surface_size();
+            let mut ui = Ui::new_native(
+                vek::Vec2::new(size.width, size.height),
+                global_state.window.window().scale_factor(),
+            );
+            ui.clear_fonts(font);
+            ui
+        };
 
         let changed = server.is_some_and(|s| {
             s.accepted_rules
@@ -111,6 +123,7 @@ impl ServerInfoState {
         });
 
         Ok(Self {
+            #[cfg(not(target_os = "trueos"))]
             scene: Scene::new(global_state.window.renderer_mut()),
             controls: Controls {
                 bg_img: ui.add_graphic(Graphic::Image(
@@ -189,13 +202,41 @@ impl PlayState for ServerInfoState {
         }
 
         // Maintain the UI.
-        let view = self.controls.view();
+        #[cfg(not(target_os = "trueos"))]
         let (messages, _) = self.ui.maintain(
-            view,
+            self.controls.view(),
             global_state.window.renderer_mut(),
             None,
             &mut global_state.clipboard,
         );
+
+        #[cfg(target_os = "trueos")]
+        let messages = {
+            use winit::platform::trueos::WindowExtTrueOS;
+            let viewport = global_state.window.window().trueos_content_viewport();
+            self.ui.set_native_origin(vek::Vec2::new(
+                viewport.position.x as f32,
+                viewport.position.y as f32,
+            ));
+            match self.ui.maintain_native(
+                self.controls.view(),
+                vek::Vec2::new(viewport.size.width, viewport.size.height),
+                &mut global_state.clipboard,
+            ) {
+                Ok((messages, plan)) => {
+                    if let Some(plan) = plan {
+                        if let Err(error) = global_state.window.present_character_ui(plan) {
+                            global_state.info_message = Some(error);
+                        }
+                    }
+                    messages
+                }
+                Err(error) => {
+                    global_state.info_message = Some(error);
+                    Vec::new()
+                }
+            }
+        };
 
         #[expect(clippy::never_loop)] // TODO: Remove when more message types are added
         for message in messages {
@@ -224,7 +265,19 @@ impl PlayState for ServerInfoState {
 
     fn capped_fps(&self) -> bool { true }
 
-    fn globals_bind_group(&self) -> &GlobalsBindGroup { self.scene.global_bind_group() }
+    fn uses_native_ui(&self) -> bool {
+        cfg!(target_os = "trueos")
+    }
+    fn globals_bind_group(&self) -> &GlobalsBindGroup {
+        #[cfg(not(target_os = "trueos"))]
+        {
+            self.scene.global_bind_group()
+        }
+        #[cfg(target_os = "trueos")]
+        {
+            unreachable!("native server rules publish through UI4")
+        }
+    }
 
     fn render(&self, drawer: &mut Drawer<'_>, _: &Settings) {
         // Draw the UI to the screen.

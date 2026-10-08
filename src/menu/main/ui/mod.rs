@@ -604,11 +604,7 @@ impl Controls {
             Message::Multiplayer => {
                 self.begin_connection(ui);
 
-                events.push(Event::LoginAttempt {
-                    username: self.login_info.username.trim().to_string(),
-                    password: self.login_info.password.clone(),
-                    server_address: self.login_info.server.trim().to_string(),
-                });
+                events.push(self.login_attempt());
             }
             Message::UnlockServerField => self.server_field_locked = false,
             Message::Username(new_value) => self.login_info.username = new_value,
@@ -686,6 +682,14 @@ impl Controls {
                       };
                   }
               },*/
+        }
+    }
+
+    fn login_attempt(&self) -> Event {
+        Event::LoginAttempt {
+            username: self.login_info.username.trim().to_string(),
+            password: self.login_info.password.clone(),
+            server_address: self.login_info.server.trim().to_string(),
         }
     }
 
@@ -1051,6 +1055,42 @@ impl MainMenuUi {
     #[cfg(target_os = "trueos")]
     pub(crate) fn invalidate_native(&mut self) {
         self.ui.invalidate_native();
+    }
+
+    /// Use the normal Multiplayer path once per process, including its loading
+    /// minimum and cancellation behavior. Returning to this menu never retries.
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn startup_login(&mut self) -> Option<Event> {
+        use core::sync::atomic::{AtomicBool, Ordering};
+        static ATTEMPTED: AtomicBool = AtomicBool::new(false);
+        if ATTEMPTED.swap(true, Ordering::Relaxed) {
+            return None;
+        }
+        let mut password = match trueos::async_fs::block_on(
+            trueos::async_fs::read_file_utf8(b"/apps/voxy/voxy.pw"),
+        ) {
+            Ok(password) => password,
+            Err(code) => {
+                tracing::info!(code, "Startup login skipped: password file unavailable");
+                return None;
+            }
+        };
+        // Preserve password spaces; strip only the file's trailing line endings.
+        password.truncate(password.trim_end_matches(['\r', '\n']).len());
+        if password.is_empty() || password.len() > 4096 || password.chars().any(char::is_control) {
+            tracing::warn!("Startup login skipped: invalid password file");
+            return None;
+        }
+        if self.controls.login_info.username.trim().is_empty()
+            || self.controls.login_info.server.trim().is_empty()
+        {
+            tracing::warn!("Startup login skipped: username or server missing");
+            return None;
+        }
+        self.controls.login_info.password = password;
+        self.controls.begin_connection(&mut self.ui);
+        tracing::info!("Automatic Multiplayer login from /apps/voxy/voxy.pw");
+        Some(self.controls.login_attempt())
     }
 
     pub fn maintain(&mut self, global_state: &mut GlobalState, dt: Duration) -> Vec<Event> {
