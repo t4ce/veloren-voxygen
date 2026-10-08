@@ -259,6 +259,9 @@ fn main() {
 
 #[cfg(feature = "headless")]
 fn main() {
+    #[cfg(target_os = "trueos")]
+    let _vm_shutdown = trueos::shutdown::ShutdownGuard::register()
+        .expect("Failed to register cooperative Voxy shutdown");
     if let Err(error) = veloren_voxygen::headless::run() {
         #[cfg(target_os = "trueos")]
         let _ = trueos::logl::log_record(
@@ -268,6 +271,7 @@ fn main() {
         );
         #[cfg(not(target_os = "trueos"))]
         eprintln!("Headless client: {error}");
+        #[cfg(not(target_os = "trueos"))]
         std::process::exit(1);
     }
 }

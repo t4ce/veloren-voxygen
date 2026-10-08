@@ -120,6 +120,10 @@ pub(super) fn run(mut app: App) -> Result<(), Box<dyn std::error::Error>> {
         crate::clipboard::Clipboard::for_frame(app.window.as_ref().expect("UI4 frame").window_id());
     let mut timings = LoopTimings::default();
     loop {
+        if matches!(trueos::shutdown::requested(), Ok(true)) {
+            super::connection_progress(format_args!("Voxygen headless: cooperative stop requested"));
+            break;
+        }
         let started = Instant::now();
         let mut micros = [0; 6];
         // Publication must retire before a resize or a fresh write lease.

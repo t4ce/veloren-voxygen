@@ -505,6 +505,11 @@ impl ApplicationHandler for App {
         }
     }
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
+        if matches!(trueos::shutdown::requested(), Ok(true)) {
+            tracing::info!("voxy: cooperative stop requested; exiting native menu");
+            event_loop.exit();
+            return;
+        }
         if self.state.is_some() {
             if let Err(error) = self.tick(event_loop) {
                 self.fail(event_loop, error);
