@@ -6,6 +6,7 @@ use iced::{Clipboard, Event, Hasher, Layout, Length, Point, Rectangle, Widget, l
 pub struct PanelWidth<'a, M> {
     text: String,
     text_size: u16,
+    viewport_margin: u16,
     content: Element<'a, M>,
 }
 impl<'a, M> PanelWidth<'a, M> {
@@ -13,8 +14,15 @@ impl<'a, M> PanelWidth<'a, M> {
         Self {
             text,
             text_size,
+            viewport_margin: 0,
             content,
         }
+    }
+
+    /// Reserve space outside the panel without expanding its interactive bounds.
+    pub fn viewport_margin(mut self, margin: u16) -> Self {
+        self.viewport_margin = margin;
+        self
     }
 }
 impl<M> Widget<M, Renderer> for PanelWidth<'_, M> {
@@ -32,6 +40,8 @@ impl<M> Widget<M, Renderer> for PanelWidth<'_, M> {
             Default::default(),
             iced::Size::new(f32::INFINITY, f32::INFINITY),
         );
+        let margin = f32::from(self.viewport_margin) * 2.;
+        let limits = limits.shrink(iced::Size::new(margin, margin));
         let available = limits.max().width;
         let width = (available * 0.8).max(text_width + 48.).min(available);
         self.content.layout(
@@ -42,6 +52,7 @@ impl<M> Widget<M, Renderer> for PanelWidth<'_, M> {
     fn hash_layout(&self, state: &mut Hasher) {
         self.text.hash(state);
         self.text_size.hash(state);
+        self.viewport_margin.hash(state);
         self.content.hash_layout(state);
     }
     fn draw(

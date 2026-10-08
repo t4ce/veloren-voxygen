@@ -5,6 +5,7 @@
 use super::{
     activity::{ProducerActivity, ProducerCounters, micros},
     bcs::{FramePlan, LayerPlan},
+    damage::{self, Repaint},
 };
 use std::{
     collections::HashMap,
@@ -16,7 +17,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use trueos::ui4_solara_text::{Damage, Error, SceneTarget, SpriteBackend, SpriteCommand};
+use trueos::ui4_solara_text::{Damage, Error, SceneTarget, SpriteBackend};
 use vek::Vec2;
 
 struct Job {
@@ -165,16 +166,21 @@ fn spawn(
 }
 fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<(), String> {
     let mut uploaded = HashMap::new();
-    let mut previous: Option<(Vec2<u32>, Vec<SpriteCommand>)> = None;
+    let mut previous: Option<(Vec2<u32>, LayerPlan)> = None;
+    let mut preceding_damage = None;
+    let mut repaint: Option<Repaint> = None;
     let mut job: Option<Job> = None;
     let mut phase = 0;
+    let mut acquired_frame = false;
+    let mut region_supported = true;
     while !mailbox.stopped.load(Ordering::Acquire) {
         mailbox.counters.iterations.fetch_add(1, Ordering::Relaxed);
         if job.is_none() {
             job = mailbox.latest.lock().unwrap().take();
             phase = 0;
+            acquired_frame = false;
         }
-        if phase <= 1 {
+        if phase <= 1 && !acquired_frame {
             if let Some(latest) = mailbox.latest.lock().unwrap().take() {
                 if job.is_some() {
                     mailbox
@@ -191,13 +197,13 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
             continue;
         };
         if phase == 0
-            && previous.as_ref().is_some_and(|(size, commands)| {
+            && previous.as_ref().is_some_and(|(size, plan)| {
                 *size == current.size
-                    && *commands == current.plan.commands
+                    && plan.commands == current.plan.commands
                     && current.plan.uploads.iter().all(|upload| {
-                        uploaded
-                            .get(&upload.id)
-                            .is_some_and(|image| Arc::ptr_eq(image, &upload.image))
+                        plan.uploads.iter().any(|previous| {
+                            previous.id == upload.id && Arc::ptr_eq(&previous.image, &upload.image)
+                        })
                     })
             })
         {
@@ -211,6 +217,21 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         }
         let result = match phase {
             0 => {
+                if name == "foreground" && region_supported {
+                    repaint = Some(damage::prepare(
+                        previous
+                            .as_ref()
+                            .map(|(size, plan)| ((size.x, size.y), plan)),
+                        &current.plan,
+                        (current.size.x, current.size.y),
+                        // Replacement buffers after resize have no retained pixels.
+                        preceding_damage.filter(|_| {
+                            previous
+                                .as_ref()
+                                .is_some_and(|(size, _)| *size == current.size)
+                        }),
+                    ));
+                }
                 target
                     .set_extent(current.size.x, current.size.y)
                     .map_err(|e| format!("extent: {e:?}"))?;
@@ -246,24 +267,43 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 result
             }
             1 => {
-                let result = target.begin_gpu_frame();
+                let result = if let Some(region) = repaint.as_ref().map(|r| r.region) {
+                    match target.begin_gpu_frame_region(region) {
+                        // The emulator's deferred paint backend cannot preserve
+                        // untouched pixels. Invalid rejects before leasing, so
+                        // switch this worker to complete frames immediately.
+                        Err(Error::Invalid) => {
+                            region_supported = false;
+                            repaint = None;
+                            target.begin_gpu_frame()
+                        }
+                        result => result,
+                    }
+                } else {
+                    target.begin_gpu_frame()
+                };
                 if result.is_ok() {
+                    // Even a canceled draw may have touched the backing store.
+                    // Finish this revision before coalescing newer input, so
+                    // its repaint region cannot be lost after a Busy retry.
+                    acquired_frame = true;
                     mailbox.counters.begins.fetch_add(1, Ordering::Relaxed);
                 }
                 result
             }
             2 => {
                 let call_started = std::time::Instant::now();
-                let result = target.draw_sprite_commands(&current.plan.commands);
+                let commands = repaint
+                    .as_ref()
+                    .map_or(current.plan.commands.as_slice(), |r| r.commands.as_slice());
+                let result = target.draw_sprite_commands(commands);
                 mailbox
                     .counters
                     .draw_call_us
                     .fetch_add(micros(call_started.elapsed()), Ordering::Relaxed);
                 if result.is_ok() {
                     mailbox.counters.draws.fetch_add(1, Ordering::Relaxed);
-                    let bcs = current
-                        .plan
-                        .commands
+                    let bcs = commands
                         .iter()
                         .filter(|command| command.backend == SpriteBackend::Bcs0)
                         .count() as u64;
@@ -274,7 +314,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     mailbox
                         .counters
                         .compositor_commands
-                        .fetch_add(current.plan.commands.len() as u64 - bcs, Ordering::Relaxed);
+                        .fetch_add(commands.len() as u64 - bcs, Ordering::Relaxed);
                 }
                 result
             }
@@ -283,7 +323,10 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 // Foreground receipts cannot represent a background commit or
                 // a staged paired resize. Publish both capabilities normally;
                 // the kernel retains responsibility for display retirement.
-                let result = target.publish(Damage::full(current.size.x, current.size.y));
+                let damage = repaint
+                    .as_ref()
+                    .map_or(Damage::full(current.size.x, current.size.y), |r| r.changed);
+                let result = target.publish(damage);
                 mailbox
                     .counters
                     .publish_call_us
@@ -308,7 +351,9 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 }
             }
             _ => {
-                previous = Some((current.size, current.plan.commands.clone()));
+                preceding_damage = repaint.as_ref().map(|r| r.changed);
+                previous = Some((current.size, current.plan.clone()));
+                repaint = None;
                 job = None;
                 continue;
             }

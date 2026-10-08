@@ -226,16 +226,14 @@ impl Screen {
         ])
         .width(Length::Fill)
         .height(Length::Fill);
-        Container::new(crate::ui::ice::widget::panel_width::PanelWidth::new(
+        // The shared dialog overlay centers the panel. Keep viewport margins
+        // out of its bounds so empty space dismisses it on either side.
+        crate::ui::ice::widget::panel_width::PanelWidth::new(
             longest_line,
             fonts.cyri.scale(23),
             panel.into(),
-        ))
-        .center_x()
-        .center_y()
-        .padding(70)
-        .width(Length::Shrink)
-        .height(Length::Fill)
+        )
+        .viewport_margin(70)
         .into()
     }
 }

@@ -2,6 +2,8 @@
 pub(crate) mod activity;
 #[cfg(target_os = "trueos")]
 pub(crate) mod bcs;
+#[cfg(target_os = "trueos")]
+pub(crate) mod damage;
 mod defaults;
 #[cfg(target_os = "trueos")]
 pub(crate) mod presenter;

@@ -3,15 +3,40 @@ use std::pin::Pin;
 use wgpu::custom::*;
 pub(super) fn instance() -> wgpu::Instance {
     tracing::info!(target: "voxy_scene_contract", "Creating TRUEOS scene instance; execution device pending");
-    wgpu::Instance::from_custom(SceneInstance)
+    wgpu::Instance::from_custom(SceneInstance::default())
 }
+// Surface creation resolves the owning input window to its independent back
+// producer. Keeping both IDs avoids accidentally importing the UI snapshot as
+// a writable game frame when execution-device support is added.
 #[derive(Debug)]
-struct SceneInstance;
+struct SceneInstance {
+    resolve_background: fn(u32) -> Result<u32, String>,
+}
+impl Default for SceneInstance {
+    fn default() -> Self {
+        Self { resolve_background }
+    }
+}
+fn resolve_background(window: u32) -> Result<u32, String> {
+    #[cfg(target_os = "trueos")]
+    {
+        // Extent is only local bookkeeping here; surface configuration supplies
+        // the actual size once a scene execution device exists.
+        trueos::ui4_solara_text::SceneTarget::for_window(window, 1, 1)
+            .and_then(|foreground| foreground.background())
+            .map(|background| background.render_target())
+            .map_err(|error| format!("TRUEOS scene background target: {error:?}"))
+    }
+    #[cfg(not(target_os = "trueos"))]
+    {
+        let _ = window;
+        Err("TRUEOS scene background target requires the TRUEOS runtime".into())
+    }
+}
 impl InstanceInterface for SceneInstance {
     fn new(_desc: wgpu::InstanceDescriptor) -> Self {
-        Self
+        Self::default()
     }
-    #[expect(unsafe_code)]
     #[expect(unsafe_code)]
     unsafe fn create_surface(
         &self,
@@ -22,9 +47,18 @@ impl InstanceInterface for SceneInstance {
                 raw_window_handle: wgpu::rwh::RawWindowHandle::Trueos(handle),
                 ..
             } => {
-                tracing::info!(target: "voxy_scene_contract", window = handle.window.get(), "Scene surface bound to UI4 window");
+                let window = handle.window.get();
+                let render_target = (self.resolve_background)(window)
+                    .map_err(wgpu::CreateSurfaceError::from_message)?;
+                if render_target == 0 || render_target == window {
+                    return Err(wgpu::CreateSurfaceError::from_message(
+                        "TRUEOS scene requires an independent background render target".into(),
+                    ));
+                }
+                tracing::info!(target: "voxy_scene_contract", window, render_target, "Scene surface bound to UI4 background producer");
                 Ok(DispatchSurface::custom(SceneSurface {
-                    window: handle.window.get(),
+                    window,
+                    render_target,
                 }))
             }
             _ => Err(wgpu::CreateSurfaceError::from_message(
@@ -36,11 +70,12 @@ impl InstanceInterface for SceneInstance {
         &self,
         options: &wgpu::RequestAdapterOptions<'_, '_>,
     ) -> Pin<Box<dyn RequestAdapterFuture>> {
-        let window = options
+        let scene = options
             .compatible_surface
-            .and_then(|surface| surface.as_custom::<SceneSurface>())
-            .map(|surface| surface.window);
-        tracing::info!(target: "voxy_scene_contract", ?window, fallback = options.force_fallback_adapter, preference = ?options.power_preference, "Scene adapter requested");
+            .and_then(|surface| surface.as_custom::<SceneSurface>());
+        let window = scene.map(|surface| surface.window);
+        let render_target = scene.map(|surface| surface.render_target);
+        tracing::info!(target: "voxy_scene_contract", ?window, ?render_target, fallback = options.force_fallback_adapter, preference = ?options.power_preference, "Scene adapter requested");
         if options.force_fallback_adapter
             || options.compatible_surface.is_some() && window.is_none()
         {
@@ -134,6 +169,7 @@ impl AdapterInterface for SceneAdapter {
 #[derive(Debug)]
 struct SceneSurface {
     window: u32,
+    render_target: u32,
 }
 impl SurfaceInterface for SceneSurface {
     fn get_capabilities(&self, _adapter: &DispatchAdapter) -> wgpu::SurfaceCapabilities {
@@ -184,7 +220,9 @@ mod tests {
     }
     #[test]
     fn binds_window_selects_adapter_and_reports_device_contract_without_execution() {
-        let instance = wgpu::Instance::from_custom(SceneInstance);
+        let instance = wgpu::Instance::from_custom(SceneInstance {
+            resolve_background: |window| Ok(window + 100),
+        });
         let target = wgpu::SurfaceTargetUnsafe::RawHandle {
             raw_display_handle: None,
             raw_window_handle: wgpu::rwh::TrueosWindowHandle::new(NonZeroU32::new(7).unwrap())
@@ -194,13 +232,22 @@ mod tests {
         #[expect(unsafe_code)]
         let surface = unsafe { instance.create_surface_unsafe(target) }.unwrap();
         assert_eq!(surface.as_custom::<SceneSurface>().unwrap().window, 7);
+        assert_eq!(
+            surface.as_custom::<SceneSurface>().unwrap().render_target,
+            107
+        );
         let adapter = ready(instance.request_adapter(&wgpu::RequestAdapterOptions {
             compatible_surface: Some(&surface),
             ..Default::default()
         }))
         .unwrap();
         let adapter = adapter.as_custom::<SceneAdapter>().unwrap();
-        assert!(adapter.is_surface_supported(&DispatchSurface::custom(SceneSurface { window: 7 })));
+        assert!(
+            adapter.is_surface_supported(&DispatchSurface::custom(SceneSurface {
+                window: 7,
+                render_target: 107
+            }))
+        );
         assert!(adapter.features().is_empty());
         let request = wgpu::DeviceDescriptor {
             required_features: wgpu::Features::IMMEDIATES,
@@ -223,7 +270,9 @@ mod tests {
     }
     #[test]
     fn rejects_foreign_window_handles_with_a_surface_error() {
-        let instance = wgpu::Instance::from_custom(SceneInstance);
+        let instance = wgpu::Instance::from_custom(SceneInstance {
+            resolve_background: |window| Ok(window + 100),
+        });
         let target = wgpu::SurfaceTargetUnsafe::RawHandle {
             raw_display_handle: None,
             raw_window_handle: wgpu::rwh::XlibWindowHandle::new(1).into(),
@@ -238,11 +287,30 @@ mod tests {
     }
 
     #[test]
+    fn rejects_a_foreground_target_instead_of_using_it_for_game_frames() {
+        let instance = wgpu::Instance::from_custom(SceneInstance {
+            resolve_background: Ok,
+        });
+        let target = wgpu::SurfaceTargetUnsafe::RawHandle {
+            raw_display_handle: None,
+            raw_window_handle: wgpu::rwh::TrueosWindowHandle::new(NonZeroU32::new(7).unwrap())
+                .into(),
+        };
+        #[expect(unsafe_code)]
+        let error = unsafe { instance.create_surface_unsafe(target) }.unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("independent background render target")
+        );
+    }
+
+    #[test]
     fn rejects_fallback_instead_of_returning_a_fake_software_device() {
         let options = wgpu::RequestAdapterOptions {
             force_fallback_adapter: true,
             ..Default::default()
         };
-        assert!(ready(SceneInstance.request_adapter(&options)).is_err());
+        assert!(ready(SceneInstance::default().request_adapter(&options)).is_err());
     }
 }

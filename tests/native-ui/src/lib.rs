@@ -49,15 +49,30 @@ pub mod ui4_solara_text {
         Invalid,
         InvalidState,
     }
-    pub struct Damage;
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct Damage {
+        pub x: u32,
+        pub y: u32,
+        pub width: u32,
+        pub height: u32,
+    }
     impl Damage {
-        pub fn full(_: u32, _: u32) -> Self {
-            Self
+        pub fn full(width: u32, height: u32) -> Self {
+            Self {
+                x: 0,
+                y: 0,
+                width,
+                height,
+            }
         }
     }
     #[derive(Default)]
     pub struct Observations {
         pub begins: usize,
+        pub clear_regions: Vec<Damage>,
+        pub region_unsupported: bool,
+        pub region_attempts: usize,
+        pub damages: Vec<Damage>,
         pub draws: usize,
         pub publications: u64,
         pub lease: bool,
@@ -103,6 +118,18 @@ pub mod ui4_solara_text {
             state.begins += 1;
             Ok(())
         }
+        pub fn begin_gpu_frame_region(&mut self, damage: Damage) -> Result<(), Error> {
+            {
+                let mut state = self.observations.lock().unwrap();
+                state.region_attempts += 1;
+                if state.region_unsupported {
+                    return Err(Error::Invalid);
+                }
+            }
+            self.begin_gpu_frame()?;
+            self.observations.lock().unwrap().clear_regions.push(damage);
+            Ok(())
+        }
         pub fn draw_sprite_commands(&mut self, commands: &[SpriteCommand]) -> Result<(), Error> {
             let mut state = self.observations.lock().unwrap();
             if !state.lease {
@@ -117,13 +144,14 @@ pub mod ui4_solara_text {
             state.commands.push(commands.to_vec());
             Ok(())
         }
-        pub fn publish(&mut self, _: Damage) -> Result<(), Error> {
+        pub fn publish(&mut self, damage: Damage) -> Result<(), Error> {
             let mut state = self.observations.lock().unwrap();
             if !state.lease {
                 return Err(Error::Invalid);
             }
             state.lease = false;
             state.publications += 1;
+            state.damages.push(damage);
             state.pending_resize = false;
             Ok(())
         }
@@ -174,6 +202,7 @@ pub mod ui {
             }
             pub mod activity;
             pub mod bcs;
+            pub mod damage;
             pub mod presenter;
         }
     }
@@ -257,6 +286,32 @@ mod scheduling {
         }
     }
     #[test]
+    fn unsupported_region_runtime_uses_full_frames_without_an_extra_lease() {
+        let (scene, _, _) = target(true);
+        let (foreground, state, _) = target(true);
+        state.lock().unwrap().region_unsupported = true;
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        let static_command = plan(1.).foreground.commands[0];
+        for revision in 1..=3 {
+            let mut frame = plan(revision as f32 + 2.);
+            frame.foreground.commands.insert(0, static_command);
+            presenter.submit(revision, vek::Vec2::new(8, 8), frame);
+            wait(|| presenter.published_revision() == revision);
+        }
+        let state = state.lock().unwrap();
+        assert_eq!(state.region_attempts, 1);
+        assert_eq!(state.begins, 3);
+        assert!(state.clear_regions.is_empty());
+        assert!(state.commands.iter().all(|commands| commands.len() == 2));
+        assert!(
+            state
+                .damages
+                .iter()
+                .all(|damage| *damage == Damage::full(8, 8))
+        );
+        presenter.check().unwrap();
+    }
+    #[test]
     fn replacement_sprite_pixels_are_uploaded_even_when_commands_are_unchanged() {
         let (scene, _, _) = target(true);
         let (foreground, state, _) = target(true);
@@ -317,6 +372,60 @@ mod scheduling {
         wait(|| state.lock().unwrap().publications == 2);
         wait(|| presenter.published_revision() == 3);
         assert_eq!(state.lock().unwrap().commands[1][0].quad.c0.x, 3.);
+        presenter.check().unwrap();
+    }
+    #[test]
+    fn busy_and_coalesced_jobs_do_not_advance_alternating_damage_debt() {
+        let (scene, _, _) = target(true);
+        let (foreground, state, live) = target(true);
+        let presenter = LayeredPresenter::new(foreground, scene).unwrap();
+        for (revision, x) in [(1, 1.), (2, 2.)] {
+            presenter.submit(revision, vek::Vec2::new(8, 8), plan(x));
+            wait(|| presenter.published_revision() == revision);
+        }
+        live.store(false, Ordering::Release);
+        presenter.submit(3, vek::Vec2::new(8, 8), plan(3.));
+        let mut busy = 0;
+        wait(|| {
+            busy += presenter.take_activity().1.busy_begin;
+            busy > 0
+        });
+        presenter.submit(4, vek::Vec2::new(8, 8), plan(6.));
+        // Give the worker a chance to coalesce while admission remains blocked.
+        thread::sleep(Duration::from_millis(20));
+        live.store(true, Ordering::Release);
+        wait(|| presenter.published_revision() == 4);
+        presenter.submit(5, vek::Vec2::new(8, 8), plan(7.));
+        wait(|| presenter.published_revision() == 5);
+        let state = state.lock().unwrap();
+        assert_eq!(state.publications, 4);
+        assert_eq!(
+            state.damages[2],
+            Damage {
+                x: 2,
+                y: 0,
+                width: 5,
+                height: 1
+            }
+        );
+        assert_eq!(
+            state.damages[3],
+            Damage {
+                x: 6,
+                y: 0,
+                width: 2,
+                height: 1
+            }
+        );
+        assert_eq!(
+            state.clear_regions[3],
+            Damage {
+                x: 2,
+                y: 0,
+                width: 6,
+                height: 1
+            }
+        );
         presenter.check().unwrap();
     }
     #[test]
@@ -400,7 +509,10 @@ mod scheduling {
         presenter.clear_foreground(2, vek::Vec2::new(640, 480));
         wait(|| presenter.foreground_published_revision() == 2);
         assert!(ui_state.lock().unwrap().commands.last().unwrap().is_empty());
-        assert_eq!(scene_state.lock().unwrap().publications, background_publications);
+        assert_eq!(
+            scene_state.lock().unwrap().publications,
+            background_publications
+        );
         presenter.submit(3, vek::Vec2::new(640, 480), plan(0.0));
         wait(|| presenter.published_revision() == 3);
         assert!(!ui_state.lock().unwrap().commands.last().unwrap().is_empty());
