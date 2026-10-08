@@ -314,7 +314,17 @@ impl PlayState for CharSelectionState {
                     .read_resource::<common::resources::TimeOfDay>();
                 let _sky_progress = crate::selection_progress::stage(crate::selection_progress::Stage::SkyMailbox);
                 // Avatar preparation and drawing stay guarded during terrain bring-up.
-                let result = global_state.window.present_sky(time.get_sun_dir().z);
+                let extent = global_state.window.window().surface_size();
+                let center = client.world_data().chunk_size().map(|v| f32::from(v) * 16.0);
+                let camera = crate::render::terrain_feature::camera(
+                    [center.x, center.y, 0.0], [1.0,0.0,0.0], [0.0,0.0,1.0], [0.0,1.0,0.0],
+                    (global_state.settings.graphics.fov as f32).to_radians(),
+                    extent.width as f32 / extent.height.max(1) as f32,
+                );
+                let clouds = std::sync::Arc::new(crate::render::flat_cloud_native::from_client(
+                    &client, camera, global_state.settings.graphics.ambiance,
+                ));
+                let result = global_state.window.present_terrain_scene(time.get_sun_dir().z, None, Some(clouds));
                 if let Err(error) = result {
                     self.char_selection_ui.display_error(error);
                 }

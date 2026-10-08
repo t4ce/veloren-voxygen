@@ -84,7 +84,7 @@ impl NativeTerrain {
     }
 
     /// Caller has leased the paired background and publishes after completion.
-    pub fn draw(&mut self, target: u32, frame: &Frame) -> Result<(), i32> {
+    pub fn draw(&mut self, target: u32, frame: &Frame, load_color: bool) -> Result<(), i32> {
         use trueos::vgpu::*;
         if self
             .mesh
@@ -125,7 +125,7 @@ impl NativeTerrain {
                     texture_width: ATLAS_SIZE,
                     texture_height: ATLAS_SIZE,
                     texture_pitch: ATLAS_SIZE * 4,
-                    texture_reserved: INDEXED_DRAW_DRAWABLE_DEPTH
+                    texture_reserved: (if load_color {INDEXED_DRAW_LOAD_COLOR} else {0}) | INDEXED_DRAW_DRAWABLE_DEPTH
                         | INDEXED_DRAW_DEPTH_TEST
                         | INDEXED_DRAW_DEPTH_WRITE
                         | INDEXED_DRAW_CLEAR_DEPTH

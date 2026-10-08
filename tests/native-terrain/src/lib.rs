@@ -272,9 +272,9 @@ mod tests {
         *RECORD.lock().unwrap() = Some(Recorder::default());
         let mut renderer = terrain::NativeTerrain::open().unwrap();
         let mut frame = frame();
-        renderer.draw(123, &frame).unwrap();
+        renderer.draw(123, &frame, false).unwrap();
         frame.camera[0][0] += 1.;
-        renderer.draw(123, &frame).unwrap();
+        renderer.draw(123, &frame, false).unwrap();
         {
             let lock = RECORD.lock().unwrap();
             let r = lock.as_ref().unwrap();
@@ -301,9 +301,9 @@ mod tests {
             assert_eq!(draw.texture_reserved >> INDEXED_DRAW_DEPTH_COMPARE_SHIFT, 3);
         }
         RECORD.lock().unwrap().as_mut().unwrap().busy_import = true;
-        assert_eq!(renderer.draw(123, &frame), Err(ERR_BUSY));
+        assert_eq!(renderer.draw(123, &frame, false), Err(ERR_BUSY));
         RECORD.lock().unwrap().as_mut().unwrap().busy_import = false;
-        renderer.draw(123, &frame).unwrap();
+        renderer.draw(123, &frame, false).unwrap();
         drop(renderer);
         assert!(
             RECORD
@@ -321,7 +321,7 @@ mod tests {
             ..Default::default()
         });
         let mut renderer = terrain::NativeTerrain::open().unwrap();
-        assert_eq!(renderer.draw(123, &frame), Err(ERR_IO));
+        assert_eq!(renderer.draw(123, &frame, false), Err(ERR_IO));
         drop(renderer);
         assert_eq!(
             RECORD
@@ -350,7 +350,7 @@ mod tests {
             ..Default::default()
         });
         let mut renderer = terrain::NativeTerrain::open().unwrap();
-        assert_eq!(renderer.draw(123, &frame), Err(ERR_IO));
+        assert_eq!(renderer.draw(123, &frame, false), Err(ERR_IO));
         drop(renderer);
         let lock = RECORD.lock().unwrap();
         let r = lock.as_ref().unwrap();

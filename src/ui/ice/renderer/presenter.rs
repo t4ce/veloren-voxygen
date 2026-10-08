@@ -31,6 +31,8 @@ struct Job {
     figure: Option<Arc<crate::render::figure_preview::Frame>>,
     #[cfg(target_os = "trueos")]
     terrain: Option<Arc<crate::render::terrain_feature::Frame>>,
+    #[cfg(target_os = "trueos")]
+    clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>,
 }
 struct Mailbox {
     latest: ArrayQueue<Job>,
@@ -120,6 +122,8 @@ impl LayeredPresenter {
             figure: None,
             #[cfg(target_os = "trueos")]
             terrain: None,
+            #[cfg(target_os = "trueos")]
+            clouds: None,
         });
         self.foreground.mailbox.submit(Job {
             revision,
@@ -130,6 +134,8 @@ impl LayeredPresenter {
             figure: None,
             #[cfg(target_os = "trueos")]
             terrain: None,
+            #[cfg(target_os = "trueos")]
+            clouds: None,
         });
     }
     pub fn clear_foreground(&self, revision: u64, size: Vec2<u32>) {
@@ -142,15 +148,17 @@ impl LayeredPresenter {
             figure: None,
             #[cfg(target_os = "trueos")]
             terrain: None,
+            #[cfg(target_os = "trueos")]
+            clouds: None,
         });
     }
     #[cfg(target_os = "trueos")]
     pub fn submit_figure(&self, revision: u64, size: Vec2<u32>, rgba: u32, figure: Option<Arc<crate::render::figure_preview::Frame>>) {
-        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure, terrain: None });
+        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure, terrain: None, clouds: None });
     }
     #[cfg(target_os = "trueos")]
-    pub fn submit_terrain(&self, revision: u64, size: Vec2<u32>, rgba: u32, terrain: Option<Arc<crate::render::terrain_feature::Frame>>) {
-        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure: None, terrain });
+    pub fn submit_terrain(&self, revision: u64, size: Vec2<u32>, rgba: u32, terrain: Option<Arc<crate::render::terrain_feature::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>) {
+        self.scene.mailbox.submit(Job { revision, size, plan: LayerPlan::default(), sky: Some(rgba), figure: None, terrain, clouds });
     }
     pub fn submit_sky(&self, revision: u64, size: Vec2<u32>, rgba: u32) {
         self.scene.mailbox.submit(Job {
@@ -162,6 +170,8 @@ impl LayeredPresenter {
             figure: None,
             #[cfg(target_os = "trueos")]
             terrain: None,
+            #[cfg(target_os = "trueos")]
+            clouds: None,
         });
     }
     pub fn submit_foreground(&self, revision: u64, size: Vec2<u32>, plan: LayerPlan) {
@@ -174,6 +184,8 @@ impl LayeredPresenter {
             figure: None,
             #[cfg(target_os = "trueos")]
             terrain: None,
+            #[cfg(target_os = "trueos")]
+            clouds: None,
         });
     }
     pub fn scene_published_revision(&self) -> u64 {
@@ -244,6 +256,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     let mut job: Option<Job> = None;
     let mut phase = 0;
     let mut acquired_frame = false;
+    let mut clouds_drawn = false;
     let mut region_supported = true;
     let mut previous_sky = None;
     let mut backdrop = Backdrop::default();
@@ -253,12 +266,15 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     let mut sky_renderer: Option<crate::render::minimal_sky::NativeSky> = None;
     #[cfg(target_os = "trueos")]
     let mut terrain_renderer: Option<crate::render::terrain_feature::NativeTerrain> = None;
+    #[cfg(target_os = "trueos")]
+    let mut cloud_renderer: Option<crate::render::flat_cloud_native::NativeClouds> = None;
     while !mailbox.stopped.load(Ordering::Acquire) {
         mailbox.counters.iterations.fetch_add(1, Ordering::Relaxed);
         if job.is_none() {
             job = mailbox.take();
             phase = 0;
             acquired_frame = false;
+            clouds_drawn = false;
         }
         if phase <= 1 && !acquired_frame {
             if let Some(latest) = mailbox.take() {
@@ -291,7 +307,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         if phase == 0
             && scene_repaint_hold.is_none()
             && {
-                #[cfg(target_os = "trueos")] { current.figure.is_none() && current.terrain.is_none() && !previous_had_geometry }
+                #[cfg(target_os = "trueos")] { current.figure.is_none() && current.terrain.is_none() && current.clouds.is_none() && !previous_had_geometry }
                 #[cfg(not(target_os = "trueos"))] { true }
             }
             && previous.as_ref().is_some_and(|(size, plan)| {
@@ -321,6 +337,11 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 if current.sky.is_some() && sky_renderer.is_none() {
                     sky_renderer = Some(crate::render::minimal_sky::NativeSky::open()?);
                     tracing::info!(target: "voxy_scene_contract", "Minimal RGBA8 sky device and render queue ready");
+                }
+                #[cfg(target_os = "trueos")]
+                if current.clouds.is_some() && cloud_renderer.is_none() {
+                    cloud_renderer = Some(crate::render::flat_cloud_native::NativeClouds::open()?);
+                    tracing::info!(target: "voxy_scene_contract", "Native Flat cloud package admitted; renderer=clouds+terrain background=display-engine");
                 }
                 #[cfg(target_os = "trueos")]
                 if current.terrain.is_some() && terrain_renderer.is_none() {
@@ -434,11 +455,23 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     #[cfg(target_os = "trueos")]
                     {
                         let renderer = sky_renderer.as_mut().unwrap();
-                        let draw = if let Some(terrain) = current.terrain.as_deref() {
-                            terrain_renderer.as_mut().unwrap().draw(target.render_target(), terrain)
-                        } else if let Some(figure) = current.figure.as_deref() {
-                            renderer.draw_figure(target.render_target(), 0, figure)
-                        } else { renderer.draw(target.render_target(), 0) };
+                        let draw = (|| {
+                            if let Some(clouds) = current.clouds.as_deref() {
+                                if !clouds_drawn {
+                                    cloud_renderer.as_mut().unwrap().draw(target.render_target(), clouds)?;
+                                    clouds_drawn = true;
+                                }
+                            }
+                            if let Some(terrain) = current.terrain.as_deref() {
+                                terrain_renderer.as_mut().unwrap().draw(target.render_target(), terrain, clouds_drawn)
+                            } else if let Some(figure) = current.figure.as_deref() {
+                                renderer.draw_figure(target.render_target(), 0, figure)
+                            } else if clouds_drawn {
+                                Ok(())
+                            } else {
+                                renderer.draw(target.render_target(), 0)
+                            }
+                        })();
                         draw
                             .map_err(|e| if e == trueos::vgpu::ERR_BUSY { Error::Busy } else {
                                 tracing::error!(target: "voxy_scene_contract", code = e, "Native sky submission failed");
@@ -525,7 +558,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                 preceding_damage = repaint.as_ref().map(|r| r.changed);
                 previous_sky = current.sky;
                 #[cfg(target_os = "trueos")]
-                { previous_had_geometry = current.figure.is_some() || current.terrain.is_some(); }
+                { previous_had_geometry = current.figure.is_some() || current.terrain.is_some() || current.clouds.is_some(); }
                 previous = Some((current.size, current.plan.clone()));
                 repaint = None;
                 job = None;

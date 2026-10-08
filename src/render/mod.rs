@@ -16,6 +16,8 @@ mod error;
 pub mod instances;
 pub mod mesh;
 pub mod model;
+#[cfg(target_os = "trueos")]
+pub(crate) mod flat_cloud_native;
 pub mod pipelines;
 pub mod renderer;
 pub mod texture;

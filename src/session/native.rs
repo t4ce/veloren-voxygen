@@ -238,7 +238,15 @@ impl PlayState for SessionState {
                     ),
                 }))
             };
-            if let Err(error) = global.window.present_terrain_scene(sun_z, terrain) {
+            let deps = self.camera.dependents();
+            let cloud_camera = crate::render::terrain_feature::camera_from_view(
+                deps.view_mat_inv, self.camera.get_focus_pos(), self.camera.get_effective_fov(),
+                size.width as f32 / size.height.max(1) as f32,
+            );
+            let clouds = std::sync::Arc::new(crate::render::flat_cloud_native::from_client(
+                &client, cloud_camera, global.settings.graphics.ambiance,
+            ));
+            if let Err(error) = global.window.present_terrain_scene(sun_z, terrain, Some(clouds)) {
                 tracing::error!(%error, "Native world presentation failed");
             }
         }
