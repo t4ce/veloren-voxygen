@@ -49,6 +49,7 @@ fn startup_overrides_saved_workload_without_locking_runtime_edits() {
  assert!(!settings.graphics.weapon_trails_enabled);
  assert!(!settings.graphics.render_mode.rain_enabled);
  assert!(settings.graphics.render_mode.experimental_shaders.contains(&render::ExperimentalShader::BareMinimum));
+ assert_eq!(settings.graphics.render_mode.cloud, render::CloudMode::Flat);
  assert_eq!(settings.graphics.render_mode.aa, render::AaMode::None);
  assert_eq!(settings.graphics.render_mode.upscale_mode.factor, 0.1);
  settings.graphics.terrain_view_distance = 16;
@@ -58,10 +59,31 @@ fn startup_overrides_saved_workload_without_locking_runtime_edits() {
  assert_eq!(settings.graphics.terrain_view_distance, 1);
  assert!(!settings.graphics.particles_enabled);
 }
+#[test]
+fn legacy_cloud_modes_and_presets_use_flat() {
+ for mode in ["None", "Flat", "Minimal", "Low", "Medium", "High", "Ultra", "FutureQuality"] {
+  let cloud: render::CloudMode = serde_json::from_value(serde_json::Value::String(mode.into())).unwrap();
+  assert_eq!(cloud, render::CloudMode::Flat);
+  let saved: render::CloudMode = ron::from_str(mode).unwrap();
+  assert_eq!(saved, render::CloudMode::Flat);
+  assert_eq!(serde_json::to_value(cloud).unwrap(), serde_json::Value::String("Flat".into()));
+ }
+ for graphics in [
+  graphics::GraphicsSettings::default(),
+  graphics::GraphicsSettings::default().into_minimal(),
+  graphics::GraphicsSettings::default().into_low(),
+  graphics::GraphicsSettings::default().into_medium(),
+  graphics::GraphicsSettings::default().into_high(),
+  graphics::GraphicsSettings::default().into_ultra(),
+ ] {
+  assert_eq!(graphics.render_mode.cloud, render::CloudMode::Flat);
+ }
+}
+
 '''.replace('@RENDER@', render).replace('@GRAPHICS@', (ROOT / 'src/settings/graphics.rs').read_text().replace('use common::ViewDistances;', 'use crate::common::ViewDistances;')).replace('@METHOD@', method)
 with tempfile.TemporaryDirectory(prefix='voxy-bringup-profile-') as tmp:
     directory = Path(tmp)
     (directory / 'src').mkdir()
-    (directory / 'Cargo.toml').write_text('[package]\nname="voxy-bringup-profile-check"\nversion="0.1.0"\nedition="2024"\n[workspace]\n[dependencies]\nserde={version="1",features=["derive"]}\nserde_json="1"\n')
+    (directory / 'Cargo.toml').write_text('[package]\nname="voxy-bringup-profile-check"\nversion="0.1.0"\nedition="2024"\n[workspace]\n[dependencies]\nserde={version="1",features=["derive"]}\nserde_json="1"\nron="0.12"\n')
     (directory / 'src/lib.rs').write_text(code)
     subprocess.run(['cargo', 'test', '--offline', '--manifest-path', str(directory / 'Cargo.toml')], check=True)

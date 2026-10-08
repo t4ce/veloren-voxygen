@@ -30,15 +30,15 @@ def bake():
     entries.append(("fluid-frag.shiny", "Fragment"))
     publications = []
     dependencies = {str(p.relative_to(SOURCES)): digest(p.read_bytes())
-                    for p in sorted(SOURCES.rglob("*.glsl"))}
+                    for p in sorted(SOURCES.rglob("*.glsl")) if p.relative_to(SOURCES).as_posix() not in ("include/cloud/regular.glsl", "include/cloud/flat.glsl")}
     with tempfile.TemporaryDirectory() as temporary:
         work = Path(temporary)
-        for profile in ("default-map", "default-cheap", "minimal", "trueos-bringup"):
+        for profile in ("default-map", "default-cheap", "minimal", "trueos-bringup", "flat-cloud-layer"):
             minimal = profile in ("minimal", "trueos-bringup")
             shadow = "NONE" if minimal else profile.split("-")[1].upper()
             defines = {
                 "VOXYGEN_COMPUTATION_PREFERENCE": "VOXYGEN_COMPUTATION_PREFERENCE_FRAGMENT",
-                "FLUID_MODE": "FLUID_MODE_MEDIUM", "CLOUD_MODE": "CLOUD_MODE_HIGH",
+                "FLUID_MODE": "FLUID_MODE_MEDIUM", "CLOUD_MODE": "CLOUD_MODE_FLAT",
                 "REFLECTION_MODE": "REFLECTION_MODE_HIGH",
                 "LIGHTING_ALGORITHM": "LIGHTING_ALGORITHM_BLINN_PHONG",
                 "SHADOW_MODE": f"SHADOW_MODE_{shadow}", "POINT_GLOW_FACTOR": "0.35",
@@ -59,6 +59,14 @@ def bake():
                         defines.pop(define, None)
                 for shader in sorted(settings["experimental_shaders"]):
                     defines["EXPERIMENTAL_" + shader.upper()] = ""
+            if profile == "flat-cloud-layer":
+                defines = {
+                    "VOXYGEN_COMPUTATION_PREFERENCE": "VOXYGEN_COMPUTATION_PREFERENCE_FRAGMENT",
+                    "FLUID_MODE": "FLUID_MODE_LOW", "CLOUD_MODE": "CLOUD_MODE_FLAT",
+                    "REFLECTION_MODE": "REFLECTION_MODE_LOW",
+                    "LIGHTING_ALGORITHM": "LIGHTING_ALGORITHM_LAMBERTIAN",
+                    "SHADOW_MODE": "SHADOW_MODE_NONE",
+                }
             constants = (SOURCES / "include/constants.glsl").read_text()
             constants += "\n" + "\n".join(f"#define {k} {v}".rstrip() for k, v in defines.items()) + "\n"
 
@@ -71,21 +79,23 @@ def bake():
                         text = constants
                     else:
                         relative = {"anti-aliasing.glsl": "antialias/none.glsl" if profile == "trueos-bringup" else ("antialias/fxupscale.glsl" if minimal else "antialias/fxaa.glsl"),
-                                    "cloud.glsl": "include/cloud/flat.glsl" if minimal else "include/cloud/regular.glsl"}.get(name, f"include/{name}")
-                        text = (SOURCES / relative).read_text()
+                                    "cloud.glsl": "@cloud-flat"}.get(name, f"include/{name}")
+                        text = (OUT / "cloud-flat.glsl").read_text() if relative == "@cloud-flat" else (SOURCES / relative).read_text()
                     return expand(text.rstrip("\n"), (*stack, name))
                 return INCLUDE.sub(resolve, source)
 
-            for name, stage in entries:
+            stage_entries = [("clouds-vert", "Vertex"), ("cloud-flat-layer-frag", "Fragment")] if profile == "flat-cloud-layer" else entries
+            for name, stage in stage_entries:
                 if minimal and name == "fluid-frag.shiny":
                     name = "fluid-frag.cheap"
                 for display_color in ((False, True) if name == "postprocess-frag" else (False,)):
-                    path = OUT / "postprocess-frag.glsl" if name == "postprocess-frag" else SOURCES / (name.replace(".", "/") + ".glsl")
+                    path = OUT / (name + ".glsl") if name in ("postprocess-frag", "cloud-flat-layer-frag") else SOURCES / (name.replace(".", "/") + ".glsl")
                     source = expand(path.read_text())
                     if display_color:
                         source = source.replace("#version 440 core", "#version 440 core\n#define TRUEOS_DISPLAY_COLOR", 1)
                     suffix = "vert" if stage == "Vertex" else "frag"
-                    filename = f"{name}.{profile if minimal else shadow.lower()}{'.display' if display_color else ''}.spv"
+                    artifact_profile = profile if minimal or profile == "flat-cloud-layer" else shadow.lower()
+                    filename = f"{name}.{artifact_profile}{'.display' if display_color else ''}.spv"
                     glsl = work / "shader.glsl"
                     glsl.write_text(source)
                     binary = work / filename
@@ -100,8 +110,8 @@ def bake():
     manifest = dict(schema=1, format="spirv-vulkan1.1", native_execution_admitted=False,
                     compiler=subprocess.check_output(["glslc", "--version"], text=True).strip(),
                     options=["--target-env=vulkan1.1", "-std=430core", "-O"],
-                    profiles=["minimal", "default-map", "default-cheap", "trueos-bringup"],
-                    dependencies=dependencies, overrides={"postprocess-frag.glsl": digest((OUT / "postprocess-frag.glsl").read_bytes()), "../trueos-bringup-profile.json": digest((ROOT / "trueos-bringup-profile.json").read_bytes())}, shaders=publications)
+                    profiles=["minimal", "default-map", "default-cheap", "trueos-bringup", "flat-cloud-layer"], cloud_mode="Flat",
+                    dependencies=dependencies, overrides={"cloud-flat-layer-frag.glsl": digest((OUT / "cloud-flat-layer-frag.glsl").read_bytes()), "cloud-flat.glsl": digest((OUT / "cloud-flat.glsl").read_bytes()), "postprocess-frag.glsl": digest((OUT / "postprocess-frag.glsl").read_bytes()), "../trueos-bringup-profile.json": digest((ROOT / "trueos-bringup-profile.json").read_bytes())}, shaders=publications)
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     rows = ["// Generated by shaderbin/bake_shaders.py.",
             "pub(super) const SHADERS: &[(&str, &str, &str, &[u8])] = &["]

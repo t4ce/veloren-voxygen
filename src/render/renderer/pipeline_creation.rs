@@ -2,7 +2,7 @@ use crate::render::{pipelines::rain_occlusion, renderer::compiler::ShaderStage};
 
 use super::{
     super::{
-        AaMode, BloomMode, CloudMode, FluidMode, LightingMode, PipelineModes, ReflectionMode,
+        AaMode, BloomMode, FluidMode, LightingMode, PipelineModes, ReflectionMode,
         RenderError, ShadowMode,
         pipelines::{
             blit, bloom, clouds, debug, figure, fluid, lod_object, lod_terrain, particle,
@@ -199,14 +199,7 @@ impl ShaderModules {
                 FluidMode::Medium => "FLUID_MODE_MEDIUM",
                 FluidMode::High => "FLUID_MODE_HIGH",
             },
-            match pipeline_modes.cloud {
-                CloudMode::Flat => "CLOUD_MODE_FLAT",
-                CloudMode::Minimal => "CLOUD_MODE_MINIMAL",
-                CloudMode::Low => "CLOUD_MODE_LOW",
-                CloudMode::Medium => "CLOUD_MODE_MEDIUM",
-                CloudMode::High => "CLOUD_MODE_HIGH",
-                CloudMode::Ultra => "CLOUD_MODE_ULTRA",
-            },
+            "CLOUD_MODE_FLAT",
             match pipeline_modes.reflection {
                 ReflectionMode::Low => "REFLECTION_MODE_LOW",
                 ReflectionMode::Medium => "REFLECTION_MODE_MEDIUM",
@@ -283,12 +276,7 @@ impl ShaderModules {
             })
             .unwrap();
 
-        let cloud = shaders
-            .get(match pipeline_modes.cloud {
-                CloudMode::Flat => "include.cloud.flat",
-                _ => "include.cloud.regular",
-            })
-            .unwrap();
+        let cloud = include_str!("../../../shaderbin/cloud-flat.glsl");
 
         let fetch_include = move |name: &str, shader_name: &str| -> Result<String, String> {
             Ok(match name {
@@ -302,7 +290,7 @@ impl ShaderModules {
                 "random.glsl" => random.0.to_owned(),
                 "lod.glsl" => lod.0.to_owned(),
                 "anti-aliasing.glsl" => anti_alias.0.to_owned(),
-                "cloud.glsl" => cloud.0.to_owned(),
+                "cloud.glsl" => cloud.to_owned(),
                 "point_glow.glsl" => point_glow.0.to_owned(),
                 "fxaa.glsl" => fxaa.0.to_owned(),
                 other => {

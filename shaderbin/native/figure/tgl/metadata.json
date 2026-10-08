@@ -29,7 +29,7 @@
       "name": "figure-frag",
       "profile": "trueos-bringup",
       "sha256": "067efd787276cb0077d70714048eb48c43f9a951ee33d5fb012ebcf6ead51fce",
-      "source_sha256": "784eca366390af4df061808419b96da4c45ce8286e2e7313fbd5adc48c1e7b87",
+      "source_sha256": "59e284ff7e076273aa38085ad98469806126ecd67e2603ad1b2b034fc1749cec",
       "stage": "frag"
     }
   ],
@@ -293,5 +293,13 @@
       "bytes": 1544,
       "sha256": "a7223b7db82bd7317458d58a8214fe92f1f7019c3410bde842fe26856128fe52"
     }
-  }
+  },
+  "equivalent_glsl_sources": [
+    {
+      "stage": "figure-frag",
+      "previous_source_sha256": "784eca366390af4df061808419b96da4c45ce8286e2e7313fbd5adc48c1e7b87",
+      "source_sha256": "59e284ff7e076273aa38085ad98469806126ecd67e2603ad1b2b034fc1749cec",
+      "identical_spirv_sha256": "067efd787276cb0077d70714048eb48c43f9a951ee33d5fb012ebcf6ead51fce"
+    }
+  ]
 }

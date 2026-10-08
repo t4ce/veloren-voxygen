@@ -119,7 +119,7 @@ impl GraphicsSettings {
             particles_chance: 0.25,
             render_mode: RenderMode {
                 aa: AaMode::FxUpscale,
-                cloud: CloudMode::Low,
+                cloud: CloudMode::Flat,
                 reflection: ReflectionMode::Medium,
                 fluid: FluidMode::Low,
                 lighting: LightingMode::Lambertian,
@@ -146,7 +146,7 @@ impl GraphicsSettings {
             particles_chance: 0.5,
             render_mode: RenderMode {
                 aa: AaMode::Fxaa,
-                cloud: CloudMode::Medium,
+                cloud: CloudMode::Flat,
                 reflection: ReflectionMode::High,
                 fluid: FluidMode::Medium,
                 lighting: LightingMode::BlinnPhong,
@@ -176,7 +176,7 @@ impl GraphicsSettings {
             particles_chance: 0.75,
             render_mode: RenderMode {
                 aa: AaMode::Fxaa,
-                cloud: CloudMode::Medium,
+                cloud: CloudMode::Flat,
                 reflection: ReflectionMode::High,
                 fluid: FluidMode::Medium,
                 lighting: LightingMode::Ashikhmin,
@@ -206,7 +206,7 @@ impl GraphicsSettings {
             particles_chance: 1.0,
             render_mode: RenderMode {
                 aa: AaMode::Fxaa,
-                cloud: CloudMode::High,
+                cloud: CloudMode::Flat,
                 reflection: ReflectionMode::High,
                 fluid: FluidMode::High,
                 lighting: LightingMode::Ashikhmin,

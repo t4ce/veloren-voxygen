@@ -144,28 +144,14 @@ impl AaMode {
     }
 }
 
-/// Cloud modes
+/// Voxy uses the weather-driven flat cloud plane at every graphics preset.
 #[derive(Default, PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum CloudMode {
-    /// No volumetrics, flat cloud texture.
-    #[serde(alias = "None")]
-    Flat,
-    /// Clouds, but barely. Ideally, any machine should be able to handle this
-    /// just fine.
-    Minimal,
-    /// Enough visual detail to be pleasing, but generally using poor-but-cheap
-    /// approximations to derive parameters
-    Low,
-    /// More detail. Enough to look good in most cases. For those that value
-    /// looks but also high framerates.
-    Medium,
-    /// High, but with extra compute power thrown at it to smooth out subtle
-    /// imperfections
-    Ultra,
-    /// Lots of detail with good-but-costly derivation of parameters.
-    #[serde(other)]
+    /// Legacy quality choices deserialize to Flat; weather still controls coverage.
     #[default]
-    High,
+    #[serde(alias = "None", alias = "Minimal", alias = "Low",
+            alias = "Medium", alias = "High", alias = "Ultra", other)]
+    Flat,
 }
 
 /// Fluid modes
@@ -456,7 +442,6 @@ impl RenderMode {
         (
             PipelineModes {
                 aa: self.aa,
-                cloud: self.cloud,
                 fluid: self.fluid,
                 reflection: self.reflection,
                 lighting: self.lighting,
@@ -482,7 +467,6 @@ impl RenderMode {
 #[derive(PartialEq, Clone, Debug)]
 pub struct PipelineModes {
     aa: AaMode,
-    pub cloud: CloudMode,
     fluid: FluidMode,
     reflection: ReflectionMode,
     lighting: LightingMode,

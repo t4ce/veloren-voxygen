@@ -7,7 +7,7 @@ use crate::{
         UI_HIGHLIGHT_0, UI_MAIN, UI_SUBTLE, img_ids::Imgs,
     },
     render::{
-        AaMode, BloomConfig, BloomFactor, BloomMode, CloudMode, FluidMode, LightingMode,
+        AaMode, BloomConfig, BloomFactor, BloomMode, FluidMode, LightingMode,
         PresentMode, ReflectionMode, RenderMode, ShadowMapMode, ShadowMode, UpscaleMode,
     },
     session::settings_change::Graphics as GraphicsChange,
@@ -1075,45 +1075,15 @@ impl Widget for Video<'_> {
         .color(TEXT_COLOR)
         .set(state.ids.cloud_mode_text, ui);
 
-        let mode_list = [
-            CloudMode::Flat,
-            CloudMode::Minimal,
-            CloudMode::Low,
-            CloudMode::Medium,
-            CloudMode::High,
-            CloudMode::Ultra,
-        ];
-        let mode_label_list = [
-            self.localized_strings
-                .get_msg("hud-settings-cloud_rendering_mode-flat"),
-            self.localized_strings
-                .get_msg("hud-settings-cloud_rendering_mode-minimal"),
-            self.localized_strings
-                .get_msg("hud-settings-cloud_rendering_mode-low"),
-            self.localized_strings
-                .get_msg("hud-settings-cloud_rendering_mode-medium"),
-            self.localized_strings
-                .get_msg("hud-settings-cloud_rendering_mode-high"),
-            self.localized_strings
-                .get_msg("hud-settings-cloud_rendering_mode-ultra"),
-        ];
-
-        // Get which cloud rendering mode is currently active
-        let selected = mode_list.iter().position(|x| *x == render_mode.cloud);
-
-        if let Some(clicked) = DropDownList::new(&mode_label_list, selected)
-            .w_h(400.0, 22.0)
-            .color(MENU_BG)
-            .label_color(TEXT_COLOR)
-            .label_font_id(self.fonts.cyri.conrod_id)
-            .down_from(state.ids.cloud_mode_text, 8.0)
-            .set(state.ids.cloud_mode_list, ui)
-        {
-            events.push(GraphicsChange::ChangeRenderMode(Box::new(RenderMode {
-                cloud: mode_list[clicked],
-                ..render_mode.clone()
-            })));
-        }
+        // Cloud quality is fixed; coverage and placement follow world weather.
+        Text::new(
+            &self.localized_strings.get_msg("hud-settings-cloud_rendering_mode-flat"),
+        )
+        .down_from(state.ids.cloud_mode_text, 8.0)
+        .font_size(self.fonts.cyri.scale(14))
+        .font_id(self.fonts.cyri.conrod_id)
+        .color(TEXT_COLOR)
+        .set(state.ids.cloud_mode_list, ui);
 
         // FluidMode
         Text::new(
