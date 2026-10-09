@@ -277,6 +277,8 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
     #[cfg(target_os = "trueos")]
     let mut cloud_renderer: Option<crate::render::flat_cloud_native::NativeClouds> = None;
     while !mailbox.stopped.load(Ordering::Acquire) {
+        #[cfg(target_os = "trueos")]
+        if let Some(renderer) = terrain_renderer.as_mut() { renderer.heartbeat(); }
         mailbox.counters.iterations.fetch_add(1, Ordering::Relaxed);
         if job.is_none() {
             job = mailbox.take();
@@ -534,6 +536,10 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                     .fetch_add(micros(call_started.elapsed()), Ordering::Relaxed);
                 match result {
                     Ok(()) => {
+                        #[cfg(target_os = "trueos")]
+                        if let (Some(renderer), Some(frame)) = (terrain_renderer.as_mut(), current.terrain.as_deref()) {
+                            renderer.published(frame);
+                        }
                         if let Some(rgba) = current.sky {
                             if previous_sky.is_none() {
                                 tracing::info!(target: "voxy_scene_contract", revision = current.revision,
@@ -577,6 +583,8 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
         match result {
             Ok(()) => phase += 1,
             Err(Error::Busy) => {
+                #[cfg(target_os = "trueos")]
+                if current.terrain.is_some() { if let Some(renderer) = terrain_renderer.as_mut() { renderer.busy(); } }
                 let counter = match phase {
                     0 => &mailbox.counters.busy_upload,
                     1 => &mailbox.counters.busy_begin,

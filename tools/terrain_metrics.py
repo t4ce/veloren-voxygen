@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""Check fresh Voxy heartbeat evidence; never invent absent hardware results."""
+import argparse
+import json
+import math
+from pathlib import Path
+import re
+
+MODES = ('near', 'both', 'far')
+REQUIRED = set('run_us sequence mode seconds retired published published_fps ready_chunk_frames near_chunks far_vertices far_ready cpu_upload_bytes frame_to_publish_p95_us frame_to_publish_max_us retries window_warm_failures budget_fallback width height new_near_revisions receipt_samples chunk_receipt_to_first_publish_p95_us boundary'.split())
+
+
+def parse(log):
+    rows = []
+    malformed = 0
+    for line in log.splitlines():
+        if 'terrain-heartbeat:' not in line:
+            continue
+        row = dict(re.findall(r'(\w+)=([^\s]+)', line.split('terrain-heartbeat:', 1)[1]))
+        try:
+            if not REQUIRED.issubset(row) or row['mode'] not in MODES:
+                raise ValueError('missing fields')
+            for key in REQUIRED - {'mode', 'far_ready', 'budget_fallback', 'boundary'}:
+                row[key] = float(row[key]) if key in {'seconds', 'published_fps'} else int(row[key])
+            if row['far_ready'] not in ('true', 'false') or row['budget_fallback'] not in ('true', 'false'):
+                raise ValueError('invalid boolean')
+            if any(not math.isfinite(row[key]) or row[key] < 0 for key in REQUIRED if isinstance(row[key], (int, float))):
+                raise ValueError('negative counter')
+            rows.append(row)
+        except (ValueError, OverflowError):
+            malformed += 1
+    return rows, malformed
+
+
+def evaluate(rows, min_seconds=30., min_fps=29., near_chunks=9, frame_budget_us=33333, receipt_budget_us=2000000):
+    if not rows:
+        return {'pass': False, 'reason': 'No complete heartbeat evidence', 'modes': {}}
+    run = rows[-1]['run_us']
+    rows = [r for r in rows if r['run_us'] == run]
+    summary = {'run_us': run, 'boundary': 'gpu-retired+ui4-published', 'physical_display_proven': False,
+               'target_fps': 30, 'min_fps': min_fps, 'frame_budget_us': frame_budget_us,
+               'minimum_consecutive_seconds_per_mode': min_seconds, 'expected_near_chunks': near_chunks,
+               'modes': {}, 'pass': True}
+    extents = set()
+    for mode in MODES:
+        selected = [r for r in rows if r['mode'] == mode]
+        longest = current = 0.
+        valid_rows = []
+        previous_sequence = None
+        for row in rows:
+            if previous_sequence is not None and row['sequence'] != previous_sequence + 1:
+                current = 0.
+            previous_sequence = row['sequence']
+            steady = row['new_near_revisions'] == 0
+            expected = near_chunks if mode != 'far' else 0
+            ready = row['near_chunks'] == expected and (mode == 'near' or row['far_ready'] == 'true')
+            valid = (row['mode'] == mode and steady and ready and row['seconds'] >= 1.9
+                     and row['published'] > 0 and row['retired'] >= row['published']
+                     and row['published_fps'] >= min_fps
+                     and row['frame_to_publish_p95_us'] <= frame_budget_us
+                     and row['ready_chunk_frames'] == expected * row['published']
+                     and row['cpu_upload_bytes'] >= 80 * row['retired']
+                     and row['cpu_upload_bytes'] <= 80 * (row['retired'] + row['retries'])
+                     and row['window_warm_failures'] == 0 and row['budget_fallback'] == 'false'
+                     and row['width'] > 0 and row['height'] > 0
+                     and row['boundary'] == summary['boundary'])
+            if valid:
+                extent = (row['width'], row['height'])
+                if valid_rows and (valid_rows[-1]['width'], valid_rows[-1]['height']) != extent:
+                    current = 0.
+                current += row['seconds']
+                longest = max(longest, current)
+                valid_rows.append(row)
+                extents.add(extent)
+            else:
+                current = 0.
+        receipts = [r for r in selected if r['receipt_samples'] > 0]
+        receipt_p95_max = max((r['chunk_receipt_to_first_publish_p95_us'] for r in receipts), default=None)
+        enough = longest >= min_seconds
+        receipt_ok = mode == 'far' or (receipt_p95_max is not None and receipt_p95_max <= receipt_budget_us)
+        result = {'pass': enough and receipt_ok, 'windows': len(selected), 'valid_steady_windows': len(valid_rows),
+                  'longest_valid_seconds': round(longest, 3), 'receipt_samples': sum(r['receipt_samples'] for r in receipts),
+                  'worst_window_receipt_p95_us': receipt_p95_max,
+                  'worst_window_frame_p95_us': max((r['frame_to_publish_p95_us'] for r in selected), default=None),
+                  'worst_frame_to_publish_us': max((r['frame_to_publish_max_us'] for r in selected), default=None)}
+        summary['modes'][mode] = result
+        summary['pass'] &= result['pass']
+    summary['same_extent'] = len(extents) == 1
+    summary['pass'] &= summary['same_extent']
+    return summary
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('log', type=Path)
+    parser.add_argument('--seconds', type=float, default=30.)
+    parser.add_argument('--min-fps', type=float, default=29.)
+    parser.add_argument('--near-chunks', type=int, default=9)
+    parser.add_argument('--receipt-budget-us', type=int, default=2000000)
+    args = parser.parse_args()
+    rows, malformed = parse(args.log.read_text(errors='replace'))
+    result = evaluate(rows, args.seconds, args.min_fps, args.near_chunks, receipt_budget_us=args.receipt_budget_us)
+    result['malformed_heartbeats'] = malformed
+    result['pass'] &= malformed == 0
+    print(json.dumps(result, indent=2))
+    return 0 if result['pass'] else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

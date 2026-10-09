@@ -3,10 +3,11 @@ use crate::client::Client;
 use common::{comp, terrain::TerrainGrid, vol::ReadVol};
 #[cfg(not(feature = "terrain-bringup"))]
 use specs::{Join, WorldExt};
+use std::time::Instant;
 use std::{
     collections::HashMap,
     sync::{Arc, mpsc},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use vek::{Rgb, Vec2, Vec3, Vec4};
 
@@ -47,6 +48,8 @@ struct Mesh {
     vertices: Vec<Vertex>,
     atlas: PaletteAtlas,
     truncated: bool,
+    build_us: u64,
+    received_at: Option<Instant>,
 }
 
 struct PaletteAtlas {
@@ -164,6 +167,8 @@ pub(crate) struct Scene {
     revision: u64,
     next_missing_log: Instant,
     mesh_source: Option<MeshSource>,
+    coverage: Option<[[i32; 2]; 2]>,
+    worker_failures: u64,
 }
 
 struct MeshSource {
@@ -222,6 +227,10 @@ pub(crate) struct PreparedFrame<'a> {
     pub(crate) atlas: &'a [[u8; 4]],
     pub(crate) overlay: Vec<Vertex>,
     pub(crate) revision: u64,
+    pub(crate) coverage: Option<[[i32; 2]; 2]>,
+    pub(crate) warm_us: u64,
+    pub(crate) received_at: Option<Instant>,
+    pub(crate) worker_failures: u64,
 }
 
 impl Scene {
@@ -231,12 +240,16 @@ impl Scene {
                 vertices: Vec::new(),
                 atlas: PaletteAtlas::new(),
                 truncated: false,
+                build_us: 0,
+                received_at: None,
             },
             pending_mesh: None,
             next_mesh: Instant::now(),
             revision: 0,
             next_missing_log: Instant::now() + Duration::from_secs(5),
             mesh_source: None,
+            coverage: None,
+            worker_failures: 0,
         }
     }
 
@@ -287,10 +300,18 @@ impl Scene {
             // Discard pending work from the previous session after disconnect.
             self.pending_mesh = None;
             self.mesh_source = None;
+            self.coverage = None;
             self.next_mesh = Instant::now();
             self.next_missing_log = Instant::now() + Duration::from_secs(5);
         }
-        if let Some(mesh) = self.pending_mesh.as_ref().and_then(|r| r.try_recv().ok()) {
+        let received = self.pending_mesh.as_ref().map(|r| r.try_recv());
+        if matches!(received, Some(Err(mpsc::TryRecvError::Disconnected))) {
+            self.pending_mesh = None;
+            self.mesh_source = None;
+            self.worker_failures += 1;
+            self.next_mesh = Instant::now() + Duration::from_secs(2);
+        }
+        if let Some(Ok(mesh)) = received {
             self.pending_mesh = None;
             if mesh.truncated && !self.terrain.truncated {
                 connection_progress(format_args!(
@@ -298,6 +319,12 @@ impl Scene {
                 ));
             }
             let was_empty = self.terrain.vertices.is_empty();
+            self.coverage = if mesh.truncated { None } else {
+                self.mesh_source.as_ref().and_then(|source| {
+                    let (min, end) = drawable_xy_bounds(&source.terrain, source.center);
+                    (min.x < end.x && min.y < end.y).then_some([min.into_array(), end.into_array()])
+                })
+            };
             self.terrain = mesh;
             self.revision = self.revision.wrapping_add(1);
             if was_empty != self.terrain.vertices.is_empty() {
@@ -326,6 +353,27 @@ impl Scene {
             if self.needs_mesh(&current_terrain, center, Instant::now()) {
                 // Arc-backed chunk snapshot: meshing never blocks input or the network tick.
                 let terrain = Arc::new((*current_terrain).clone());
+                #[cfg(target_os = "trueos")]
+                let received_at = {
+                    let (min, end) = drawable_xy_bounds(&terrain, center);
+                    let first = TerrainGrid::chunk_key(min);
+                    let last = TerrainGrid::chunk_key(end - 1);
+                    let mut oldest = None;
+                    for y in first.y..=last.y { for x in first.x..=last.x {
+                        let key = Vec2::new(x,y);
+                        let unchanged = self.mesh_source.as_ref().is_some_and(|old| {
+                            match (old.terrain.get_key_arc(key), terrain.get_key_arc(key)) {
+                                (Some(a),Some(b)) => Arc::ptr_eq(a,b), _ => false,
+                            }
+                        });
+                        if !unchanged {if let Some(at) = client.terrain_received_at(key) {
+                            oldest = Some(oldest.map_or(at, |old: Instant| old.min(at)));
+                        }}
+                    }}
+                    oldest
+                };
+                #[cfg(not(target_os = "trueos"))]
+                let received_at = None;
                 self.mesh_source = Some(MeshSource {
                     terrain: Arc::clone(&terrain),
                     center,
@@ -333,9 +381,19 @@ impl Scene {
                 let (sender, receiver) = mpsc::channel();
                 self.pending_mesh = Some(receiver);
                 self.next_mesh = Instant::now() + MESH_INTERVAL;
-                std::thread::spawn(move || {
-                    let _ = sender.send(terrain_mesh(&terrain, center));
+                let worker = std::thread::Builder::new().name("terrain-near".into()).spawn(move || {
+                    let started = Instant::now();
+                    let mut mesh = terrain_mesh(&terrain, center);
+                    mesh.build_us = started.elapsed().as_micros() as u64;
+                    mesh.received_at = received_at;
+                    let _ = sender.send(mesh);
                 });
+                if worker.is_err() {
+                    self.pending_mesh = None;
+                    self.mesh_source = None;
+                    self.worker_failures += 1;
+                    self.next_mesh = Instant::now() + Duration::from_secs(2);
+                }
             }
         }
         let eye = position.unwrap_or_default() + Vec3::new(0.0, 0.0, 1.65);
@@ -384,6 +442,10 @@ impl Scene {
             atlas: &self.terrain.atlas.texels,
             overlay,
             revision: self.revision,
+            coverage: self.coverage,
+            warm_us: self.terrain.build_us,
+            received_at: self.terrain.received_at,
+            worker_failures: self.worker_failures,
         }
     }
 }
@@ -473,8 +535,28 @@ fn terrain_xy_bounds(center: Vec3<i32>) -> (Vec2<i32>, Vec2<i32>) {
     )
 }
 
+// Grow a real, hole-free chunk rectangle around the center within the
+// requested 3x3 window. Coverage belongs to the worker snapshot, not the next
+// live request. Missing chunks never remove the heightfield beneath them.
+fn drawable_xy_bounds(terrain: &TerrainGrid, center: Vec3<i32>) -> (Vec2<i32>, Vec2<i32>) {
+    let key = TerrainGrid::chunk_key(Vec2::new(center.x, center.y));
+    if !terrain.contains_key_real(key) {
+        let min = TerrainGrid::key_chunk(key);
+        return (min, min);
+    }
+    let mut min = key;
+    let mut end = key + 1;
+    for _ in 0..CHUNK_RADIUS {
+        if (min.y..end.y).all(|y| terrain.contains_key_real(Vec2::new(min.x - 1, y))) { min.x -= 1; }
+        if (min.y..end.y).all(|y| terrain.contains_key_real(Vec2::new(end.x, y))) { end.x += 1; }
+        if (min.x..end.x).all(|x| terrain.contains_key_real(Vec2::new(x, min.y - 1))) { min.y -= 1; }
+        if (min.x..end.x).all(|x| terrain.contains_key_real(Vec2::new(x, end.y))) { end.y += 1; }
+    }
+    (TerrainGrid::key_chunk(min), TerrainGrid::key_chunk(end))
+}
+
 fn terrain_bounds(terrain: &TerrainGrid, center: Vec3<i32>) -> (Vec3<i32>, Vec3<i32>) {
-    let (min, end) = terrain_xy_bounds(center);
+    let (min, end) = drawable_xy_bounds(terrain, center);
     let first = TerrainGrid::chunk_key(min - 1);
     let last = TerrainGrid::chunk_key(end);
     let mut height = None::<(i32, i32)>;
@@ -562,6 +644,8 @@ fn voxel_mesh_with_air(
                             vertices,
                             atlas,
                             truncated: true,
+                            build_us: 0,
+                received_at: None,
                         };
                     }
                     let tile = atlas.tile(face_tile(&corners, side, face_color(color, side)));
@@ -574,6 +658,8 @@ fn voxel_mesh_with_air(
         vertices,
         atlas,
         truncated: false,
+        build_us: 0,
+                received_at: None,
     }
 }
 

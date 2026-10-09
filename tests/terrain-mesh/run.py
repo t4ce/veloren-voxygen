@@ -13,7 +13,7 @@ facade = r'''
 #![allow(dead_code)]
 use vek::{Rgb, Vec2, Vec3};
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
+use std::time::{Duration,Instant};
 use std::sync::Arc;
 #[derive(Clone)]
 struct Block { color: Option<Rgb<u8>>, solid: bool }
@@ -31,6 +31,7 @@ struct TerrainGrid {
 struct ChunkBounds { min: i32, max: i32 }
 impl ChunkBounds { fn get_min_z(&self)->i32 {self.min} fn get_max_z(&self)->i32 {self.max} }
 impl TerrainGrid {
+ fn contains_key_real(&self,key:Vec2<i32>)->bool {self.loaded.contains(&key)}
  fn chunk_size() -> Vec2<u32> { Vec2::new(32,32) }
  fn chunk_key(pos: Vec2<i32>) -> Vec2<i32> { pos.map(|p| p.div_euclid(32)) }
  fn key_chunk(key: Vec2<i32>) -> Vec2<i32> {key*32}
@@ -52,6 +53,18 @@ fn grid() -> TerrainGrid {
 }
 '''
 tests = r'''
+#[test] fn drawable_rectangle_never_includes_missing_diagonals_and_handles_negative_chunks() {
+ let mut terrain=grid();
+ terrain.loaded.extend([Vec2::new(-1,0),Vec2::new(1,0),Vec2::new(0,-1),Vec2::new(0,1)]);
+ let (min,end)=drawable_xy_bounds(&terrain,Vec3::new(16,16,0));
+ assert_eq!(min,Vec2::new(-32,0)); assert_eq!(end,Vec2::new(64,32));
+ for y in -1..=1 {for x in -1..=1 {terrain.loaded.insert(Vec2::new(x,y));}}
+ assert_eq!(drawable_xy_bounds(&terrain,Vec3::new(16,16,0)),(Vec2::new(-32,-32),Vec2::new(64,64)));
+ terrain.loaded=std::collections::HashSet::from([Vec2::new(-1,-1)]);
+ assert_eq!(drawable_xy_bounds(&terrain,Vec3::new(-1,-1,0)),(Vec2::new(-32,-32),Vec2::zero()));
+ let (min,end)=drawable_xy_bounds(&terrain,Vec3::new(1,1,0));assert_eq!(min,end);
+}
+
 #[test] fn missing_chunk_does_not_create_a_face_but_known_air_does() {
  let mut terrain=grid();
  terrain.blocks.insert(Vec3::new(31,16,0),Block(Some(Rgb::new(31,140,47))));

@@ -352,9 +352,11 @@ pub struct Client {
 
     pending_chunks: HashMap<Vec2<i32>, Instant>,
     #[cfg(target_os = "trueos")]
-    terrain_decode_queue: VecDeque<ServerGeneral>,
+    terrain_decode_queue: VecDeque<(ServerGeneral, Instant)>,
     #[cfg(target_os = "trueos")]
-    terrain_decode_pending: Option<(Vec2<i32>, std::sync::mpsc::Receiver<Option<TerrainChunk>>)>,
+    terrain_decode_pending: Option<(Vec2<i32>, Instant, std::sync::mpsc::Receiver<Option<TerrainChunk>>)>,
+    #[cfg(target_os = "trueos")]
+    terrain_received_at: HashMap<Vec2<i32>, Instant>,
     target_time_of_day: Option<TimeOfDay>,
     dt_adjustment: f64,
 
@@ -1178,6 +1180,8 @@ impl Client {
             terrain_decode_queue: VecDeque::new(),
             #[cfg(target_os = "trueos")]
             terrain_decode_pending: None,
+            #[cfg(target_os = "trueos")]
+            terrain_received_at: HashMap::new(),
             target_time_of_day: None,
             dt_adjustment: 1.0,
 
@@ -2311,6 +2315,7 @@ impl Client {
             self.terrain_decode_queue.clear();
             // Drop delivery so an old worker cannot repopulate cleared terrain.
             self.terrain_decode_pending = None;
+            self.terrain_received_at.clear();
         }
     }
 
@@ -2612,6 +2617,11 @@ impl Client {
     pub fn cleanup(&mut self) {
         // Cleanup the local state
         self.state.cleanup();
+        #[cfg(target_os = "trueos")]
+        {
+            let terrain = self.state.terrain();
+            self.terrain_received_at.retain(|key, _| terrain.contains_key_real(*key));
+        }
     }
 
     /// Handles terrain addition and removal.
@@ -3204,7 +3214,7 @@ impl Client {
     fn handle_server_terrain_msg(&mut self, msg: ServerGeneral) -> Result<(), Error> {
         #[cfg(target_os = "trueos")]
         {
-            self.terrain_decode_queue.push_back(msg);
+            self.terrain_decode_queue.push_back((msg, Instant::now()));
             Ok(())
         }
         #[cfg(not(target_os = "trueos"))]
@@ -3216,7 +3226,7 @@ impl Client {
     #[cfg(target_os = "trueos")]
     fn poll_terrain_decode(&mut self) -> Result<(), Error> {
         loop {
-            if let Some((key, receiver)) = &self.terrain_decode_pending {
+            if let Some((key, received_at, receiver)) = &self.terrain_decode_pending {
                 let chunk = match receiver.try_recv() {
                     Ok(chunk) => chunk,
                     Err(std::sync::mpsc::TryRecvError::Empty) => return Ok(()),
@@ -3226,24 +3236,41 @@ impl Client {
                     }
                 };
                 let key = *key;
+                let received_at = *received_at;
                 self.terrain_decode_pending = None;
                 if let Some(chunk) = chunk {
                     self.state.insert_chunk(key, Arc::new(chunk));
+                    self.terrain_received_at.insert(key, received_at);
                 }
                 self.pending_chunks.remove(&key);
             }
-            let Some(msg) = self.terrain_decode_queue.pop_front() else { return Ok(()); };
+            let Some((msg, received_at)) = self.terrain_decode_queue.pop_front() else { return Ok(()); };
             match msg {
                 ServerGeneral::TerrainChunkUpdate { key, chunk: Ok(chunk) } => {
                     let (sender, receiver) = std::sync::mpsc::channel();
-                    self.terrain_decode_pending = Some((key, receiver));
+                    self.terrain_decode_pending = Some((key, received_at, receiver));
                     self.runtime.spawn_blocking(move || {
                         let _ = sender.send(chunk.to_chunk());
                     });
                 }
+                ServerGeneral::TerrainBlockUpdates(blocks) => {
+                    if let Some(mut blocks) = blocks.decompress() {
+                        for (pos, block) in blocks.drain() {
+                            self.state.set_block(pos, block);
+                            self.terrain_received_at.insert(TerrainGrid::chunk_key(pos), received_at);
+                        }
+                    }
+                }
                 msg => self.apply_server_terrain_msg(msg)?,
             }
         }
+    }
+
+    /// Application receipt of the successfully decoded chunk currently installed.
+    /// Packet arrival is stamped before the ordered decode queue, not at meshing.
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn terrain_received_at(&self, key: Vec2<i32>) -> Option<Instant> {
+        self.terrain_received_at.get(&key).copied()
     }
 
     fn apply_server_terrain_msg(&mut self, msg: ServerGeneral) -> Result<(), Error> {

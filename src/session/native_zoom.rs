@@ -69,16 +69,16 @@ impl Zoom {
 
 pub(super) fn fit_distance(
     chunk_size: [f32; 2],
-    focus_z: f32,
     terrain_height: Option<(f32, f32)>,
     fov: f32,
     aspect: f32,
 ) -> f32 {
     // A player can be half a chunk away from the 3x3 area's center. Two
     // chunk widths per axis therefore enclose every corner about the player.
-    let height = terrain_height.map_or(0.0, |(low, high)| {
-        (focus_z - low).abs().max((high - focus_z).abs())
-    });
+    // Use the terrain's full vertical span, with head/jump clearance, instead
+    // of live player Z. At maximum zoom, a live-height fit would retarget the
+    // distance on every jump or block step and make the view pump in and out.
+    let height = terrain_height.map_or(0.0, |(low, high)| (high - low).abs() + 4.0);
     let radius = (chunk_size[0] * 2.0)
         .hypot(chunk_size[1] * 2.0)
         .hypot(height);
@@ -136,12 +136,31 @@ mod tests {
     fn footprint_height_and_portrait_aspect_fit_with_margin() {
         let radius = 64.0_f32.hypot(64.0);
         let fov = 65.0_f32.to_radians();
-        let wide = fit_distance([32., 32.], 0., None, fov, 16. / 9.);
+        let wide = fit_distance([32., 32.], None, fov, 16. / 9.);
         assert!((wide * (fov * 0.5).sin() / radius - 1.15).abs() < 0.00001);
-        let portrait = fit_distance([32., 32.], 0., None, fov, 0.5);
+        let portrait = fit_distance([32., 32.], None, fov, 0.5);
         assert!(portrait > wide);
-        assert!(fit_distance([32., 32.], 0., Some((-100., 150.)), fov, 16. / 9.) > wide);
-        assert!(fit_distance([32., 32.], 0., None, 30.0_f32.to_radians(), 16. / 9.) > wide);
+        assert!(fit_distance([32., 32.], Some((-100., 150.)), fov, 16. / 9.) > wide);
+        assert!(fit_distance([32., 32.], None, 30.0_f32.to_radians(), 16. / 9.) > wide);
+    }
+
+    #[test]
+    fn maximum_zoom_stays_fixed_when_focus_moves_up_and_down() {
+        let height = Some((-100.0, 150.0));
+        let fit = || fit_distance([32., 32.], height, 65.0_f32.to_radians(), 16. / 9.);
+        let mut zoom = Zoom::new(10.0);
+        zoom.set_limit(fit());
+        for _ in 0..100 {
+            zoom.scroll(15.0);
+        }
+        zoom.advance(5.0);
+        let chosen = zoom.distance;
+        // Session refresh has no player-position input: jumps, landings and
+        // ascending/descending blocks keep the same terrain-derived endpoint.
+        for _ in 0..120 {
+            zoom.set_limit(fit());
+            assert_eq!(zoom.advance(1.0 / 30.0), chosen);
+        }
     }
 
     #[test]

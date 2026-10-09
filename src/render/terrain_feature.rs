@@ -1,5 +1,5 @@
-//! Nearby terrain uses the exact palette shader and vertex layout of voxy-terrain.
-//! The paired background is cleared to the existing sky color in the same draw.
+//! Near and whole-map terrain share the admitted palette shader and vertex layout.
+//! One retained terrain draw follows the flat clouds on the paired background.
 use crate::terrain_preview::{ATLAS_SIZE, Vertex};
 use std::sync::Arc;
 
@@ -10,6 +10,8 @@ pub(crate) struct Geometry {
 pub(crate) struct Frame {
     pub geometry: Arc<Geometry>,
     pub camera: [[f32; 4]; 5],
+    pub metrics: super::terrain_layers::Metrics,
+    pub prepared_at: std::time::Instant,
 }
 
 pub(crate) fn camera(
@@ -56,6 +58,7 @@ pub(crate) struct NativeTerrain {
     queue: trueos::vgpu::Queue,
     mesh: Option<Mesh>,
     unknown_completion: bool,
+    heartbeat: super::terrain_heartbeat::Heartbeat,
 }
 #[cfg(target_os = "trueos")]
 impl NativeTerrain {
@@ -75,6 +78,7 @@ impl NativeTerrain {
                 queue,
                 mesh: None,
                 unknown_completion: false,
+                heartbeat: super::terrain_heartbeat::Heartbeat::new(),
             }),
             Err(error) => {
                 let _ = device.close();
@@ -83,9 +87,17 @@ impl NativeTerrain {
         }
     }
 
+    pub fn heartbeat(&mut self) { self.heartbeat.tick(); }
+    pub fn busy(&mut self) { self.heartbeat.busy(); }
+    pub fn published(&mut self, frame: &Frame) {
+        self.heartbeat.published(frame.metrics, frame.prepared_at.elapsed().as_micros() as u64);
+    }
+
     /// Caller has leased the paired background and publishes after completion.
     pub fn draw(&mut self, target: u32, frame: &Frame, load_color: bool) -> Result<(), i32> {
         use trueos::vgpu::*;
+        let started = std::time::Instant::now();
+        let mut uploaded = 80u64;
         if self
             .mesh
             .as_ref()
@@ -94,6 +106,7 @@ impl NativeTerrain {
             // Construct before replacing the retired mesh, so partial creation
             // failures clean up their own resources without losing the old one.
             let mesh = Mesh::new(self.device, frame.geometry.clone())?;
+            uploaded += (frame.geometry.vertices.len() * 36 + frame.geometry.atlas.len() * 4) as u64;
             if let Some(previous) = self.mesh.replace(mesh) {
                 previous.destroy(self.device);
             }
@@ -105,7 +118,10 @@ impl NativeTerrain {
         if self.device.write_buffer(mesh.vertices, 0, state)? != state.len() {
             return Err(ERR_IO);
         }
+        self.heartbeat.uploaded(frame.metrics, uploaded);
         let surface = self.device.acquire_ui4_surface(target)?;
+        let prepare_us = started.elapsed().as_micros() as u64;
+        let submitted = std::time::Instant::now();
         self.unknown_completion = true;
         let point = self
             .device
@@ -136,6 +152,7 @@ impl NativeTerrain {
             .map_err(|error| if error == ERR_BUSY { ERR_IO } else { error })?;
         self.device.wait(self.queue, point.value)?;
         self.unknown_completion = false;
+        self.heartbeat.retired(frame.metrics, prepare_us, submitted.elapsed().as_micros() as u64);
         Ok(())
     }
 }

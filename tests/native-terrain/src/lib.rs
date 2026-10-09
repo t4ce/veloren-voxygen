@@ -3,6 +3,10 @@
 extern crate self as trueos;
 #[path = "../../../src/render/terrain_feature.rs"]
 mod terrain;
+#[path = "../../../src/render/terrain_layers.rs"]
+mod terrain_layers;
+#[path = "../../../src/render/terrain_heartbeat.rs"]
+mod terrain_heartbeat;
 #[cfg(target_os = "trueos")]
 #[path = "../target/cloud_transport.rs"]
 mod clouds;
@@ -13,6 +17,23 @@ mod native_zoom;
 #[cfg(target_os = "trueos")]
 #[path = "../target/camera_zoom.rs"]
 mod camera_zoom;
+#[path = "../../../src/render/terrain_composition.rs"]
+mod terrain_composition;
+mod terrain_feature {pub(crate) use crate::terrain::Geometry;}
+mod client {
+    pub struct Client {pub world:WorldData}
+    pub struct WorldData {pub size:vek::Vec2<u16>,pub lod_base:Colors}
+    pub struct Colors(pub u32);
+    impl Colors {pub fn get(&self,_:vek::Vec2<i32>)->Option<&u32>{Some(&self.0)}}
+    impl WorldData {
+        pub fn chunk_size(&self)->vek::Vec2<u16>{self.size}
+        pub fn min_chunk_alt(&self)->f32{0.}
+        pub fn max_chunk_alt(&self)->f32{1.}
+        pub fn alt_at(&self,_:vek::Vec2<i32>)->Option<f32>{Some(0.)}
+    }
+    impl Client {pub fn world_data(&self)->&WorldData{&self.world}}
+}
+mod render { pub mod terrain_feature {pub(crate) use crate::terrain::Geometry;} }
 mod terrain_preview {
     pub const ATLAS_SIZE: u32 = 1024;
     pub const MAX_VERTICES: usize = 600_000;
@@ -23,6 +44,8 @@ mod terrain_preview {
         pub atlas_uv: [f32; 4],
     }
 }
+#[cfg(target_os = "trueos")]
+pub mod vsys { pub const LOG_LEVEL_IMPORTANT:u32=1; pub fn log_record(_:u32,_:&str,_:&str)->Result<(),i32>{Ok(())} }
 #[cfg(target_os = "trueos")]
 pub mod vgpu {
     use std::sync::Mutex;
@@ -219,6 +242,8 @@ mod tests {
                 .into(),
                 atlas: vec![[31, 140, 47, 255]; 1024 * 1024].into(),
             }),
+            metrics: Default::default(),
+            prepared_at: std::time::Instant::now(),
             camera: terrain::camera(
                 [320., 320., 18.],
                 [1., 0., 0.],
@@ -278,6 +303,31 @@ mod tests {
                 assert!((actual - expected).abs() < 0.0001);
             }
         }
+    }
+    #[test]
+    fn background_composition_keeps_valid_near_when_far_fails_and_rejects_stale_results() {
+        use std::time::{Duration,Instant};
+        let client=client::Client{world:client::WorldData{size:vek::Vec2::zero(),lod_base:client::Colors(0)}};
+        let near=frame().geometry;
+        let coverage=terrain_layers::Coverage::new([0,0],[32,32]);
+        let mut composition=terrain_composition::Composition::new();
+        let source=terrain_layers::Metrics{near_warm_us:200,..Default::default()};
+        assert!(composition.prepare(&client,Some(near.clone()),1,coverage,source).is_none());
+        // A newer revision arrives while the first worker is in flight.
+        let deadline=Instant::now()+Duration::from_secs(2);
+        let (complete,metrics)=loop {
+            if let Some(result)=composition.prepare(&client,Some(near.clone()),2,coverage,source) {
+                assert_eq!(result.1.near_revision,2,"a stale worker must not become drawable");break result;
+            }
+            assert!(Instant::now()<deadline,"far retry must not block valid near");
+            std::thread::sleep(Duration::from_millis(1));
+        };
+        assert_eq!(metrics.near_chunks,1);assert!(!metrics.far_ready);assert_eq!(metrics.warm_failures,1);
+        assert_eq!(complete.vertices.len(),near.vertices.len());
+        let retained=composition.prepare(&client,Some(near),3,coverage,
+            terrain_layers::Metrics{near_warm_us:900,..Default::default()}).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&retained.0,&complete));
+        assert_eq!(retained.1.near_revision,2);assert_eq!(retained.1.near_warm_us,200);
     }
     #[cfg(target_os = "trueos")]
     #[test]

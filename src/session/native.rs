@@ -24,6 +24,7 @@ pub struct SessionState {
     terrain_height: Option<(f32, f32)>,
     keys: KeyState,
     terrain: crate::terrain_preview::Scene,
+    composition: crate::render::terrain_composition::Composition,
     geometry: Option<(
         u64,
         std::sync::Arc<crate::render::terrain_feature::Geometry>,
@@ -62,15 +63,15 @@ impl SessionState {
             terrain_height: None,
             keys: Default::default(),
             terrain: crate::terrain_preview::Scene::new(),
+            composition: crate::render::terrain_composition::Composition::new(),
             geometry: None,
             frames: 0,
         }
     }
     fn refresh_zoom_limit(&mut self) {
-        let position = self.client.borrow().position().unwrap_or_default();
         let size = common::terrain::TerrainGrid::chunk_size();
         self.zoom.set_limit(zoom::fit_distance(
-            [size.x as f32, size.y as f32], position.z + 1.5,
+            [size.x as f32, size.y as f32],
             self.terrain_height, self.camera.get_effective_fov(),
             self.camera.get_aspect_ratio(),
         ));
@@ -84,6 +85,7 @@ impl PlayState for SessionState {
         global.window.prepare_scene_display();
     }
     fn tick(&mut self, global: &mut GlobalState, events: Vec<Event>) -> PlayStateResult {
+        let frame_started = std::time::Instant::now();
         self.refresh_zoom_limit();
         for event in events {
             match event {
@@ -233,42 +235,44 @@ impl PlayState for SessionState {
                 size.width.max(1),
                 size.height.max(1),
             );
-            let terrain = if prepared.terrain.is_empty() {
-                self.geometry = None;
-                self.terrain_height = None;
-                None
-            } else {
-                if self
-                    .geometry
-                    .as_ref()
-                    .is_none_or(|(revision, _)| *revision != prepared.revision)
-                {
-                    self.terrain_height = prepared.terrain.iter().map(|v| v.position[2])
-                        .fold(None, |range, z| Some(range.map_or((z, z),
-                            |(low, high): (f32, f32)| (low.min(z), high.max(z)))));
-                    self.geometry = Some((
-                        prepared.revision,
-                        std::sync::Arc::new(crate::render::terrain_feature::Geometry {
-                            vertices: prepared.terrain.into(),
-                            atlas: prepared.atlas.into(),
-                        }),
-                    ));
-                }
-                let deps = self.camera.dependents();
-                // The demo shader uses forward depth and an absolute world eye.
-                // Derive the basis from the same camera inverse used by Voxy,
-                // including roll, third-person distance and collision correction.
-                let mut camera = crate::render::terrain_feature::camera_from_view(
-                        deps.view_mat_inv,
-                        self.camera.get_focus_pos(),
-                        self.camera.get_effective_fov(),
-                        size.width as f32 / size.height.max(1) as f32,
-                    );
-                camera[4][3] = self.zoom.far_plane();
-                Some(std::sync::Arc::new(crate::render::terrain_feature::Frame {
-                    geometry: self.geometry.as_ref().unwrap().1.clone(), camera,
-                }))
+            if self.geometry.as_ref().is_none_or(|(revision, _)| *revision != prepared.revision) {
+                self.terrain_height = prepared.terrain.iter().map(|v| v.position[2])
+                    .fold(None, |range, z| Some(range.map_or((z, z),
+                        |(low, high): (f32, f32)| (low.min(z), high.max(z)))));
+                self.geometry = Some((prepared.revision, std::sync::Arc::new(
+                    crate::render::terrain_feature::Geometry {
+                        vertices: prepared.terrain.into(), atlas: prepared.atlas.into(),
+                    })));
+            }
+            let coverage = prepared.coverage.and_then(|[min, end]|
+                crate::render::terrain_layers::Coverage::new(min, end));
+            let chunks = common::terrain::TerrainGrid::chunk_size();
+            let metrics = crate::render::terrain_layers::Metrics {
+                near_warm_us: prepared.warm_us,
+                received_at: prepared.received_at, width: size.width, height: size.height,
+                warm_failures: prepared.worker_failures,
+                near_chunks: coverage.map_or(0, |c| c.chunks(chunks.into_array())),
+                loaded_chunks: client.state().terrain().iter().filter(|(key, _)|
+                    client.state().terrain().contains_key_real(*key)).count() as u32,
+                ..Default::default()
             };
+            let near = self.geometry.as_ref().map(|(_, geometry)| geometry.clone());
+            let composed = self.composition.prepare(&client, near, prepared.revision, coverage, metrics);
+            let terrain = composed.and_then(|(geometry, metrics)| {
+                if geometry.vertices.is_empty() { return None; }
+                if client.position().is_none_or(|pos|
+                    pos.into_array().iter().any(|value| !value.is_finite())) { return None; }
+                let deps = self.camera.dependents();
+                let mut camera = crate::render::terrain_feature::camera_from_view(
+                    deps.view_mat_inv, self.camera.get_focus_pos(), self.camera.get_effective_fov(),
+                    size.width as f32 / size.height.max(1) as f32);
+                camera[4][3] = if metrics.mode == crate::render::terrain_layers::Mode::Near {
+                    self.zoom.far_plane()
+                } else { self.composition.far_plane(&client) };
+                Some(std::sync::Arc::new(crate::render::terrain_feature::Frame {
+                    geometry, camera, metrics, prepared_at: frame_started,
+                }))
+            });
             let deps = self.camera.dependents();
             let cloud_camera = crate::render::terrain_feature::camera_from_view(
                 deps.view_mat_inv, self.camera.get_focus_pos(), self.camera.get_effective_fov(),

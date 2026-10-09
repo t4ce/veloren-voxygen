@@ -625,3 +625,9 @@ mod figure_preview_loader;
 
 #[cfg(target_os = "trueos")]
 pub(crate) mod terrain_feature;
+#[cfg(target_os = "trueos")]
+pub(crate) mod terrain_layers;
+#[cfg(target_os = "trueos")]
+pub(crate) mod terrain_composition;
+#[cfg(target_os = "trueos")]
+pub(crate) mod terrain_heartbeat;

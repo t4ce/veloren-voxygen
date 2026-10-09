@@ -218,14 +218,88 @@ math provides fine near-player control and faster travel farther out; easing
 uses real elapsed time and cannot overshoot on a slow frame. Mode changes do
 not reset distance to 2.35 blocks. Coalesced input is limited to one notch and
 invalid numeric input is ignored. The overview limit encloses the 96x96
-footprint about any player position in its center chunk, includes mesh heights,
-and accounts for FoV/aspect with 15% margin. The terrain far plane grows to
+footprint about any player position in its center chunk, includes the full mesh
+height span plus head/jump clearance, and accounts for FoV/aspect with 15%
+margin. The limit does not depend on live player height: jumping or stepping
+moves the camera focus without retargeting overview zoom. The terrain far plane grows to
 cover that overview. The camera-mode key uses the same eased distance flow.
 
-The integrated terrain mesh now covers the graphics minimum's complete 3x3
-chunk area (96x96 blocks), aligned to the player's current chunk. Vertical
+The integrated terrain mesh can cover the graphics minimum's complete 3x3
+chunk area (96x96 blocks), aligned to the player's current chunk, once a
+contiguous rectangle of real chunks has arrived. Vertical
 bounds come from the received chunks' stored height extents and face-neighbor
 transitions, rather than a 64-block crop around the player. Unknown chunks
 still suppress boundary faces. Moving inside a chunk no longer remeshes the
 terrain; chunk crossings, arrivals, removals and copy-on-write edits do. The
 existing 600,000-vertex GPU budget remains enforced and logged on truncation.
+
+## Retained near + whole-map terrain experiment
+
+The full-client bring-up defaults to **Both**. Global F1 cycles
+**Both → Far → Near → Both**, before menu/game bindings; held-key repeats do
+not cycle. Clouds keep the existing flat pass. F1 changes the rendered terrain
+layers; CPU snapshots remain warm for returning to the other mode.
+
+| Layer | Source / technique | Initial budget |
+| --- | --- | --- |
+| Near | Real received voxel chunks, exposed block faces, existing 3×3 noise tiles | VD=1: at most 9 chunks / 96×96 blocks; 600,000 total terrain vertices |
+| Far | Connection-time `WorldData.lod_alt` via `alt_at()` and `lod_base`; one uniform whole-map triangle lattice | Guess 32,768 cells, halve to **16,384**; at most 98,304 uncut vertices, 120,000 including cut triangulation |
+| Join | Exact rectangle subtraction on each far triangle; boundary skirts follow the same triangle planes | Combined geometry stays within 600,000 vertices |
+
+Only a hole-free rectangle of real chunks can become near coverage. Initially
+this can be the central 32×32 chunk; arrival of neighboring strips expands it.
+Coverage and geometry commit from the same worker snapshot. Truncated meshes
+do not punch holes in Far. At the combined vertex limit, Both falls back to the
+complete far map and reports `budget_fallback=true`. This fallback is a failed
+performance acceptance result, not a successful close terrain demonstration.
+The cut follows completed coverage, not the requested VD square. It therefore
+also handles rectangular intermediate coverage without drawing the ground twice.
+VD remains 1 for this experiment; enlarging the network request does not yet
+enlarge the rich mesh radius.
+
+| Function / boundary | Inputs and transform | Execution |
+| --- | --- | --- |
+| `Client::handle_server_terrain_msg` / `poll_terrain_decode` | Stamp application receipt before ordered decoding; install chunk plus its receipt atomically on successful decode | CPU; one decode in flight, bounded existing message queue |
+| `Scene::prepare_terrain` / `terrain_mesh` | Chunk snapshot, player chunk, actual stored height bounds → exposed faces + palette; at most one worker, minimum 500 ms between starts | Background CPU |
+| `Composition::prepare` / `snapshot` | At most 16,384 height/color samples from the already available full map; no extra voxel requests | Bounded CPU snapshot; map validation and composition workers |
+| `terrain_layers::compose(map, near, coverage, mode)` | Subtract four rectangle half-planes with interpolated Z, triangulate outside polygons, join boundary height planes, reserve atlas rows 896+ for far colors | Background CPU; maximum one composition worker; minimum 100 ms between starts |
+| `NativeTerrain::draw(target, frame, load_color)` | Retained 32-byte vertices + u32 indices + RGBA atlas; update the 80-byte eye/basis/FoV/aspect/far camera block each frame | App vGPU submission, one combined terrain draw after clouds |
+| Kernel `prepare_voxy_stream_mesh_raw` | Dirty vertex/index ranges and camera → existing resident Intel streaming mesh; atlas retained separately | Driver; unchanged Voxy admission and shader package |
+| `VoxyHeadlessTexture` contract | World coordinates → camera-relative projection; interpolate palette UV → sampled RGBA; drawable depth test/write | Intel GPU graphics shaders; GuC schedules work, it does not decode terrain |
+| `Device::wait` → scene `publish` | Retired render timeline → paired UI4 background publication | GPU completion and compositor handoff; no physical scanout receipt |
+
+Near meshing and far clipping are CPU algorithms in this first integration.
+Rendering and retained geometry/texture reuse are GPU work. This is not yet
+GPU voxel compaction or compute-generated far geometry; introducing that needs
+an admitted compute/shader contract and a measured improvement over this baseline.
+The full native session uses vGPU directly, rather than passing these draws
+through the general wgpu API.
+
+`terrain-heartbeat` emits at IMPORTANT once per two-second wall-clock window,
+even during presentation retries. It carries a run ID and sequence number,
+actual mode/revision, extent, loaded vs proven near chunks, vertex counts,
+application buffer-write bytes, warm/compose time, preparation and
+submission+wait p95, frame-start-to-UI-publication p50/p95/max, busy retries and
+worker failures. A new revision's receipt-to-first-publication latency is sampled
+once. `ready_chunk_frames` measures retained ready coverage per published frame;
+it is explicitly not a count of newly decoded chunks. No frames means zero
+throughput. F1 starts a new window; recovery does not erase cumulative failures.
+
+The two-second `throughput_ok` indicator is provisional (at least 27 FPS,
+p95 ≤33,333 µs, available layers, no fallback/new worker failure). The stricter
+capture checker requires **30 consecutive seconds per mode at ≥29 FPS**, a
+common resolution, all nine near chunks where applicable, p95 ≤33,333 µs and
+camera-only app writes in steady windows. Missing sequence numbers, stalls,
+partial coverage and fallbacks break the consecutive proof. It also requires
+actual receipt samples in Near and Both, provisionally ≤2 seconds. These are
+initial experiment gates, not established Intel throughput numbers.
+
+For a fresh hardware run: connect in Both, warm all nine chunks, move across a
+chunk boundary to collect a receipt sample, then hold the camera still for at
+least 32 seconds. Repeat in Near with a newly received chunk boundary; run Far
+for at least 32 seconds. Keep the same resolution and one uninterrupted capture.
+Use `python3 tools/terrain_metrics.py <capture.log>`. The checker selects the
+latest run and outputs JSON, exits nonzero if evidence is missing or fails, and
+always marks physical display proof unavailable. Test resize, disconnect,
+partial arrivals and rapid F1 separately; those windows should not pass a steady
+throughput gate. Local host tests execute no Intel workload.

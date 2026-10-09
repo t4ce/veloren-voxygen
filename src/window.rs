@@ -1048,6 +1048,18 @@ impl Window {
                     return;
                 }
 
+                // Global native terrain comparison: consume F1 before menu or
+                // gameplay bindings. Repeat/synthetic keydown were rejected above.
+                #[cfg(target_os = "trueos")]
+                if event.logical_key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::F1) {
+                    if event.state == winit::event::ElementState::Pressed {
+                        let mode = crate::render::terrain_layers::Mode::cycle_global();
+                        crate::render::terrain_heartbeat::record(format_args!(
+                            "terrain-mode: requested={} key=F1 cycle=near,both,far\n", mode.label()));
+                    }
+                    return;
+                }
+
                 if let Some(mapped_inputs) = Window::map_input(
                     KeyMouse::Key(event.logical_key),
                     controls,
