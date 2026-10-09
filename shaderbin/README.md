@@ -200,7 +200,8 @@ view: terrain controls and the display background color retain their live paths.
 Native terrain faces use 3x3 atlas tiles for the small color variations from
 Voxygen's `terrain-frag.glsl` / `include/random.glsl`. The worker evaluates the
 original chunk-local, normal-offset hash at the nine cell centers. Its sqrt-space
-noise strength is retained, normalized around our existing axis-shaded base RGB
+noise strength is increased by 10% (0.015 to 0.0165), normalized around our
+existing axis-shaded base RGB
 rather than importing the full renderer's lighting brightness. UVs interpolate
 across each tile with nearest sampling and a tiny edge inset. The admitted
 textured shader and six vertices per face stay unchanged. The atlas is now
@@ -210,3 +211,21 @@ identical nine-color tiles share storage. Camera movement does not reseed noise.
 boundaries, deduplication, full-budget capacity and existing occlusion guards.
 The host GPU proof in `tests/flat-clouds` also checks all nine sampled cells in a
 full-sized atlas and cloud composition without neighboring tile bleed.
+
+World wheel zoom now follows one continuous distance curve from first person
+through third person to a full nine-chunk overview. Offset exponential wheel
+math provides fine near-player control and faster travel farther out; easing
+uses real elapsed time and cannot overshoot on a slow frame. Mode changes do
+not reset distance to 2.35 blocks. Coalesced input is limited to one notch and
+invalid numeric input is ignored. The overview limit encloses the 96x96
+footprint about any player position in its center chunk, includes mesh heights,
+and accounts for FoV/aspect with 15% margin. The terrain far plane grows to
+cover that overview. The camera-mode key uses the same eased distance flow.
+
+The integrated terrain mesh now covers the graphics minimum's complete 3x3
+chunk area (96x96 blocks), aligned to the player's current chunk. Vertical
+bounds come from the received chunks' stored height extents and face-neighbor
+transitions, rather than a 64-block crop around the player. Unknown chunks
+still suppress boundary faces. Moving inside a chunk no longer remeshes the
+terrain; chunk crossings, arrivals, removals and copy-on-write edits do. The
+existing 600,000-vertex GPU budget remains enforced and logged on truncation.

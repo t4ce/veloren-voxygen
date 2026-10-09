@@ -579,6 +579,19 @@ impl Camera {
 
     pub fn set_distance_instant(&mut self, dist: f32) { self.dist = dist; self.tgt_dist = dist; }
 
+    /// Apply the continuous session zoom without a first/third-person distance
+    /// jump or a second interpolation. The session owns time-based easing.
+    #[cfg(target_os = "trueos")]
+    pub fn set_distance_continuous(&mut self, distance: f32) {
+        if !distance.is_finite() { return; }
+        let distance = distance.max(MIN_ZOOM);
+        self.mode = if distance <= MIN_ZOOM + 0.001 {
+            CameraMode::FirstPerson
+        } else { CameraMode::ThirdPerson };
+        self.dist = distance;
+        self.tgt_dist = distance;
+    }
+
     pub fn update(&mut self, time: f64, dt: f32, smoothing_enabled: bool) {
         // This is horribly frame time dependent, but so is most of the game
         let delta = self.last_time.replace(time).map_or(0.0, |t| time - t);

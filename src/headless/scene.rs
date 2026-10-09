@@ -21,8 +21,8 @@ pub(crate) fn placement(display_width: u32, display_height: u32) -> (i32, i32, u
     )
 }
 
-const RADIUS: i32 = 40;
-const VERTICAL_RADIUS: i32 = 32;
+// Graphics minimum view distance: center chunk plus its eight neighbors.
+const CHUNK_RADIUS: i32 = 1;
 pub(crate) const MAX_VERTICES: usize = 600_000;
 pub(crate) const ATLAS_SIZE: u32 = 1024;
 const TILE_SIZE: u32 = 3;
@@ -148,9 +148,10 @@ fn face_tile(corners: &[[f32; 4]; 8], side: usize, color: [u8; 3]) -> [[u8; 3]; 
         let noise = terrain_hash(p);
         // Retain the existing base brightness/axis contrast. The Ubuntu
         // sqrt-space variation is normalized by its zero-noise brightness;
-        // its full lighting pass is not part of this minimal renderer.
+        // Noise spread is 10% above Ubuntu; its full lighting pass is not
+        // part of this minimal renderer.
         color.map(|channel| {
-            let delta = (channel as f32 / 255.0).sqrt() + noise * 0.015 * 1.055;
+            let delta = (channel as f32 / 255.0).sqrt() + noise * 0.0165 * 1.055;
             (delta * delta * 255.0).round().clamp(0.0, 255.0) as u8
         })
     })
@@ -174,11 +175,13 @@ struct MeshSource {
 
 impl MeshSource {
     fn matches(&self, terrain: &TerrainGrid, center: Vec3<i32>) -> bool {
-        if self.center != center {
+        if TerrainGrid::chunk_key(Vec2::new(self.center.x, self.center.y))
+            != TerrainGrid::chunk_key(Vec2::new(center.x, center.y))
+        {
             return false;
         }
-        let min = Vec2::new(center.x - RADIUS, center.y - RADIUS);
-        let max = Vec2::new(center.x + RADIUS - 1, center.y + RADIUS - 1);
+        let (min, end) = terrain_xy_bounds(center);
+        let max = end - 1;
         let first = TerrainGrid::chunk_key(min - 1);
         let last = TerrainGrid::chunk_key(max + 1);
         let size = TerrainGrid::chunk_size().map(|value| value as i32);
@@ -299,12 +302,12 @@ impl Scene {
             self.revision = self.revision.wrapping_add(1);
             if was_empty != self.terrain.vertices.is_empty() {
                 connection_progress(format_args!(
-                    "Voxygen terrain: revision={} vertices={} ready={} truncated={} palette_colors={}",
+                    "Voxygen terrain: revision={} vertices={} ready={} truncated={} palette_tiles={}",
                     self.revision,
                     self.terrain.vertices.len(),
                     !self.terrain.vertices.is_empty(),
                     self.terrain.truncated,
-                    self.terrain.atlas.colors.len(),
+                    self.terrain.atlas.tiles.len(),
                 ));
             }
         }
@@ -462,9 +465,45 @@ fn cuboid(vertices: &mut Vec<Vertex>, min: [f32; 3], max: [f32; 3], atlas_uv: [f
     }
 }
 
+fn terrain_xy_bounds(center: Vec3<i32>) -> (Vec2<i32>, Vec2<i32>) {
+    let key = TerrainGrid::chunk_key(Vec2::new(center.x, center.y));
+    (
+        TerrainGrid::key_chunk(key - CHUNK_RADIUS),
+        TerrainGrid::key_chunk(key + CHUNK_RADIUS + 1),
+    )
+}
+
+fn terrain_bounds(terrain: &TerrainGrid, center: Vec3<i32>) -> (Vec3<i32>, Vec3<i32>) {
+    let (min, end) = terrain_xy_bounds(center);
+    let first = TerrainGrid::chunk_key(min - 1);
+    let last = TerrainGrid::chunk_key(end);
+    let mut height = None::<(i32, i32)>;
+    for y in first.y..=last.y {
+        for x in first.x..=last.x {
+            // Include face-neighbor height transitions, not diagonal-only halo.
+            if (x == first.x || x == last.x) && (y == first.y || y == last.y) {
+                continue;
+            }
+            if let Some(chunk) = terrain.get_key_arc(Vec2::new(x, y)) {
+                height = Some(
+                    height.map_or((chunk.get_min_z(), chunk.get_max_z()), |(low, high)| {
+                        (low.min(chunk.get_min_z()), high.max(chunk.get_max_z()))
+                    }),
+                );
+            }
+        }
+    }
+    // One layer below stored voxels catches their bottom transition; neighbor
+    // queries still use actual below/above blocks and never invent boundary air.
+    let (low, high) = height.map_or((0, 0), |(low, high)| (low.saturating_sub(1), high));
+    (Vec3::new(min.x, min.y, low), Vec3::new(end.x, end.y, high))
+}
+
 fn terrain_mesh(terrain: &TerrainGrid, center: Vec3<i32>) -> Mesh {
+    let (min, end) = terrain_bounds(terrain, center);
     voxel_mesh_with_air(
-        center,
+        min,
+        end,
         |pos| {
             terrain.get(pos).ok().and_then(|block| {
                 // Collidable sprites have model colors, not voxel RGB. They
@@ -486,19 +525,26 @@ fn terrain_mesh(terrain: &TerrainGrid, center: Vec3<i32>) -> Mesh {
 
 #[cfg(test)]
 fn voxel_mesh(center: Vec3<i32>, voxel_color: impl Fn(Vec3<i32>) -> Option<Rgb<u8>>) -> Mesh {
-    voxel_mesh_with_air(center, &voxel_color, |pos| voxel_color(pos).is_none())
+    let (min, end) = terrain_xy_bounds(center);
+    voxel_mesh_with_air(
+        Vec3::new(min.x, min.y, center.z - 1),
+        Vec3::new(end.x, end.y, center.z + 2),
+        &voxel_color,
+        |pos| voxel_color(pos).is_none(),
+    )
 }
 
 fn voxel_mesh_with_air(
-    center: Vec3<i32>,
+    min: Vec3<i32>,
+    end: Vec3<i32>,
     voxel_color: impl Fn(Vec3<i32>) -> Option<Rgb<u8>>,
     is_known_air: impl Fn(Vec3<i32>) -> bool,
 ) -> Mesh {
     let mut vertices = Vec::new();
     let mut atlas = PaletteAtlas::new();
-    for z in center.z - VERTICAL_RADIUS..center.z + VERTICAL_RADIUS {
-        for y in center.y - RADIUS..center.y + RADIUS {
-            for x in center.x - RADIUS..center.x + RADIUS {
+    for z in min.z..end.z {
+        for y in min.y..end.y {
+            for x in min.x..end.x {
                 let pos = Vec3::new(x, y, z);
                 let Some(color) = voxel_color(pos) else {
                     continue;
@@ -553,15 +599,16 @@ mod tests {
     }
 
     #[test]
-    fn dirty_source_stationary_skips_and_integer_movement_invalidates() {
+    fn dirty_source_only_chunk_crossing_invalidates_movement() {
         let terrain = empty_terrain();
         let center = Vec3::new(320, 320, 16);
         let mut scene = Scene::new();
         scene.mesh_source = Some(source_for(&terrain, center));
         let due = scene.next_mesh;
         assert!(!scene.needs_mesh(&terrain, center, due + MESH_INTERVAL));
-        assert!(scene.needs_mesh(&terrain, center + Vec3::unit_x(), due));
-        assert!(scene.needs_mesh(&terrain, center + Vec3::unit_z(), due));
+        assert!(!scene.needs_mesh(&terrain, center + Vec3::unit_x(), due));
+        assert!(!scene.needs_mesh(&terrain, center + Vec3::unit_z(), due));
+        assert!(scene.needs_mesh(&terrain, center - Vec3::unit_x(), due));
         assert!(!scene.needs_mesh(&terrain, center + Vec3::unit_x(), due - MESH_INTERVAL));
         let (_sender, receiver) = mpsc::channel();
         scene.pending_mesh = Some(receiver);

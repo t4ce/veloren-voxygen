@@ -6,13 +6,16 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/headless/scene.rs').read_text()
-mesh = source[source.index('const RADIUS:'):source.index('pub(crate) struct Scene')]
+mesh = source[source.index('const CHUNK_RADIUS:'):source.index('pub(crate) struct Scene')]
+mesh += source[source.index('struct MeshSource {'):source.index('#[derive(Clone, Copy, Debug)]')]
 mesh += source[source.index('const FACES:'):source.index('#[cfg(test)]\nmod tests')]
 facade = r'''
 #![allow(dead_code)]
 use vek::{Rgb, Vec2, Vec3};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
+use std::sync::Arc;
+#[derive(Clone)]
 struct Block { color: Option<Rgb<u8>>, solid: bool }
 #[allow(non_snake_case)]
 fn Block(color: Option<Rgb<u8>>) -> Block { Block { solid: color.is_some(), color } }
@@ -20,11 +23,21 @@ impl Block {
  fn is_solid(&self) -> bool { self.solid }
  fn get_color(&self) -> Option<Rgb<u8>> { self.color }
 }
+#[derive(Clone)]
 struct TerrainGrid {
  loaded: HashSet<Vec2<i32>>, blocks: HashMap<Vec3<i32>, Block>,
- air: Block, base: Block, filled_base: bool,
+ air: Block, base: Block, filled_base: bool, bounds: Arc<ChunkBounds>,
 }
-impl TerrainGrid { fn chunk_size() -> Vec2<u32> { Vec2::new(32,32) } }
+struct ChunkBounds { min: i32, max: i32 }
+impl ChunkBounds { fn get_min_z(&self)->i32 {self.min} fn get_max_z(&self)->i32 {self.max} }
+impl TerrainGrid {
+ fn chunk_size() -> Vec2<u32> { Vec2::new(32,32) }
+ fn chunk_key(pos: Vec2<i32>) -> Vec2<i32> { pos.map(|p| p.div_euclid(32)) }
+ fn key_chunk(key: Vec2<i32>) -> Vec2<i32> {key*32}
+ fn get_key_arc(&self,key:Vec2<i32>)->Option<&Arc<ChunkBounds>> {
+  self.loaded.contains(&key).then_some(&self.bounds)
+ }
+}
 trait ReadVol { fn get(&self, pos: Vec3<i32>) -> Result<&Block, ()>; }
 impl ReadVol for TerrainGrid {
  fn get(&self, pos: Vec3<i32>) -> Result<&Block, ()> {
@@ -34,7 +47,8 @@ impl ReadVol for TerrainGrid {
 }
 fn grid() -> TerrainGrid {
  TerrainGrid { loaded: HashSet::from([Vec2::zero()]), blocks: HashMap::new(),
-  air: Block(None), base: Block(Some(Rgb::new(31,140,47))), filled_base: false }
+  air: Block(None), base: Block(Some(Rgb::new(31,140,47))), filled_base: false,
+  bounds: Arc::new(ChunkBounds {min:-48,max:128}) }
 }
 '''
 tests = r'''
@@ -63,7 +77,7 @@ tests = r'''
  let mut terrain=grid(); terrain.filled_base=true;
  terrain.loaded.insert(Vec2::new(1,0));
  // Explicit air overrides the otherwise solid base in the neighboring column.
- for z in -31..1 { for y in 0..32 { terrain.blocks.insert(Vec3::new(32,y,z),Block(None)); } }
+ for z in -49..1 { for y in 0..32 { terrain.blocks.insert(Vec3::new(32,y,z),Block(None)); } }
  let mesh=terrain_mesh(&terrain,Vec3::new(16,16,1));
  assert!(mesh.vertices.chunks_exact(6).any(|face| face.iter().all(|v| v.position[0]==32.) && face.iter().any(|v| v.position[2]<0.)));
 }
@@ -136,6 +150,45 @@ tests = r'''
   assert_eq!(&atlas.texels[((y+2)*ATLAS_SIZE+x+2) as usize][..3],&tile[8]);
  }
  assert_eq!(atlas.tiles.len(),MAX_VERTICES/6+1);
+}
+
+#[test] fn all_nine_chunks_use_full_stored_height_and_exclude_the_tenth() {
+ let mut terrain=grid();
+ for y in -1..=1 { for x in -1..=1 {
+  terrain.loaded.insert(Vec2::new(x,y));
+  // Edges and heights outside the former player-centered crop.
+  terrain.blocks.insert(Vec3::new(x*32+1,y*32+1,100),Block(Some(Rgb::new(31,140,47))));
+  terrain.blocks.insert(Vec3::new(x*32+30,y*32+30,-40),Block(Some(Rgb::new(31,140,47))));
+ }}
+ terrain.loaded.insert(Vec2::new(2,0));
+ terrain.blocks.insert(Vec3::new(65,1,100),Block(Some(Rgb::new(31,140,47))));
+ let mesh=terrain_mesh(&terrain,Vec3::zero());
+ assert_eq!(mesh.vertices.len(),18*36);
+ assert!(!mesh.truncated);
+ assert!(mesh.vertices.iter().any(|v| v.position[0] < -30.));
+ assert!(mesh.vertices.iter().any(|v| v.position[0]>60.));
+ assert!(mesh.vertices.iter().any(|v| v.position[2]==101.));
+ assert!(mesh.vertices.iter().any(|v| v.position[2]==-40.));
+ assert!(mesh.vertices.iter().all(|v| v.position[0]<64.));
+ let moved=terrain_mesh(&terrain,Vec3::new(31,31,50));
+ assert_eq!(mesh.atlas.texels,moved.atlas.texels);
+ assert_eq!(mesh.vertices.iter().map(|v|v.position).collect::<Vec<_>>(),
+     moved.vertices.iter().map(|v|v.position).collect::<Vec<_>>());
+ assert_eq!(terrain_xy_bounds(Vec3::new(-1,-1,0)),(Vec2::new(-64,-64),Vec2::new(32,32)));
+}
+#[test] fn mesh_cache_uses_chunk_boundaries_and_detects_halo_updates() {
+ let mut terrain=grid(); let center=Vec3::new(0,0,0);
+ let source=MeshSource {terrain:Arc::new(terrain.clone()),center};
+ assert!(source.matches(&terrain,Vec3::new(31,31,100)));
+ assert!(!source.matches(&terrain,Vec3::new(32,31,100)));
+ assert!(!source.matches(&terrain,Vec3::new(-1,0,0)));
+ terrain.loaded.insert(Vec2::new(2,2)); // diagonal halo not read
+ assert!(source.matches(&terrain,center));
+ terrain.loaded.insert(Vec2::new(2,1)); // face halo read
+ assert!(!source.matches(&terrain,center));
+ let source=MeshSource {terrain:Arc::new(terrain.clone()),center};
+ terrain.bounds=Arc::new(ChunkBounds {min:-48,max:200});
+ assert!(!source.matches(&terrain,center));
 }
 '''
 with tempfile.TemporaryDirectory(prefix='voxy-terrain-mesh-') as directory:

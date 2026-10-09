@@ -1,4 +1,6 @@
 //! Connected-world control path for the admitted sky and terrain renderer.
+#[path = "native_zoom.rs"]
+mod zoom;
 use crate::{
     Direction, GlobalState, PlayState, PlayStateResult,
     client::{Client, Event as ClientEvent},
@@ -18,6 +20,8 @@ use vek::*;
 pub struct SessionState {
     client: Rc<RefCell<Client>>,
     camera: Camera,
+    zoom: zoom::Zoom,
+    terrain_height: Option<(f32, f32)>,
     keys: KeyState,
     terrain: crate::terrain_preview::Scene,
     geometry: Option<(
@@ -54,12 +58,24 @@ impl SessionState {
         Self {
             client,
             camera,
+            zoom: zoom::Zoom::new(10.0),
+            terrain_height: None,
             keys: Default::default(),
             terrain: crate::terrain_preview::Scene::new(),
             geometry: None,
             frames: 0,
         }
     }
+    fn refresh_zoom_limit(&mut self) {
+        let position = self.client.borrow().position().unwrap_or_default();
+        let size = common::terrain::TerrainGrid::chunk_size();
+        self.zoom.set_limit(zoom::fit_distance(
+            [size.x as f32, size.y as f32], position.z + 1.5,
+            self.terrain_height, self.camera.get_effective_fov(),
+            self.camera.get_aspect_ratio(),
+        ));
+    }
+
 }
 impl PlayState for SessionState {
     fn enter(&mut self, global: &mut GlobalState, _: Direction) {
@@ -68,6 +84,7 @@ impl PlayState for SessionState {
         global.window.prepare_scene_display();
     }
     fn tick(&mut self, global: &mut GlobalState, events: Vec<Event>) -> PlayStateResult {
+        self.refresh_zoom_limit();
         for event in events {
             match event {
                 Event::Close => return PlayStateResult::Shutdown,
@@ -75,6 +92,7 @@ impl PlayState for SessionState {
                 Event::Focused(true) => global.window.grab_cursor(true),
                 Event::Resize(size) => {
                     self.camera.set_aspect_ratio(size.x as f32 / size.y.max(1) as f32);
+                    self.refresh_zoom_limit();
                     // UI4 commits a paired resize only after both producers
                     // publish new backing frames. The guarded HUD must still
                     // publish its transparent foreground at the new extent.
@@ -83,7 +101,9 @@ impl PlayState for SessionState {
                 Event::CursorPan(delta) => self
                     .camera
                     .rotate_by(Vec3::new(delta.x, delta.y, 0.0) * 0.005),
-                Event::Zoom(delta) => self.camera.zoom_by(delta, None),
+                Event::Zoom(delta) => {
+                    self.zoom.scroll(delta);
+                }
                 Event::InputUpdate(input, pressed) => {
                     let action = match input {
                         GameInput::MoveForward => {
@@ -118,7 +138,7 @@ impl PlayState for SessionState {
                         GameInput::Roll => Some(comp::InputKind::Roll),
                         GameInput::Fly => Some(comp::InputKind::Fly),
                         GameInput::CycleCamera if pressed => {
-                            self.camera.next_mode(false, false);
+                            self.zoom.toggle();
                             None
                         }
                         _ => None,
@@ -172,6 +192,8 @@ impl PlayState for SessionState {
             .current::<comp::Pos>()
             .map_or(Vec3::zero(), |pos| pos.0);
         self.camera.set_focus_pos(position + Vec3::unit_z() * 1.5);
+        let zoom_distance = self.zoom.advance(global.clock.real_dt().as_secs_f32());
+        self.camera.set_distance_continuous(zoom_distance);
         self.camera.update(
             client.state().get_time(),
             global.clock.real_dt().as_secs_f32(),
@@ -213,6 +235,7 @@ impl PlayState for SessionState {
             );
             let terrain = if prepared.terrain.is_empty() {
                 self.geometry = None;
+                self.terrain_height = None;
                 None
             } else {
                 if self
@@ -220,6 +243,9 @@ impl PlayState for SessionState {
                     .as_ref()
                     .is_none_or(|(revision, _)| *revision != prepared.revision)
                 {
+                    self.terrain_height = prepared.terrain.iter().map(|v| v.position[2])
+                        .fold(None, |range, z| Some(range.map_or((z, z),
+                            |(low, high): (f32, f32)| (low.min(z), high.max(z)))));
                     self.geometry = Some((
                         prepared.revision,
                         std::sync::Arc::new(crate::render::terrain_feature::Geometry {
@@ -232,14 +258,15 @@ impl PlayState for SessionState {
                 // The demo shader uses forward depth and an absolute world eye.
                 // Derive the basis from the same camera inverse used by Voxy,
                 // including roll, third-person distance and collision correction.
-                Some(std::sync::Arc::new(crate::render::terrain_feature::Frame {
-                    geometry: self.geometry.as_ref().unwrap().1.clone(),
-                    camera: crate::render::terrain_feature::camera_from_view(
+                let mut camera = crate::render::terrain_feature::camera_from_view(
                         deps.view_mat_inv,
                         self.camera.get_focus_pos(),
                         self.camera.get_effective_fov(),
                         size.width as f32 / size.height.max(1) as f32,
-                    ),
+                    );
+                camera[4][3] = self.zoom.far_plane();
+                Some(std::sync::Arc::new(crate::render::terrain_feature::Frame {
+                    geometry: self.geometry.as_ref().unwrap().1.clone(), camera,
                 }))
             };
             let deps = self.camera.dependents();

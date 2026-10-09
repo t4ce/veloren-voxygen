@@ -8,6 +8,11 @@ mod terrain;
 mod clouds;
 #[path = "../../../src/render/cloud_view.rs"]
 mod cloud_view;
+#[path = "../../../src/session/native_zoom.rs"]
+mod native_zoom;
+#[cfg(target_os = "trueos")]
+#[path = "../target/camera_zoom.rs"]
+mod camera_zoom;
 mod terrain_preview {
     pub const ATLAS_SIZE: u32 = 1024;
     pub const MAX_VERTICES: usize = 600_000;
