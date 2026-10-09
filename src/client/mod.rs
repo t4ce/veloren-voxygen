@@ -91,6 +91,9 @@ use tokio_parallel::prelude::*;
 use tracing::{debug, error, trace, warn};
 use vek::*;
 
+#[cfg(target_os = "trueos")]
+mod terrain_prefetch;
+
 pub const MAX_SELECTABLE_VIEW_DISTANCE: u32 = 65;
 
 const PING_ROLLING_AVERAGE_SECS: usize = 10;
@@ -357,6 +360,8 @@ pub struct Client {
     terrain_decode_pending: Option<(Vec2<i32>, Instant, std::sync::mpsc::Receiver<Option<TerrainChunk>>)>,
     #[cfg(target_os = "trueos")]
     terrain_received_at: HashMap<Vec2<i32>, Instant>,
+    #[cfg(target_os = "trueos")]
+    terrain_prefetch: terrain_prefetch::WarmState,
     target_time_of_day: Option<TimeOfDay>,
     dt_adjustment: f64,
 
@@ -1182,6 +1187,8 @@ impl Client {
             terrain_decode_pending: None,
             #[cfg(target_os = "trueos")]
             terrain_received_at: HashMap::new(),
+            #[cfg(target_os = "trueos")]
+            terrain_prefetch: terrain_prefetch::WarmState::new(),
             target_time_of_day: None,
             dt_adjustment: 1.0,
 
@@ -2316,6 +2323,7 @@ impl Client {
             // Drop delivery so an old worker cannot repopulate cleared terrain.
             self.terrain_decode_pending = None;
             self.terrain_received_at.clear();
+            self.terrain_prefetch = terrain_prefetch::WarmState::new();
         }
     }
 
@@ -2624,6 +2632,125 @@ impl Client {
         }
     }
 
+    #[cfg(target_os = "trueos")]
+    fn terrain_chunk_in_decode(&self, key: Vec2<i32>) -> bool {
+        self.terrain_decode_pending.as_ref().is_some_and(|(pending, _, _)| *pending == key)
+            || self.terrain_decode_queue.iter().any(|(msg, _)|
+                matches!(msg, ServerGeneral::TerrainChunkUpdate {key: pending, chunk: Ok(_)} if *pending == key))
+    }
+
+    /// Extra resident data only. Render radius, VD negotiation, entity syncing
+    /// and message types stay the same. Existing unload hysteresis retains ±2.
+    #[cfg(target_os = "trueos")]
+    fn tick_terrain_prefetch(
+        &mut self,
+        position: Vec3<f32>,
+        foreground_sent: usize,
+    ) -> Result<(), Error> {
+        let velocity = self
+            .current::<comp::Vel>()
+            .map_or(Vec2::zero(), |v| v.0.xy());
+        let size = TerrainGrid::chunk_size().into_array();
+        let Some(plan) =
+            terrain_prefetch::plan(position.xy().into_array(), velocity.into_array(), size)
+        else {
+            return Ok(());
+        };
+        let now = Instant::now();
+        let near_missing = {
+            let terrain = self.state.terrain();
+            plan.near
+                .iter()
+                .filter(|key| !terrain.contains_key_real(Vec2::from(**key)))
+                .count()
+        };
+        // Count availability at the crossing itself, not after a later response.
+        self.terrain_prefetch.observe(plan.center, near_missing);
+        if near_missing == 0 {
+            // Outside-map default chunks are already available locally. Promote
+            // those without spending a network request or falsely waiting on air.
+            for candidate in &plan.warm {
+                let key = Vec2::from(candidate.key);
+                let terrain = self.state.terrain();
+                let local = (!terrain.contains_key_real(key))
+                    .then(|| terrain.get_key_arc(key).cloned())
+                    .flatten();
+                drop(terrain);
+                if let Some(chunk) = local {
+                    self.state.insert_chunk(key, chunk);
+                }
+            }
+            let speculative = self
+                .pending_chunks
+                .keys()
+                .filter(|key| {
+                    (0..2).any(|i| (i64::from(key[i]) - i64::from(plan.center[i])).abs() > 1)
+                })
+                .count();
+            if foreground_sent < 2
+                && self.pending_chunks.len() < 12
+                && speculative < terrain_prefetch::PENDING_LIMIT
+                && self.terrain_decode_queue.len() < terrain_prefetch::PENDING_LIMIT
+                && self.terrain_prefetch.due(now)
+            {
+                for candidate in &plan.warm {
+                    let key = Vec2::from(candidate.key);
+                    if self.state.terrain().contains_key_real(key)
+                        || self.pending_chunks.contains_key(&key)
+                        || self.terrain_chunk_in_decode(key)
+                        || !self.terrain_prefetch.eligible(candidate.key, now)
+                    {
+                        continue;
+                    }
+                    self.send_msg_err(ClientGeneral::TerrainChunkRequest { key })?;
+                    self.pending_chunks.insert(key, now);
+                    self.terrain_prefetch.sent(now);
+                    break; // no catch-up burst after low FPS or a stall
+                }
+            }
+        }
+        if self.terrain_prefetch.report_due(now) {
+            let terrain = self.state.terrain();
+            let warm_ready = plan
+                .warm
+                .iter()
+                .filter(|candidate| terrain.contains_key_real(Vec2::from(candidate.key)))
+                .count();
+            let eta = plan
+                .warm
+                .iter()
+                .filter(|candidate| !terrain.contains_key_real(Vec2::from(candidate.key)))
+                .map(|candidate| candidate.eta_seconds)
+                .fold(f64::INFINITY, f64::min);
+            let resident = terrain.iter().count();
+            drop(terrain);
+            let _ = trueos::logl::log_record(
+                trueos::logl::level::IMPORTANT,
+                "apps::voxygen",
+                format_args!(
+                    "terrain-prefetch: render_radius=1 warm_radius=2 near_ready={} near_target=9 warm_ready={} warm_target={} resident={} pending={} decode_queue={} decode_inflight={} requests={} ready_crossings={} cold_crossings={} missing_at_crossings={} teleports={} timeouts={} next_missing_eta_s={:.3} request_to_decoded_samples={} request_to_decoded_p95_us={} max_speculative_pending=6 max_speculative_requests_s=10 boundary=decoded-resident protocol=unchanged\n",
+                    9 - near_missing,
+                    warm_ready,
+                    plan.warm.len(),
+                    resident,
+                    self.pending_chunks.len(),
+                    self.terrain_decode_queue.len(),
+                    self.terrain_decode_pending.is_some(),
+                    self.terrain_prefetch.requests,
+                    self.terrain_prefetch.ready_crossings,
+                    self.terrain_prefetch.cold_crossings,
+                    self.terrain_prefetch.missing_at_crossings,
+                    self.terrain_prefetch.teleports,
+                    self.terrain_prefetch.timeouts,
+                    eta,
+                    self.terrain_prefetch.latency_samples(),
+                    self.terrain_prefetch.latency_p95_us()
+                ),
+            );
+        }
+        Ok(())
+    }
+
     /// Handles terrain addition and removal.
     ///
     /// Removes old terrain chunks outside the view distance.
@@ -2636,7 +2763,7 @@ impl Client {
             .cloned();
         if let (Some(pos), Some(view_distance)) = (pos, self.view_distance) {
             prof_span!("terrain");
-            let chunk_pos = self.state.terrain().pos_key(pos.0.map(|e| e as i32));
+            let chunk_pos = self.state.terrain().pos_key(pos.0.map(|e| e.floor() as i32));
 
             // Remove chunks that are too far from the player.
             let mut chunks_to_remove = Vec::new();
@@ -2705,7 +2832,11 @@ impl Client {
                             }
                         } else {
                             drop(terrain);
-                            if !skip_mode && !self.pending_chunks.contains_key(key) {
+                            #[cfg(target_os = "trueos")]
+                            let decoding = self.terrain_chunk_in_decode(*key);
+                            #[cfg(not(target_os = "trueos"))]
+                            let decoding = false;
+                            if !skip_mode && !self.pending_chunks.contains_key(key) && !decoding {
                                 const TOTAL_PENDING_CHUNKS_LIMIT: usize = 12;
                                 const CURRENT_TICK_PENDING_CHUNKS_LIMIT: usize = 2;
                                 if self.pending_chunks.len() < TOTAL_PENDING_CHUNKS_LIMIT
@@ -2736,8 +2867,17 @@ impl Client {
 
             // If chunks are taking too long, assume they're no longer pending.
             let now = Instant::now();
+            #[cfg(target_os = "trueos")]
+            let before_expiry = self.pending_chunks.len();
             self.pending_chunks
                 .retain(|_, created| now.duration_since(*created) < Duration::from_secs(3));
+            #[cfg(target_os = "trueos")]
+            {
+                self.terrain_prefetch.timeouts += (before_expiry - self.pending_chunks.len()) as u64;
+                if view_distance == 1 {
+                    self.tick_terrain_prefetch(pos.0, current_tick_send_chunk_requests)?;
+                }
+            }
         }
 
         if let Some(lod_pos) = pos.map(|p| p.0.xy()).or(self.lod_pos_fallback) {
@@ -3241,7 +3381,10 @@ impl Client {
                 if let Some(chunk) = chunk {
                     self.state.insert_chunk(key, Arc::new(chunk));
                     self.terrain_received_at.insert(key, received_at);
-                }
+                    if let Some(sent) = self.pending_chunks.get(&key) {
+                        self.terrain_prefetch.delivered(*sent, Instant::now());
+                    }
+                } else {self.terrain_prefetch.failed(key.into_array(), Instant::now());}
                 self.pending_chunks.remove(&key);
             }
             let Some((msg, received_at)) = self.terrain_decode_queue.pop_front() else { return Ok(()); };
@@ -3261,7 +3404,12 @@ impl Client {
                         }
                     }
                 }
-                msg => self.apply_server_terrain_msg(msg)?,
+                msg => {
+                    if let ServerGeneral::TerrainChunkUpdate {key, chunk: Err(_)} = &msg {
+                        self.terrain_prefetch.failed(key.into_array(), Instant::now());
+                    }
+                    self.apply_server_terrain_msg(msg)?;
+                }
             }
         }
     }

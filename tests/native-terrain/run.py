@@ -30,6 +30,36 @@ struct Camera { dist: f32, tgt_dist: f32, mode: CameraMode }
  camera.set_distance_continuous(f32::NAN); assert_eq!(camera.dist,0.1);
 }
 ''')
+# Compile the actual server admission expression, rather than a second copy
+# of the client's approximation. Catch server-policy drift without wire changes.
+server = (root.parents[2] / 'TRUEOS-Blueprints/vendor/veloren/server/src/sys/msg/terrain.rs').read_text()
+start = server.index('pos.0.xy().map(|e| e as f64).distance_squared(')
+end = server.index('.powi(2)', start) + len('.powi(2)')
+(root / 'target/server_prefetch_rule.rs').write_text(r'''
+struct Pos(vek::Vec3<f32>);
+struct ViewDistance;
+impl ViewDistance {fn current(&self)->u32{1}}
+struct Presence {terrain_view_distance:ViewDistance}
+struct TerrainChunkSize;
+impl TerrainChunkSize {const RECT_SIZE:vek::Vec2<u32>=vek::Vec2 {x:32,y:32};}
+fn actual_server_admits(position:[f32;2],key:[i32;2])->bool {
+ let pos=Pos(vek::Vec3::new(position[0],position[1],0.));
+ let key:vek::Vec2<i32>=key.into();
+ let presence=Presence{terrain_view_distance:ViewDistance};
+''' + server[start:end] + r'''
+}
+#[test] fn warm_requests_fit_actual_server_policy_even_with_one_block_position_lag() {
+ for x in -32..=32 {for y in -32..=32 {
+  let position=[x as f32,y as f32];
+  let plan=crate::terrain_prefetch::plan(position,[8.,8.],[32;2]).unwrap();
+  for candidate in plan.warm {
+   for lag in [[0.,0.],[1.,0.],[-1.,0.],[0.,1.],[0.,-1.]] {
+    assert!(actual_server_admits([position[0]+lag[0],position[1]+lag[1]],candidate.key));
+   }
+  }
+ }}
+}
+''')
 env = os.environ.copy()
 env['RUSTFLAGS'] = ('--cfg target_os="trueos" -Aexplicit_builtin_cfgs_in_flags '
                     '--check-cfg=cfg(target_os,values("trueos"))')

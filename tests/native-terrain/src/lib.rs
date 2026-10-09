@@ -19,6 +19,10 @@ mod native_zoom;
 mod camera_zoom;
 #[path = "../../../src/render/terrain_composition.rs"]
 mod terrain_composition;
+#[path = "../../../src/client/terrain_prefetch.rs"]
+mod terrain_prefetch;
+#[path = "../target/server_prefetch_rule.rs"]
+mod server_prefetch_rule;
 mod terrain_feature {pub(crate) use crate::terrain::Geometry;}
 mod client {
     pub struct Client {pub world:WorldData}
