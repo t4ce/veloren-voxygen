@@ -4984,6 +4984,7 @@ dependencies = [
  "flate2",
  "hashbrown 0.17.1",
  "image",
+ "lz4_flex",
  "num-traits",
  "serde",
  "specs",

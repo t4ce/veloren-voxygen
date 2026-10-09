@@ -68,6 +68,7 @@ impl Coverage {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Metrics {
     pub mode: Mode,
+    pub stream_run_us: u64,
     pub near_revision: u64,
     pub near_vertices: u32,
     pub far_vertices: u32,

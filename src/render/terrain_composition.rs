@@ -186,6 +186,7 @@ impl Composition {
         let mut metrics = *metrics;
         metrics.near_revision = self.cached.as_ref().unwrap().0.near;
         metrics.loaded_chunks = source.loaded_chunks;
+        metrics.stream_run_us = source.stream_run_us;
         metrics.width = source.width;
         metrics.height = source.height;
         metrics.far_warm_us = source.far_warm_us;

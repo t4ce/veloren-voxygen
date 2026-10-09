@@ -15,7 +15,7 @@ def evidence():
     for mode in metrics.MODES:
         chunks = 0 if mode == 'far' else 9
         for index in range(16):
-            rows.append(dict(run_us=123, sequence=len(rows)+1, mode=mode, seconds=2., retired=60, published=60,
+            rows.append(dict(run_us=123, stream_run_us=456, sequence=len(rows)+1, mode=mode, seconds=2., retired=60, published=60,
                 published_fps=30., ready_chunk_frames=60*chunks, near_chunks=chunks, far_vertices=0 if mode == 'near' else 98304,
                 far_ready='false' if mode == 'near' else 'true', cpu_upload_bytes=80*60,
                 frame_to_publish_p95_us=15000, frame_to_publish_max_us=20000,
@@ -60,6 +60,23 @@ class Checks(unittest.TestCase):
         rows = evidence()
         rows[-1]['run_us'] = 124
         self.assertFalse(metrics.evaluate(rows)['pass'])
+
+    def test_prefetched_crossings_prove_readiness_without_inventing_new_receipt_samples(self):
+        rows = evidence()
+        for row in rows:
+            row['receipt_samples'] = 0
+        line = 'terrain-prefetch: run_us=456 near_ready=9 warm_ready=16 warm_target=16 resident=30 pending=0 requests=40 ready_crossings=5 cold_crossings=0 missing_at_crossings=0 teleports=0 timeouts=0 request_to_decoded_samples=32 request_to_decoded_p95_us=500000 boundary=decoded-resident protocol=unchanged'
+        proof = metrics.warm_proof(line, 456, 5)
+        self.assertTrue(proof['pass'])
+        self.assertTrue(metrics.evaluate(rows, warm_evidence=proof)['pass'])
+        self.assertFalse(metrics.evaluate(rows)['pass'])
+        for changed in [line.replace('cold_crossings=0', 'cold_crossings=1'),
+                        line.replace('ready_crossings=5', 'ready_crossings=4'),
+                        line.replace('run_us=456', 'run_us=123'),
+                        line.replace('warm_ready=16', 'warm_ready=12')]:
+            self.assertFalse(metrics.evaluate(rows, warm_evidence=metrics.warm_proof(changed, 456, 5))['pass'])
+        rows[-1]['stream_run_us'] = 789
+        self.assertFalse(metrics.evaluate(rows, warm_evidence=proof)['pass'])
 
     def test_parser_accepts_log_prefixes_rejects_truncation_and_nonfinite_values(self):
         row = evidence()[0]

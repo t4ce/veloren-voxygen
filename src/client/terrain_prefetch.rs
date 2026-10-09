@@ -119,6 +119,7 @@ pub fn plan(position: [f32; 2], velocity: [f32; 2], size: [u32; 2]) -> Option<Pl
 }
 
 pub struct WarmState {
+    pub run_us: u64,
     next_request: Instant,
     next_report: Instant,
     last_center: Option<[i32; 2]>,
@@ -135,6 +136,9 @@ impl WarmState {
     pub fn new() -> Self {
         let now = Instant::now();
         Self {
+            run_us: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_micros() as u64),
             next_request: now,
             next_report: now,
             last_center: None,

@@ -1,0 +1,30 @@
+[package]
+name = "voxy-terrain-wire-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[workspace]
+
+# Exercise the production protocol and metadata on Linux, without pulling in
+# the TRUEOS-only frontend or its platform image/network patches.
+[dependencies]
+common = { package = "veloren-common", path = "../../common", features = ["no-assets"] }
+veloren-common-net = { path = "../../common/net" }
+bincode = { version = "2", features = ["serde"] }
+vek = { version = "0.17", features = ["serde", "mint"] }
+lz4_flex = { version = "0.11.6", default-features = false, features = ["std", "safe-encode", "safe-decode", "checked-decode"] }
+
+[patch.crates-io]
+specs = { path = "../../vendor/specs" }
+shred = { path = "../../vendor/shred" }
+hibitset = { path = "../../vendor/hibitset" }
+hashbrown = { path = "../../vendor/hashbrown" }
+indexmap = { path = "../../vendor/indexmap" }
+tynm = { path = "../../vendor/tynm-0.1.10" }
+wavefront = { path = "../../vendor/wavefront-0.2.3" }
+
+[[test]]
+name = "terrain_lz4"
+path = "../../common/net/tests/terrain_lz4.rs"

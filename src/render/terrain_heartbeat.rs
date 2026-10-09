@@ -75,7 +75,11 @@ impl Heartbeat {
         }
     }
     fn mode(&mut self, metrics: Metrics) {
-        if metrics.mode != self.metrics.mode {
+        if metrics.mode != self.metrics.mode || metrics.stream_run_us != self.metrics.stream_run_us
+        {
+            if metrics.stream_run_us != self.metrics.stream_run_us {
+                self.last_near = None;
+            }
             // Begin a fresh two-second window; F1 cannot flood heartbeat logs.
             self.reset(Instant::now());
         }
@@ -130,8 +134,9 @@ impl Heartbeat {
         };
         self.sequence += 1;
         record(format_args!(
-            "terrain-heartbeat: run_us={} sequence={} mode={} seconds={:.3} retired={} published={} published_fps={:.2} ready_chunk_frames={} chunk_frames_s={:.2} near_chunks={} loaded_chunks={} near_vertices={} far_vertices={} near_revision={} cpu_upload_bytes={} prepare_p95_us={} submit_wait_p95_us={} frame_to_publish_p50_us={} frame_to_publish_p95_us={} frame_to_publish_max_us={} frame_budget_us={} throughput_ok={} retries={} warm_failures={} window_warm_failures={} far_ready={} near_warm_us={} far_warm_us={} compose_us={} budget_fallback={} width={} height={} new_near_revisions={} receipt_samples={} chunk_receipt_to_first_publish_p95_us={} measurement=provisional target_fps=30 min_fps=27 boundary=gpu-retired+ui4-published physical_receipt=unavailable-background\n",
+            "terrain-heartbeat: run_us={} stream_run_us={} sequence={} mode={} seconds={:.3} retired={} published={} published_fps={:.2} ready_chunk_frames={} chunk_frames_s={:.2} near_chunks={} loaded_chunks={} near_vertices={} far_vertices={} near_revision={} cpu_upload_bytes={} prepare_p95_us={} submit_wait_p95_us={} frame_to_publish_p50_us={} frame_to_publish_p95_us={} frame_to_publish_max_us={} frame_budget_us={} throughput_ok={} retries={} warm_failures={} window_warm_failures={} far_ready={} near_warm_us={} far_warm_us={} compose_us={} budget_fallback={} width={} height={} new_near_revisions={} receipt_samples={} chunk_receipt_to_first_publish_p95_us={} measurement=provisional target_fps=30 min_fps=27 boundary=gpu-retired+ui4-published physical_receipt=unavailable-background\n",
             self.run_us,
+            self.metrics.stream_run_us,
             self.sequence,
             self.metrics.mode.label(),
             seconds,

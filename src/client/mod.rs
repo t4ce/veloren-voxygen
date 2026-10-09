@@ -2633,6 +2633,9 @@ impl Client {
     }
 
     #[cfg(target_os = "trueos")]
+    pub(crate) fn terrain_stream_run_us(&self) -> u64 { self.terrain_prefetch.run_us }
+
+    #[cfg(target_os = "trueos")]
     fn terrain_chunk_in_decode(&self, key: Vec2<i32>) -> bool {
         self.terrain_decode_pending.as_ref().is_some_and(|(pending, _, _)| *pending == key)
             || self.terrain_decode_queue.iter().any(|(msg, _)|
@@ -2728,7 +2731,8 @@ impl Client {
                 trueos::logl::level::IMPORTANT,
                 "apps::voxygen",
                 format_args!(
-                    "terrain-prefetch: render_radius=1 warm_radius=2 near_ready={} near_target=9 warm_ready={} warm_target={} resident={} pending={} decode_queue={} decode_inflight={} requests={} ready_crossings={} cold_crossings={} missing_at_crossings={} teleports={} timeouts={} next_missing_eta_s={:.3} request_to_decoded_samples={} request_to_decoded_p95_us={} max_speculative_pending=6 max_speculative_requests_s=10 boundary=decoded-resident protocol=unchanged\n",
+                    "terrain-prefetch: run_us={} render_radius=1 warm_radius=2 near_ready={} near_target=9 warm_ready={} warm_target={} resident={} pending={} decode_queue={} decode_inflight={} requests={} ready_crossings={} cold_crossings={} missing_at_crossings={} teleports={} timeouts={} next_missing_eta_s={:.3} request_to_decoded_samples={} request_to_decoded_p95_us={} max_speculative_pending=6 max_speculative_requests_s=10 boundary=decoded-resident protocol=unchanged\n",
+                    self.terrain_prefetch.run_us,
                     9 - near_missing,
                     warm_ready,
                     plan.warm.len(),

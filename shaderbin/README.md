@@ -290,16 +290,59 @@ p95 ≤33,333 µs, available layers, no fallback/new worker failure). The strict
 capture checker requires **30 consecutive seconds per mode at ≥29 FPS**, a
 common resolution, all nine near chunks where applicable, p95 ≤33,333 µs and
 camera-only app writes in steady windows. Missing sequence numbers, stalls,
-partial coverage and fallbacks break the consecutive proof. It also requires
-actual receipt samples in Near and Both, provisionally ≤2 seconds. These are
-initial experiment gates, not established Intel throughput numbers.
+partial coverage and fallbacks break the consecutive proof. By default it also
+requires actual receipt samples in Near and Both, provisionally ≤2 seconds;
+the warm-crossing option below supplies readiness evidence for prefetched data.
+These are initial experiment gates, not established Intel throughput numbers.
 
-For a fresh hardware run: connect in Both, warm all nine chunks, move across a
-chunk boundary to collect a receipt sample, then hold the camera still for at
-least 32 seconds. Repeat in Near with a newly received chunk boundary; run Far
-for at least 32 seconds. Keep the same resolution and one uninterrupted capture.
-Use `python3 tools/terrain_metrics.py <capture.log>`. The checker selects the
-latest run and outputs JSON, exits nonzero if evidence is missing or fails, and
-always marks physical display proof unavailable. Test resize, disconnect,
-partial arrivals and rapid F1 separately; those windows should not pass a steady
-throughput gate. Local host tests execute no Intel workload.
+For a fresh hardware run: connect in Both, warm the resident buffer, then
+walk through at least five ordinary chunk crossings (including diagonal movement
+and direction changes). Stop and capture at least 32 steady seconds in each of
+Both, Near and Far, at the same resolution, in one uninterrupted capture. Use
+`python3 tools/terrain_metrics.py <capture.log> --require-warm-crossings 5`.
+This gate checks resident data at crossings plus steady rendering in each mode.
+It joins evidence by terrain-stream ID, requires zero cold ordinary crossings
+and a full final warm ring, and does not demand new network arrivals for terrain
+that was deliberately prefetched. The original receipt-based gate remains
+available without the flag for experiments that consume arriving chunks directly.
+The checker outputs JSON and exits nonzero if evidence is absent or fails;
+physical display proof remains unavailable. Test resize, disconnect, partial
+arrivals and rapid F1 separately. Local host tests execute no Intel workload.
+
+## Ahead-of-use decoded terrain
+
+The VD=1 full client now warms a **5×5 resident area** around the same **3×3
+rendered area**: up to 25 decoded chunks, including 16 speculative neighbors.
+`TerrainChunkRequest { key }` already accepts coordinates in a larger radial
+allowance than the current request loop. The warm ring uses that allowance with
+a one-block position margin. Tests compile the actual server admission expression
+and check requests at chunk edges and with small server-position lag. No protocol,
+server code, VD negotiation, or entity distance changes are needed.
+
+Current near chunks get priority. After all nine are resident, the warm scheduler
+requests at most one additional chunk per 100 ms, with at most six speculative
+requests pending inside the existing twelve-request total. It pauses when near
+coverage is incomplete or the decode queue is backed up. Already queued/in-flight
+chunk decodes suppress duplicate requests, even after a request timeout. Failed
+speculative replies back off three seconds. Long frames cannot create a catch-up
+burst. Outside-map default data is promoted locally without a network request.
+
+The scheduler estimates when each candidate enters the near rectangle using
+position within the current chunk and planar velocity. At a diagonal crossing
+it prioritizes the required corner over strips the player is leaving. Other
+directions fill too, so turning does not require inventing a new request path.
+The existing unload hysteresis retains the entire ±2 warm ring plus a trailing
+margin, with at most 45 resident keys after pruning. The warm ring covers the
+next rendered 3×3 after a single neighboring chunk move when those targets are
+resident. Render meshes still follow the existing preparation/upload budget.
+
+The two-second `terrain-prefetch` heartbeat reports decoded near/warm coverage,
+pending requests and decode backlog, warm/cold ordinary crossings, separately
+counted startup/teleport behavior, and request-to-decoded p95 over up to 32 actual
+completions. `next_missing_eta_s` exposes the predicted urgency of remaining
+candidates. Startup is not counted as a movement miss; multi-chunk jumps are
+reported as teleports. A normal crossing with any missing near data increments
+`cold_crossings` permanently for that stream, so later recovery cannot hide it.
+Host models cover straight and diagonal movement at 8 blocks/second with an
+assumed 1.5-second request-to-decoded delay. This is scheduler evidence, not a
+measured latency or a guarantee under arbitrary movement/network conditions.

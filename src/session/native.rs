@@ -249,6 +249,7 @@ impl PlayState for SessionState {
             let chunks = common::terrain::TerrainGrid::chunk_size();
             let metrics = crate::render::terrain_layers::Metrics {
                 near_warm_us: prepared.warm_us,
+                stream_run_us: client.terrain_stream_run_us(),
                 received_at: prepared.received_at, width: size.width, height: size.height,
                 warm_failures: prepared.worker_failures,
                 near_chunks: coverage.map_or(0, |c| c.chunks(chunks.into_array())),
