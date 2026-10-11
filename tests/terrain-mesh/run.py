@@ -56,68 +56,83 @@ fn grid() -> TerrainGrid {
 }
 '''
 radial = (root / 'src/headless/radial.rs').read_text()
-# Compile the production sphere mesher against the same loaded/unknown facade.
-mesh += '\n' + radial[radial.index('fn desired_center'):]
+# Compile the fixed-capture mesher and lifecycle against the loaded/unknown facade.
+mesh += '\n' + radial.replace('//!','//').replace('use super::*;','').replace('use crate::render::terrain_feature::Geometry;','')
 facade += r'''
+use std::sync::mpsc;
 struct Geometry { vertices: Arc<[Vertex]>, atlas: Arc<[[u8;4]]> }
-struct Complete { geometry: Arc<Geometry>, center: Vec3<f32>, height:Option<(f32,f32)>, build_us:u64, chunks:u32 }
-const RADIUS:f32=40.; const TILE_EDGE:i32=8; const LEAD_SECONDS:f32=0.20; const MAX_LEAD:f32=6.;
+#[macro_export] macro_rules! info {($($t:tt)*)=>{}}
+#[macro_export] macro_rules! error {($($t:tt)*)=>{}}
+mod tracing {pub(crate) use super::{info,error};}
+struct Client { terrain: TerrainGrid, center: Vec2<i32> }
+impl Client {
+ fn terrain_snapshot_ready(&self)->bool {true}
+ fn terrain_snapshot_center(&self)->Option<Vec2<i32>> {Some(self.center)}
+ fn state(&self)->&Self {self}
+ fn terrain(&self)->&TerrainGrid {&self.terrain}
+}
+fn capture()->TerrainGrid {
+ let mut terrain=grid();terrain.bounds=Arc::new(ChunkBounds{min:-1,max:3});
+ for y in -4..=4 {for x in -4..=4 {terrain.loaded.insert(Vec2::new(x,y));}}
+ terrain
+}
 '''
 tests = r'''
-#[test] fn sphere_outer_band_preserves_every_exposed_face() {
- let mut terrain=grid();
- for y in -4..=4 {for x in -4..=4 {terrain.loaded.insert(Vec2::new(x,y));}}
- terrain.blocks.insert(Vec3::new(36,0,0),Block(Some(Rgb::new(31,140,47))));
- let mesh=build(&terrain,Vec3::zero());
- assert_eq!(mesh.geometry.vertices.len(),36);
+#[test] fn complete_capture_includes_distant_chunks_and_stored_heights() {
+ let mut terrain=capture();terrain.bounds=Arc::new(ChunkBounds{min:99,max:102});
+ for y in -4..=4 {for x in -4..=4 {
+  terrain.blocks.insert(Vec3::new(x*32+16,y*32+16,100),Block(Some(Rgb::new(31,140,47))));
+ }}
+ let mesh=build(&terrain,Vec2::zero()).unwrap();
+ assert_eq!(mesh.chunks,81);assert_eq!(mesh.geometry.vertices.len(),81*36);
+ assert!(mesh.geometry.atlas.is_empty());
+ assert!(mesh.geometry.vertices.iter().any(|v|v.position[0] < -100.));
+ assert!(mesh.geometry.vertices.iter().any(|v|v.position[0]>140.));
+ assert!(mesh.geometry.vertices.iter().any(|v|v.position[2]==101.));
+ terrain.loaded.remove(&Vec2::new(4,4));assert!(build(&terrain,Vec2::zero()).is_err());
 }
-#[test] fn sphere_ground_has_no_dissolve_holes_inside_boundary() {
- let mut terrain=grid(); terrain.filled_base=true;
- for y in -4..=4 {for x in -4..=4 {terrain.loaded.insert(Vec2::new(x,y));}}
- let mesh=build(&terrain,Vec3::zero());
- let expected=(-40..40).flat_map(|y|(-40..40).map(move |x|Vec3::new(x,y,0)))
-  .filter(|p|cell_visible(Vec3::zero(),*p)).count();
- assert_eq!(mesh.geometry.vertices.len(),expected*6);
- assert!(mesh.geometry.vertices.iter().all(|v|v.position[2]==1.));
+#[test] fn flat_capture_merges_into_contiguous_opaque_chunk_surfaces() {
+ let mut terrain=capture();terrain.filled_base=true;
+ let mesh=build(&terrain,Vec2::zero()).unwrap();
+ assert_eq!(mesh.geometry.vertices.len(),81*6);
+ assert!(mesh.geometry.vertices.iter().all(|v|v.position[2]==1. && v.atlas_uv[3]==1.));
+ assert!(mesh.geometry.vertices.iter().all(|v|v.atlas_uv[0]==31./255. && v.atlas_uv[1]==140./255.));
 }
-#[test] fn sphere_cache_reuses_surfaces_and_invalidates_changed_neighbor_chunks() {
- let mut terrain=grid();
- let pos=Vec3::new(31,16,0);
- terrain.blocks.insert(pos,Block(Some(Rgb::new(31,140,47))));
- let terrain=Arc::new(terrain);
- let mut cache=SurfaceCache::default();
- let first=build_cached(&terrain,Vec3::new(16.,16.,0.),&mut cache);
- let first_reads=terrain.reads.swap(0,std::sync::atomic::Ordering::Relaxed);
- assert_eq!(first.geometry.vertices.len(),30);
- let key=pos.map(|v|v.div_euclid(TILE_EDGE));
- let pointer=cache.tiles[&key].as_ptr();
- let moved=build_cached(&Arc::new((*terrain).clone()),Vec3::new(17.,16.,0.),&mut cache);
- assert_eq!(moved.geometry.vertices.len(),30);
- assert_eq!(pointer,cache.tiles[&key].as_ptr());
- assert!(terrain.reads.swap(0,std::sync::atomic::Ordering::Relaxed)<first_reads/4);
- build_cached(&terrain,Vec3::new(17.,16.,0.),&mut cache);
- assert_eq!(terrain.reads.load(std::sync::atomic::Ordering::Relaxed),0);
- let mut changed=(*terrain).clone(); changed.loaded.insert(Vec2::new(1,0));
- let next=build_cached(&Arc::new(changed),Vec3::new(17.,16.,0.),&mut cache);
- assert_eq!(next.geometry.vertices.len(),36);
- let far=build_cached(&terrain,Vec3::new(200.,16.,0.),&mut cache);
- assert!(far.geometry.vertices.is_empty());
- assert!(!cache.tiles.contains_key(&key));
+#[test] fn greedy_planes_preserve_holes_and_average_color() {
+ let color=[31,140,47];let red=[200,0,0];
+ let faces=vec![(0,0,color),(1,0,color),(0,1,color),(1,1,red),(3,0,color)];
+ let mut vertices=Vec::new();merge_plane(&mut vertices,5,7,faces.clone()).unwrap();
+ let mut rebuilt=HashMap::new();
+ for quad in vertices.chunks_exact(6) {
+  let lo=quad.iter().map(|v|v.position[0] as i32).min().unwrap();
+  let hi=quad.iter().map(|v|v.position[0] as i32).max().unwrap();
+  let bottom=quad.iter().map(|v|v.position[1] as i32).min().unwrap();
+  let top=quad.iter().map(|v|v.position[1] as i32).max().unwrap();
+  assert!(quad.iter().all(|v|v.position[2]==7.));
+  let color=quad[0].atlas_uv[..3].iter().map(|v|(v*255.).round() as u8).collect::<Vec<_>>();
+  for y in bottom..top {for x in lo..hi {assert!(rebuilt.insert((x,y),color.clone()).is_none());}}
+ }
+ assert_eq!(rebuilt.len(),faces.len());
+ for (x,y,_) in faces {assert!(rebuilt.contains_key(&(x,y)));}
+ assert_eq!(vertices.len(),12);
+ assert_eq!(rebuilt[&(0,0)],vec![73,105,35]);
+ assert_eq!(rebuilt[&(1,1)],vec![73,105,35]);
+ assert_eq!(rebuilt[&(3,0)],color.to_vec());
+ let mut full=vec![Vertex{position:[0.;4],atlas_uv:[0.;4]};MAX_OPAQUE_VERTICES];
+ assert!(merge_plane(&mut full,5,0,vec![(0,0,color)]).is_err());
 }
-
-#[test] fn spherical_mesh_follows_player_with_local_data_and_keeps_unknown_cells_empty() {
- let mut terrain=grid();
- for y in -4..=4 {for x in -4..=4 {terrain.loaded.insert(Vec2::new(x,y));}}
- terrain.blocks.insert(Vec3::new(31,0,0),Block(Some(Rgb::new(31,140,47))));
- terrain.blocks.insert(Vec3::new(41,0,0),Block(Some(Rgb::new(31,140,47))));
- let first=build(&terrain,Vec3::zero());
- assert!(!first.geometry.vertices.is_empty());
- assert!(first.geometry.vertices.iter().all(|v|v.position[0]<=32.));
- let next=build(&terrain,Vec3::new(12.,0.,0.));
- assert!(next.geometry.vertices.iter().any(|v|v.position[0]>=41.));
- assert!(next.geometry.vertices.len()<=MAX_VERTICES);
- terrain.loaded.clear();
- assert!(build(&terrain,Vec3::zero()).geometry.vertices.is_empty());
+#[test] fn movement_reuses_capture_without_remeshing_or_voxel_reads() {
+ let mut client=Client {terrain:capture(),center:Vec2::zero()};
+ client.terrain.blocks.insert(Vec3::new(16,16,0),Block(Some(Rgb::new(31,140,47))));
+ let mut window=Window::new();let deadline=Instant::now()+Duration::from_secs(10);
+ let first=loop {let p=window.prepare(Some(&client));if p.geometry.is_some(){break p;}
+  assert!(Instant::now()<deadline);std::thread::sleep(Duration::from_millis(1));};
+ assert_eq!(first.revision,1);let reads=client.terrain.reads.load(std::sync::atomic::Ordering::Relaxed);
+ for x in -100..100 {client.center=Vec2::new(x,200);let next=window.prepare(Some(&client));
+  assert!(Arc::ptr_eq(first.geometry.as_ref().unwrap(),next.geometry.as_ref().unwrap()));
+  assert_eq!(next.revision,1);}
+ assert_eq!(reads,client.terrain.reads.load(std::sync::atomic::Ordering::Relaxed));
+ assert!(window.prepare(None).geometry.is_none());
 }
 
 #[test] fn drawable_rectangle_never_includes_missing_diagonals_and_handles_negative_chunks() {

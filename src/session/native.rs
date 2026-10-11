@@ -224,11 +224,6 @@ impl PlayState for SessionState {
                 .position()
                 .filter(|position| {
                     position.into_array().iter().all(|value| value.is_finite())
-                        && client.state().terrain().contains_key_real(
-                            common::terrain::TerrainGrid::chunk_key(
-                                position.map(|v| v.floor() as i32),
-                            ),
-                        )
                 })
                 .is_some();
             let prepared = self.terrain.prepare(synced.then_some(&*client));

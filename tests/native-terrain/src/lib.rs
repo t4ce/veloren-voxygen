@@ -72,6 +72,7 @@ pub mod vgpu {
     pub const BUFFER_USAGE_VERTEX: u32 = 2;
     pub const BUFFER_USAGE_INDEX: u32 = 4;
     pub const PRIMITIVE_TOPOLOGY_TRIANGLE_LIST: u32 = 4;
+    pub const SHADER_PACKAGE_VOXY_HEADLESS_FNV1A64: u64 = 0x2EAA72CFCA1B1C77;
     pub const SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64: u64 = 0xF84D_E655_632E_F102;
     pub const SHADER_PACKAGE_VOXY_FLAT_CLOUD_FNV1A64: u64 = 0x07442C9AD2E3AAF8;
     pub const INDEXED_DRAW_LOAD_COLOR: u32 = 1;
@@ -129,6 +130,7 @@ pub mod vgpu {
     }
     #[derive(Default)]
     pub struct Recorder {
+        pub shaders: Vec<u64>,
         pub events: Vec<&'static str>,
         pub buffers: Vec<Option<Vec<u8>>>,
         pub writes: Vec<(u32, usize, usize)>,
@@ -155,7 +157,8 @@ pub mod vgpu {
             Ok(Queue)
         }
         pub fn create_shader_module(self, digest: u64) -> Result<ShaderModule, i32> {
-            assert!(digest == SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64 || digest == SHADER_PACKAGE_VOXY_FLAT_CLOUD_FNV1A64 || digest == SHADER_PACKAGE_VOXY_FIGURE_FNV1A64);
+            assert!(digest == SHADER_PACKAGE_VOXY_HEADLESS_FNV1A64 || digest == SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64 || digest == SHADER_PACKAGE_VOXY_FLAT_CLOUD_FNV1A64 || digest == SHADER_PACKAGE_VOXY_FIGURE_FNV1A64);
+            record(|r| r.shaders.push(digest));
             Ok(ShaderModule)
         }
         pub fn create_render_pipeline(
@@ -563,6 +566,34 @@ mod tests {
         renderer.draw_buffered(123, &old, false).unwrap();
         for _ in 0..10 { renderer.draw_buffered(123, &old, false).unwrap(); }
         assert_eq!(RECORD.lock().unwrap().as_ref().unwrap().draws.last().unwrap().index_count,6);
+        drop(renderer);
+
+        // Fixed opaque terrain allocates no atlas and camera motion only writes
+        // uniforms; buffer identity and geometry stay resident across frames.
+        *RECORD.lock().unwrap() = Some(Recorder::default());
+        let mut renderer = terrain::NativeTerrain::open().unwrap();
+        let mut opaque = self::frame();
+        opaque.geometry = Arc::new(terrain::Geometry {
+            vertices: opaque.geometry.vertices.clone(), atlas: Arc::from([]),
+        });
+        for _ in 0..8 {
+            match renderer.draw_buffered(123, &opaque, false) {
+                Ok(()) | Err(ERR_BUSY) => {}, other => panic!("opaque preparation: {other:?}"),
+            }
+        }
+        let (writes, buffers) = {
+            let lock = RECORD.lock().unwrap();let record = lock.as_ref().unwrap();
+            assert_eq!(record.shaders,vec![SHADER_PACKAGE_VOXY_HEADLESS_FNV1A64]);
+            assert_eq!(record.buffers.len(),2);
+            (record.writes.len(),record.buffers.len())
+        };
+        for x in 0..100 { opaque.camera[0][0]=x as f32;renderer.draw_buffered(123,&opaque,false).unwrap(); }
+        {
+            let lock=RECORD.lock().unwrap();let record=lock.as_ref().unwrap();
+            assert_eq!(record.buffers.len(),buffers);
+            assert!(record.writes[writes..].iter().all(|(_,offset,bytes)|*offset==0 && *bytes==80));
+            assert!(record.draws.iter().all(|draw|draw.sampled_texture==0 && draw.texture_width==0 && draw.texture_height==0));
+        }
         drop(renderer);
 
         *RECORD.lock().unwrap() = Some(Recorder {

@@ -1,10 +1,11 @@
-//! Near and whole-map terrain share the admitted palette shader and vertex layout.
+//! Retained terrain: opaque vertex color for the fixed capture, palette for previews.
 //! One retained terrain draw follows the flat clouds on the paired background.
 use crate::terrain_preview::{ATLAS_SIZE, Vertex};
 use std::sync::Arc;
 
 pub(crate) struct Geometry {
     pub vertices: Arc<[Vertex]>,
+    // Empty atlas selects the admitted opaque-color program.
     pub atlas: Arc<[[u8; 4]]>,
 }
 pub(crate) struct Frame {
@@ -147,7 +148,7 @@ impl NativeTerrain {
             match self.retired_step {
                 0 => { let _ = self.device.destroy_buffer(mesh.vertices); },
                 1 => { let _ = self.device.destroy_buffer(mesh.indices); },
-                2 => { let _ = self.device.destroy_buffer(mesh.atlas); },
+                2 => { if let Some(atlas) = mesh.atlas { let _ = self.device.destroy_buffer(atlas); } },
                 3 => { let _ = self.device.destroy_render_pipeline(mesh.pipeline); },
                 _ => { let _ = self.device.destroy_shader_module(mesh.shader); },
             }
@@ -229,10 +230,10 @@ impl NativeTerrain {
                     // Uncovered pixels reveal the display-engine backdrop.
                     clear_rgba8_srgb: 0,
                     topology: PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                    sampled_texture: mesh.atlas.raw(),
-                    texture_width: ATLAS_SIZE,
-                    texture_height: ATLAS_SIZE,
-                    texture_pitch: ATLAS_SIZE * 4,
+                    sampled_texture: mesh.atlas.map_or(0, |atlas| atlas.raw()),
+                    texture_width: if mesh.atlas.is_some() { ATLAS_SIZE } else { 0 },
+                    texture_height: if mesh.atlas.is_some() { ATLAS_SIZE } else { 0 },
+                    texture_pitch: if mesh.atlas.is_some() { ATLAS_SIZE * 4 } else { 0 },
                     texture_reserved: (if load_color {INDEXED_DRAW_LOAD_COLOR} else {0}) | INDEXED_DRAW_DRAWABLE_DEPTH
                         | INDEXED_DRAW_DEPTH_TEST
                         | INDEXED_DRAW_DEPTH_WRITE
@@ -286,14 +287,15 @@ impl Upload {
     fn step(&mut self, device: trueos::vgpu::Device) -> Result<Option<Mesh>, i32> {
         use trueos::vgpu::*;
         if self.stage == 0 && (self.geometry.vertices.is_empty()
-            || self.geometry.vertices.len() % 3 != 0 || self.geometry.vertices.len() > crate::terrain_preview::MAX_VERTICES
-            || self.geometry.atlas.len() != (ATLAS_SIZE * ATLAS_SIZE) as usize) { return Err(ERR_UNSUPPORTED); }
+            || self.geometry.vertices.len() % 3 != 0 || self.geometry.vertices.len() > if self.geometry.atlas.is_empty() {6_000_000} else {crate::terrain_preview::MAX_VERTICES}
+            || !self.geometry.atlas.is_empty() && self.geometry.atlas.len() != (ATLAS_SIZE * ATLAS_SIZE) as usize) { return Err(ERR_UNSUPPORTED); }
         if self.offset == 0 { tracing::info!(stage = self.stage, "terrain-upload: stage entered; owner=presentation"); }
         match self.stage {
-            0 => self.shader = Some(device.create_shader_module(SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64)?),
+            0 => self.shader = Some(device.create_shader_module(if self.geometry.atlas.is_empty() {SHADER_PACKAGE_VOXY_HEADLESS_FNV1A64} else {SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64})?),
             1 => self.pipeline = Some(device.create_render_pipeline(self.shader.unwrap(),32,0)?),
             2 => self.buffers[0] = Some(device.create_buffer(80+self.geometry.vertices.len()*32, BUFFER_USAGE_MAP_WRITE|BUFFER_USAGE_VERTEX)?),
             3 => self.buffers[1] = Some(device.create_buffer(self.geometry.vertices.len()*4, BUFFER_USAGE_MAP_WRITE|BUFFER_USAGE_INDEX)?),
+            4 | 7 if self.geometry.atlas.is_empty() => {},
             4 => self.buffers[2] = Some(device.create_buffer(self.geometry.atlas.len()*4, BUFFER_USAGE_MAP_WRITE)?),
             5..=7 => {
                 let slot = (self.stage-5) as usize;
@@ -322,7 +324,7 @@ impl Upload {
         if self.stage == 8 {
             Ok(Some(Mesh { geometry: self.geometry.clone(), shader: self.shader.take().unwrap(),
                 pipeline: self.pipeline.take().unwrap(), vertices: self.buffers[0].take().unwrap(),
-                indices: self.buffers[1].take().unwrap(), atlas: self.buffers[2].take().unwrap() }))
+                indices: self.buffers[1].take().unwrap(), atlas: self.buffers[2].take() }))
         } else { Ok(None) }
     }
     fn destroy(mut self, device: trueos::vgpu::Device) {
@@ -338,7 +340,7 @@ struct Mesh {
     pipeline: trueos::vgpu::RenderPipeline,
     vertices: trueos::vgpu::Buffer,
     indices: trueos::vgpu::Buffer,
-    atlas: trueos::vgpu::Buffer,
+    atlas: Option<trueos::vgpu::Buffer>,
 }
 #[cfg(target_os = "trueos")]
 impl Mesh {
@@ -346,12 +348,12 @@ impl Mesh {
         use trueos::vgpu::*;
         if geometry.vertices.is_empty()
             || geometry.vertices.len() % 3 != 0
-            || geometry.vertices.len() > crate::terrain_preview::MAX_VERTICES
-            || geometry.atlas.len() != (ATLAS_SIZE * ATLAS_SIZE) as usize
+            || geometry.vertices.len() > if geometry.atlas.is_empty() {6_000_000} else {crate::terrain_preview::MAX_VERTICES}
+            || (!geometry.atlas.is_empty() && geometry.atlas.len() != (ATLAS_SIZE * ATLAS_SIZE) as usize)
         {
             return Err(ERR_UNSUPPORTED);
         }
-        let shader = device.create_shader_module(SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64)?;
+        let shader = device.create_shader_module(if geometry.atlas.is_empty() {SHADER_PACKAGE_VOXY_HEADLESS_FNV1A64} else {SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64})?;
         let mut buffers = Vec::new();
         let mut created_pipeline = None;
         let result = (|| {
@@ -367,18 +369,21 @@ impl Mesh {
                 BUFFER_USAGE_MAP_WRITE | BUFFER_USAGE_INDEX,
             )?;
             buffers.push(indices);
-            let atlas = device.create_buffer(geometry.atlas.len() * 4, BUFFER_USAGE_MAP_WRITE)?;
-            buffers.push(atlas);
+            let atlas = if geometry.atlas.is_empty() { None } else {
+                Some(device.create_buffer(geometry.atlas.len() * 4, BUFFER_USAGE_MAP_WRITE)?)
+            };
+            buffers.extend(atlas);
             let sequential: Vec<u32> = (0..geometry.vertices.len() as u32).collect();
             for (buffer, offset, bytes) in [
                 (
-                    vertices,
+                    Some(vertices),
                     80,
                     bytemuck::cast_slice(geometry.vertices.as_ref()),
                 ),
-                (indices, 0, bytemuck::cast_slice(sequential.as_slice())),
+                (Some(indices), 0, bytemuck::cast_slice(sequential.as_slice())),
                 (atlas, 0, bytemuck::cast_slice(geometry.atlas.as_ref())),
             ] {
+                let Some(buffer) = buffer else { continue; };
                 if device.write_buffer(buffer, offset, bytes)? != bytes.len() {
                     return Err(ERR_IO);
                 }
@@ -406,7 +411,7 @@ impl Mesh {
     fn destroy(self, device: trueos::vgpu::Device) {
         let _ = device.destroy_buffer(self.vertices);
         let _ = device.destroy_buffer(self.indices);
-        let _ = device.destroy_buffer(self.atlas);
+        if let Some(atlas) = self.atlas { let _ = device.destroy_buffer(atlas); }
         let _ = device.destroy_render_pipeline(self.pipeline);
         let _ = device.destroy_shader_module(self.shader);
     }

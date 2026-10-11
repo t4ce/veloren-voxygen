@@ -2657,6 +2657,11 @@ impl Client {
     pub(crate) fn terrain_snapshot_ready(&self) -> bool { self.terrain_snapshot.frozen }
 
     #[cfg(target_os = "trueos")]
+    pub(crate) fn terrain_snapshot_center(&self) -> Option<Vec2<i32>> {
+        self.terrain_snapshot.capture.as_ref().map(|capture| capture.center.into())
+    }
+
+    #[cfg(target_os = "trueos")]
     fn accept_snapshot_message(&self, msg: &ServerGeneral) -> bool {
         if self.terrain_snapshot.frozen { return false; }
         if self.terrain_snapshot.capture.is_none() { return true; }
