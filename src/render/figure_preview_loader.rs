@@ -1,5 +1,21 @@
 //! One CPU load at a time; superseded avatar results never reach the renderer.
 use std::{sync::mpsc, thread};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+struct Admission(AtomicBool);
+impl Admission {
+    const fn new() -> Self { Self(AtomicBool::new(false)) }
+    fn enter(&self) -> Option<Permit<'_>> {
+        self.0.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .ok().map(|_| Permit(self))
+    }
+}
+struct Permit<'a>(&'a Admission);
+impl Drop for Permit<'_> {
+    fn drop(&mut self) { self.0.0.store(false, Ordering::Release); }
+}
+#[cfg(target_os = "trueos")]
+static MESH_ADMISSION: Admission = Admission::new();
 
 pub struct Loader<K, V> {
     ready: Option<(K, V)>,
@@ -17,6 +33,17 @@ mod tests {
         },
         time::{Duration, Instant},
     };
+
+    #[test]
+    fn mesh_admission_is_shared_and_released_on_failure() {
+        let admission = Admission::new();
+        let permit = admission.enter().unwrap();
+        assert!(admission.enter().is_none(), "another avatar cannot start a concurrent asset load");
+        drop(permit);
+        let failed = || -> Result<(), ()> { let _permit = admission.enter().unwrap(); Err(()) };
+        assert!(failed().is_err());
+        assert!(admission.enter().is_some(), "a failed load must release admission");
+    }
 
     #[test]
     fn a_blocked_load_keeps_ui_polling_and_discards_superseded_avatar() {
@@ -179,12 +206,17 @@ impl<K: Clone + Eq + Send + 'static, V: Send + 'static> Loader<K, V> {
             return Ok(self.ready.as_ref().map(|(_, value)| value));
         }
         if self.pending.is_none() && self.failed.as_ref() != Some(&key) {
+            #[cfg(target_os = "trueos")]
+            let Some(permit) = MESH_ADMISSION.enter() else { return Ok(None); };
             let (sender, receiver) = mpsc::channel();
             let worker_key = key.clone();
             thread::Builder::new()
                 .name("voxy-figure-mesh".into())
                 .spawn(move || {
-                    let _ = sender.send(load(worker_key));
+                    let result = load(worker_key);
+                    #[cfg(target_os = "trueos")]
+                    drop(permit);
+                    let _ = sender.send(result);
                 })
                 .map_err(|error| format!("start figure mesh worker: {error}"))?;
             self.pending = Some((key, receiver));

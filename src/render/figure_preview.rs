@@ -35,6 +35,7 @@ pub struct Frame {
 #[derive(Default)]
 pub struct Preview {
     loader: super::figure_preview_loader::Loader<FigureKey<Body>, Arc<Geometry>>,
+    animation: super::world_animation::State,
 }
 impl Preview {
     /// Use the authored avatar mesh in the same camera/depth space as near terrain.
@@ -42,6 +43,7 @@ impl Preview {
         &mut self, body: Body, inventory: Option<&Inventory>, size: Vec2<u32>,
         time: f32, sun_z: f32, position: Vec3<f32>, orientation: Quaternion<f32>,
         view_projection: Mat4<f32>, focus: Vec3<f32>, first_person: bool,
+        animation: super::world_animation::Inputs<'_>,
     ) -> Result<Option<Arc<Frame>>, String> {
         let Some(preview) = self.frame_with_mode(body, inventory, size, time, sun_z, first_person)? else { return Ok(None); };
         let mut state = preview.state;
@@ -49,12 +51,7 @@ impl Preview {
         state[208..220].copy_from_slice(bytemuck::bytes_of(&focus.map(f32::trunc).into_array()));
         state[224..236].copy_from_slice(bytemuck::bytes_of(&focus.into_array()));
         state[640..652].copy_from_slice(bytemuck::bytes_of(&position.into_array()));
-        let skeleton = IdleAnimation::update_skeleton(
-            &CharacterSkeleton::new(false, 0.0, 1.0),
-            (None, None, (None, None), time), time, &mut 0.0, &SkeletonAttr::from(&body),
-        );
-        let mut bones = [anim::FigureBoneData::default(); anim::MAX_BONE_COUNT];
-        anim::compute_matrices(&skeleton, anim::vek::Mat4::from(orientation), &mut bones, body);
+        let bones = self.animation.update(body, inventory, position, orientation, time, animation);
         state[672..].copy_from_slice(bytemuck::cast_slice(&bones));
         Ok(Some(Arc::new(Frame { geometry: preview.geometry.clone(), state })))
     }

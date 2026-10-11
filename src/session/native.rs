@@ -139,7 +139,7 @@ impl PlayState for SessionState {
             }
         }
         self.frames += 1;
-        let observe = self.frames <= 3 || self.frames % 128 == 0;
+        let observe = self.frames <= 256 || self.frames % 128 == 0;
         if observe {
             tracing::info!(frame = self.frames, "Native world phase=client-tick");
         }
@@ -271,6 +271,7 @@ impl PlayState for SessionState {
                 &client, cloud_camera, global.settings.graphics.ambiance, true,
             ).map(std::sync::Arc::new);
             let mut entities = Vec::new();
+            if observe { tracing::info!(frame = self.frames, "Native world phase=figures"); }
             if terrain.is_some() {
                 let focus = self.camera.get_focus_pos();
                 let projection = crate::scene::camera::perspective_rh_zo_general(
@@ -282,6 +283,18 @@ impl PlayState for SessionState {
                 let bodies = ecs.read_storage::<comp::Body>();
                 let inventories = ecs.read_storage::<comp::Inventory>();
                 let orientations = ecs.read_storage::<comp::Ori>();
+                let velocities = ecs.read_storage::<comp::Vel>();
+                let scales = ecs.read_storage::<comp::Scale>();
+                let physics = ecs.read_storage::<comp::PhysicsState>();
+                let characters = ecs.read_storage::<comp::CharacterState>();
+                let activities = ecs.read_storage::<comp::CharacterActivity>();
+                let controllers = ecs.read_storage::<comp::Controller>();
+                let lights = ecs.read_storage::<comp::LightEmitter>();
+                let riders = ecs.read_storage::<common::link::Is<common::mounting::Rider>>();
+                let volume_riders = ecs.read_storage::<common::link::Is<common::mounting::VolumeRider>>();
+                let id_maps = ecs.read_resource::<common::uid::IdMaps>();
+                let default_character = comp::CharacterState::default();
+                let default_physics = comp::PhysicsState::default();
                 let mut visible = std::collections::HashSet::new();
                 for (entity, pos, body) in (&ecs.entities(), &positions, &bodies).join() {
                     if (pos.0 - position).magnitude_squared() > 128.0 * 128.0 { continue; }
@@ -292,11 +305,31 @@ impl PlayState for SessionState {
                     // An unsynced inventory cannot identify a separate equipment
                     // mesh yet; omit the local body until equipment arrives.
                     if first_person && inventories.get(entity).is_none() { continue; }
+                    let character = characters.get(entity).unwrap_or(&default_character);
+                    let activity = activities.get(entity);
+                    let orientation = orientations.get(entity).copied().unwrap_or_default();
+                    let look_direction = activity.and_then(|a| a.look_dir)
+                        .or_else(|| controllers.get(entity).map(|c| c.inputs.look_dir))
+                        .unwrap_or_else(|| orientation.look_dir());
+                    let interaction_position = if let comp::CharacterState::Interact(state) = character {
+                        if let common::states::interact::InteractKind::Entity { target, .. } = state.static_data.interact {
+                            id_maps.uid_entity(target).and_then(|target| positions.get(target)).map(|p| p.0)
+                        } else { None }
+                    } else { None };
                     let preview = self.figures.entry(entity).or_default();
                     match preview.world_frame(*body, inventories.get(entity),
                         Vec2::new(size.width, size.height), client.state().get_time() as f32, sun_z,
                         pos.0, orientations.get(entity).map_or(Quaternion::identity(), |ori| ori.to_quat()),
-                        projection * deps.view_mat, focus, first_person) {
+                        projection * deps.view_mat, focus, first_person,
+                        crate::render::world_animation::Inputs {
+                            character, physics: physics.get(entity).unwrap_or(&default_physics),
+                            velocity: velocities.get(entity).map_or(Vec3::zero(), |vel| vel.0),
+                            scale: scales.get(entity).map_or(1.0, |scale| scale.0), look_direction,
+                            activity, volume_rider: volume_riders.get(entity),
+                            riding: riders.get(entity).is_some() || volume_riders.get(entity).is_some(),
+                            interaction_position, has_light: lights.get(entity).is_some(),
+                            dt: global.clock.game_dt().as_secs_f32(),
+                        }) {
                         Ok(Some(frame)) => entities.push(frame),
                         Ok(None) => {},
                         Err(error) => tracing::warn!(%error, "World avatar preparation failed"),
@@ -304,10 +337,12 @@ impl PlayState for SessionState {
                 }
                 self.figures.retain(|entity, _| visible.contains(entity));
             }
+            if observe { tracing::info!(frame = self.frames, entities = entities.len(), "Native world phase=publish-request"); }
             if let Err(error) = global.window.present_terrain_scene(sun_z, terrain, clouds, entities) {
                 tracing::error!(%error, "Native world presentation failed");
             }
         }
+        if observe { tracing::info!(frame = self.frames, "Native world phase=cleanup"); }
         client.cleanup();
         if observe {
             tracing::info!(frame = self.frames, "Native world phase=complete");

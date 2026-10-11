@@ -149,6 +149,9 @@ pub(crate) struct NativeFigure {
 }
 #[cfg(target_os = "trueos")]
 impl NativeFigure {
+    pub(crate) fn has_geometry(&self, geometry: &std::sync::Arc<super::figure_preview::Geometry>) -> bool {
+        std::sync::Arc::ptr_eq(&self.geometry, geometry)
+    }
     fn new(
         device: trueos::vgpu::Device,
         geometry: std::sync::Arc<super::figure_preview::Geometry>,

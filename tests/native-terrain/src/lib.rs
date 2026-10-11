@@ -132,6 +132,7 @@ pub mod vgpu {
         pub events: Vec<&'static str>,
         pub buffers: Vec<Option<Vec<u8>>>,
         pub writes: Vec<(u32, usize, usize)>,
+        pub threads: std::collections::HashSet<std::thread::ThreadId>,
         pub draws: Vec<IndexedDraw>,
         pub busy_import: bool,
         pub fail_wait: bool,
@@ -139,7 +140,10 @@ pub mod vgpu {
     }
     pub static RECORD: Mutex<Option<Recorder>> = Mutex::new(None);
     fn record<T>(f: impl FnOnce(&mut Recorder) -> T) -> T {
-        f(RECORD.lock().unwrap().as_mut().unwrap())
+        let mut lock = RECORD.lock().unwrap();
+        let record = lock.as_mut().unwrap();
+        record.threads.insert(std::thread::current().id());
+        f(record)
     }
     impl Device {
         pub fn open(caps: Capabilities) -> Result<Self, i32> {
@@ -362,6 +366,21 @@ mod tests {
             let mut renderer=terrain::NativeTerrain::open().unwrap();
             renderer.draw(5, &frame(), false).unwrap();
             renderer.draw_entities(5, &[entity_frame.clone()]).unwrap();
+            let neighbor = std::sync::Arc::new(figure_preview::Frame {
+                geometry: std::sync::Arc::new(figure_preview::Geometry {
+                    vertices: vec![[1,1];4], indices: vec![0,1,2,2,1,3], atlas_size:[1,1], atlas:vec![[128;4]],
+                }), state: [0;vgpu::VOXY_FIGURE_STATE_BYTES],
+            });
+            renderer.draw_entities(5, &[neighbor.clone(), entity_frame.clone()]).unwrap();
+            let allocated = RECORD.lock().unwrap().as_ref().unwrap().buffers.len();
+            assert!(!RECORD.lock().unwrap().as_ref().unwrap().events.contains(&"destroy-buffer"),
+                "an arriving neighbor must not evict the existing mesh");
+            renderer.draw_entities(5, &[entity_frame.clone(), neighbor.clone()]).unwrap();
+            assert_eq!(RECORD.lock().unwrap().as_ref().unwrap().buffers.len(), allocated,
+                "reordering entities must reuse their GPU buffers");
+            renderer.draw_entities(5, &[entity_frame.clone()]).unwrap();
+            assert_eq!(RECORD.lock().unwrap().as_ref().unwrap().buffers.iter().filter(|b|b.is_some()).count(),6,
+                "only the departed neighbor's three buffers should be reclaimed");
             let record=RECORD.lock().unwrap();
             let draw=record.as_ref().unwrap().draws.last().unwrap();
             assert_ne!(draw.texture_reserved & INDEXED_DRAW_LOAD_COLOR,0);
@@ -531,11 +550,18 @@ mod tests {
             assert!(std::time::Instant::now() < deadline);
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
+        {
+            let lock = RECORD.lock().unwrap();
+            let record = lock.as_ref().unwrap();
+            assert_eq!(record.threads.len(),1,"GPU calls must remain on the presentation thread");
+            // The earlier direct setup is intentionally synchronous; staged writes
+            // after it must stay bounded by the per-frame upload slice.
+            assert!(record.writes.iter().skip(4).all(|(_,_,bytes)| *bytes<=256*1024));
+        }
         // A failed back buffer never removes the drawable front buffer.
         RECORD.lock().unwrap().as_mut().unwrap().fail_buffer = true;
         renderer.draw_buffered(123, &old, false).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        renderer.draw_buffered(123, &old, false).unwrap();
+        for _ in 0..10 { renderer.draw_buffered(123, &old, false).unwrap(); }
         assert_eq!(RECORD.lock().unwrap().as_ref().unwrap().draws.last().unwrap().index_count,6);
         drop(renderer);
 

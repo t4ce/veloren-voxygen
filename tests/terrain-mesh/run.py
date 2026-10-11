@@ -27,6 +27,7 @@ impl Block {
 struct TerrainGrid {
  loaded: HashSet<Vec2<i32>>, blocks: HashMap<Vec3<i32>, Block>,
  air: Block, base: Block, filled_base: bool, bounds: Arc<ChunkBounds>,
+ reads: Arc<std::sync::atomic::AtomicUsize>,
 }
 struct ChunkBounds { min: i32, max: i32 }
 impl ChunkBounds { fn get_min_z(&self)->i32 {self.min} fn get_max_z(&self)->i32 {self.max} }
@@ -42,6 +43,7 @@ impl TerrainGrid {
 trait ReadVol { fn get(&self, pos: Vec3<i32>) -> Result<&Block, ()>; }
 impl ReadVol for TerrainGrid {
  fn get(&self, pos: Vec3<i32>) -> Result<&Block, ()> {
+  self.reads.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
   if !self.loaded.contains(&Vec2::new(pos.x.div_euclid(32),pos.y.div_euclid(32))) { return Err(()); }
   Ok(self.blocks.get(&pos).unwrap_or(if self.filled_base && pos.z < 1 { &self.base } else { &self.air }))
  }
@@ -49,7 +51,8 @@ impl ReadVol for TerrainGrid {
 fn grid() -> TerrainGrid {
  TerrainGrid { loaded: HashSet::from([Vec2::zero()]), blocks: HashMap::new(),
   air: Block(None), base: Block(Some(Rgb::new(31,140,47))), filled_base: false,
-  bounds: Arc::new(ChunkBounds {min:-48,max:128}) }
+  bounds: Arc::new(ChunkBounds {min:-48,max:128}),
+  reads: Arc::new(std::sync::atomic::AtomicUsize::new(0)) }
 }
 '''
 radial = (root / 'src/headless/radial.rs').read_text()
@@ -58,9 +61,50 @@ mesh += '\n' + radial[radial.index('fn desired_center'):]
 facade += r'''
 struct Geometry { vertices: Arc<[Vertex]>, atlas: Arc<[[u8;4]]> }
 struct Complete { geometry: Arc<Geometry>, center: Vec3<f32>, height:Option<(f32,f32)>, build_us:u64, chunks:u32 }
-const RADIUS:f32=40.; const REVEAL_BAND:f32=8.; const LEAD_SECONDS:f32=0.20; const MAX_LEAD:f32=6.;
+const RADIUS:f32=40.; const TILE_EDGE:i32=8; const LEAD_SECONDS:f32=0.20; const MAX_LEAD:f32=6.;
 '''
 tests = r'''
+#[test] fn sphere_outer_band_preserves_every_exposed_face() {
+ let mut terrain=grid();
+ for y in -4..=4 {for x in -4..=4 {terrain.loaded.insert(Vec2::new(x,y));}}
+ terrain.blocks.insert(Vec3::new(36,0,0),Block(Some(Rgb::new(31,140,47))));
+ let mesh=build(&terrain,Vec3::zero());
+ assert_eq!(mesh.geometry.vertices.len(),36);
+}
+#[test] fn sphere_ground_has_no_dissolve_holes_inside_boundary() {
+ let mut terrain=grid(); terrain.filled_base=true;
+ for y in -4..=4 {for x in -4..=4 {terrain.loaded.insert(Vec2::new(x,y));}}
+ let mesh=build(&terrain,Vec3::zero());
+ let expected=(-40..40).flat_map(|y|(-40..40).map(move |x|Vec3::new(x,y,0)))
+  .filter(|p|cell_visible(Vec3::zero(),*p)).count();
+ assert_eq!(mesh.geometry.vertices.len(),expected*6);
+ assert!(mesh.geometry.vertices.iter().all(|v|v.position[2]==1.));
+}
+#[test] fn sphere_cache_reuses_surfaces_and_invalidates_changed_neighbor_chunks() {
+ let mut terrain=grid();
+ let pos=Vec3::new(31,16,0);
+ terrain.blocks.insert(pos,Block(Some(Rgb::new(31,140,47))));
+ let terrain=Arc::new(terrain);
+ let mut cache=SurfaceCache::default();
+ let first=build_cached(&terrain,Vec3::new(16.,16.,0.),&mut cache);
+ let first_reads=terrain.reads.swap(0,std::sync::atomic::Ordering::Relaxed);
+ assert_eq!(first.geometry.vertices.len(),30);
+ let key=pos.map(|v|v.div_euclid(TILE_EDGE));
+ let pointer=cache.tiles[&key].as_ptr();
+ let moved=build_cached(&Arc::new((*terrain).clone()),Vec3::new(17.,16.,0.),&mut cache);
+ assert_eq!(moved.geometry.vertices.len(),30);
+ assert_eq!(pointer,cache.tiles[&key].as_ptr());
+ assert!(terrain.reads.swap(0,std::sync::atomic::Ordering::Relaxed)<first_reads/4);
+ build_cached(&terrain,Vec3::new(17.,16.,0.),&mut cache);
+ assert_eq!(terrain.reads.load(std::sync::atomic::Ordering::Relaxed),0);
+ let mut changed=(*terrain).clone(); changed.loaded.insert(Vec2::new(1,0));
+ let next=build_cached(&Arc::new(changed),Vec3::new(17.,16.,0.),&mut cache);
+ assert_eq!(next.geometry.vertices.len(),36);
+ let far=build_cached(&terrain,Vec3::new(200.,16.,0.),&mut cache);
+ assert!(far.geometry.vertices.is_empty());
+ assert!(!cache.tiles.contains_key(&key));
+}
+
 #[test] fn spherical_mesh_follows_player_with_local_data_and_keeps_unknown_cells_empty() {
  let mut terrain=grid();
  for y in -4..=4 {for x in -4..=4 {terrain.loaded.insert(Vec2::new(x,y));}}

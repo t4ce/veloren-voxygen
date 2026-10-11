@@ -59,6 +59,8 @@ pub(crate) struct NativeTerrain {
     mesh: Option<Mesh>,
     pending_upload: Option<Upload>,
     retired_mesh: Option<Mesh>,
+    retired_step: u8,
+    figure_draws: u32,
     resident_metrics: Option<super::terrain_layers::Metrics>,
     next_upload: std::time::Instant,
     buffered_upload_bytes: u64,
@@ -85,6 +87,8 @@ impl NativeTerrain {
                 mesh: None,
                 pending_upload: None,
                 retired_mesh: None,
+                retired_step: 0,
+                figure_draws: 0,
                 resident_metrics: None,
                 next_upload: std::time::Instant::now(),
                 buffered_upload_bytes: 0,
@@ -106,67 +110,69 @@ impl NativeTerrain {
     }
 
     pub fn draw_entities(&mut self, target: u32, frames: &[Arc<super::figure_preview::Frame>]) -> Result<(), i32> {
-        while self.figures.len() > frames.len() {
-            if let Some(figure) = self.figures.pop().flatten() { figure.destroy(self.device); }
-        }
-        self.figures.resize_with(frames.len(), || None);
-        for (cache, frame) in self.figures.iter_mut().zip(frames) {
+        // Ready meshes arrive independently. Their position in this frame's
+        // list is not an identity: inserting one must not rebuild its neighbors.
+        for (index, frame) in frames.iter().enumerate() {
+            let slot = self.figures.iter().position(|cache| cache.as_ref()
+                .is_some_and(|figure| figure.has_geometry(&frame.geometry)))
+                .unwrap_or_else(|| { self.figures.push(None); self.figures.len() - 1 });
+            let cache = &mut self.figures[slot];
+            self.figure_draws = self.figure_draws.saturating_add(1);
+            let trace = self.figure_draws <= 1024;
+            if trace { tracing::info!(draw = self.figure_draws, index, vertices = frame.geometry.vertices.len(), "world-figure: draw entered"); }
             self.unknown_completion = true;
             super::minimal_sky::NativeSky::draw_figure_on(self.device, self.queue, cache, target, 0, frame, true, true)?;
             self.unknown_completion = false;
+            if trace { tracing::info!(draw = self.figure_draws, index, "world-figure: draw retired"); }
+        }
+        let mut slot = 0;
+        while slot < self.figures.len() {
+            if self.figures[slot].as_ref().is_some_and(|figure|
+                frames.iter().any(|frame| figure.has_geometry(&frame.geometry))) {
+                slot += 1;
+            } else if let Some(figure) = self.figures.swap_remove(slot) {
+                tracing::info!("world-figure: stale mesh release entered");
+                figure.destroy(self.device);
+                tracing::info!("world-figure: stale mesh release complete");
+            }
         }
         Ok(())
     }
 
-    /// Never prepare a replacement on the presentation thread. A single worker
-    /// fills a back buffer while the front buffer remains complete and drawable.
+    /// CPU producers are asynchronous; GPU ownership stays on this thread.
+    /// One allocation or a bounded upload slice per frame fills the back buffer.
     pub fn draw_buffered(&mut self, target: u32, frame: &Frame, load_color: bool) -> Result<(), i32> {
-        use std::sync::mpsc::TryRecvError;
-        if let Some(upload) = &self.pending_upload {
-            let result = match upload.receiver.try_recv() {
-                Ok(result) => Some(result),
-                Err(TryRecvError::Empty) => None,
-                Err(TryRecvError::Disconnected) => Some(Err(trueos::vgpu::ERR_IO)),
-            };
-            if let Some(result) = result {
-                let upload = self.pending_upload.take().unwrap();
-                // Completion was sent after all buffer writes; joining occurs
-                // only on shutdown, never on the steady-state draw path.
-                match result {
-                    Ok(mesh) => {
-                        self.buffered_upload_bytes = (mesh.geometry.vertices.len() * 36 + mesh.geometry.atlas.len() * 4) as u64;
-                        // The previous draw fence has retired. Hand reclamation
-                        // to the next preparation worker rather than freeing a
-                        // large buffer set on the presentation thread.
-                        self.retired_mesh = self.mesh.replace(mesh);
-                        self.resident_metrics = Some(upload.metrics);
-                    }
-                    Err(code) => {
-                        self.next_upload = std::time::Instant::now() + std::time::Duration::from_secs(1);
-                        tracing::warn!(code, "Terrain back-buffer preparation failed; retaining front buffer");
-                    },
-                }
+        if let Some(mesh) = &self.retired_mesh {
+            // Reclaim at most one retired object per frame; no GPU ABI worker.
+            match self.retired_step {
+                0 => { let _ = self.device.destroy_buffer(mesh.vertices); },
+                1 => { let _ = self.device.destroy_buffer(mesh.indices); },
+                2 => { let _ = self.device.destroy_buffer(mesh.atlas); },
+                3 => { let _ = self.device.destroy_render_pipeline(mesh.pipeline); },
+                _ => { let _ = self.device.destroy_shader_module(mesh.shader); },
             }
+            self.retired_step += 1;
+            if self.retired_step == 5 { self.retired_mesh = None; self.retired_step = 0; }
         }
-        if self.pending_upload.is_none() && std::time::Instant::now() >= self.next_upload
-            && self.mesh.as_ref().is_none_or(|mesh|
-            !Arc::ptr_eq(&mesh.geometry, &frame.geometry)) {
-            let geometry = frame.geometry.clone();
-            let device = self.device;
-            let retired = self.retired_mesh.take().map(|mesh| Retired { device, mesh: Some(mesh) });
-            let (sender, receiver) = std::sync::mpsc::channel();
-            let worker = std::thread::Builder::new().name("terrain-upload".into()).spawn(move || {
-                drop(retired);
-                let result = Mesh::new(device, geometry);
-                if let Err(error) = sender.send(result) {
-                    if let Ok(mesh) = error.0 { mesh.destroy(device); }
+        if self.pending_upload.is_none() && self.retired_mesh.is_none()
+            && std::time::Instant::now() >= self.next_upload
+            && self.mesh.as_ref().is_none_or(|mesh| !Arc::ptr_eq(&mesh.geometry, &frame.geometry)) {
+            self.pending_upload = Some(Upload::new(frame.geometry.clone(), frame.metrics));
+        }
+        if let Some(upload) = self.pending_upload.as_mut() {
+            match upload.step(self.device) {
+                Ok(Some(mesh)) => {
+                    self.buffered_upload_bytes = upload.written as u64;
+                    self.resident_metrics = Some(upload.metrics);
+                    self.retired_mesh = self.mesh.replace(mesh);
+                    self.retired_step = 0;
+                    self.pending_upload = None;
                 }
-            });
-            match worker {
-                Ok(thread) => self.pending_upload = Some(Upload { receiver, thread, metrics: frame.metrics }),
-                Err(error) => {
+                Ok(None) => {},
+                Err(code) => {
+                    if let Some(upload) = self.pending_upload.take() { upload.destroy(self.device); }
                     self.next_upload = std::time::Instant::now() + std::time::Duration::from_secs(1);
-                    tracing::warn!(%error, "Terrain upload worker unavailable; retaining front buffer");
+                    tracing::warn!(code, "Terrain back-buffer preparation failed; retaining front buffer");
                 },
             }
         }
@@ -176,7 +182,6 @@ impl NativeTerrain {
         metrics.loaded_chunks = frame.metrics.loaded_chunks;
         let resident = Frame { geometry: mesh.geometry.clone(), camera: frame.camera,
             metrics, prepared_at: frame.prepared_at };
-        // Arc identity now matches the front buffer, so draw performs no mesh creation.
         self.draw(target, &resident, load_color)
     }
 
@@ -250,10 +255,7 @@ impl Drop for NativeTerrain {
         if self.unknown_completion {
             return;
         }
-        if let Some(upload) = self.pending_upload.take() {
-            let _ = upload.thread.join();
-            if let Ok(Ok(mesh)) = upload.receiver.try_recv() { mesh.destroy(self.device); }
-        }
+        if let Some(upload) = self.pending_upload.take() { upload.destroy(self.device); }
         if let Some(mesh) = self.retired_mesh.take() { mesh.destroy(self.device); }
         for figure in self.figures.drain(..).flatten() { figure.destroy(self.device); }
         if let Some(mesh) = self.mesh.take() {
@@ -264,21 +266,70 @@ impl Drop for NativeTerrain {
     }
 }
 #[cfg(target_os = "trueos")]
-struct Retired {
-    device: trueos::vgpu::Device,
-    mesh: Option<Mesh>,
-}
-#[cfg(target_os = "trueos")]
-impl Drop for Retired {
-    fn drop(&mut self) {
-        if let Some(mesh) = self.mesh.take() { mesh.destroy(self.device); }
-    }
-}
+const UPLOAD_SLICE: usize = 256 * 1024;
 #[cfg(target_os = "trueos")]
 struct Upload {
-    receiver: std::sync::mpsc::Receiver<Result<Mesh, i32>>,
-    thread: std::thread::JoinHandle<()>,
+    geometry: Arc<Geometry>,
     metrics: super::terrain_layers::Metrics,
+    shader: Option<trueos::vgpu::ShaderModule>,
+    pipeline: Option<trueos::vgpu::RenderPipeline>,
+    buffers: [Option<trueos::vgpu::Buffer>; 3],
+    stage: u8,
+    offset: usize,
+    written: usize,
+}
+#[cfg(target_os = "trueos")]
+impl Upload {
+    fn new(geometry: Arc<Geometry>, metrics: super::terrain_layers::Metrics) -> Self {
+        Self { geometry, metrics, shader: None, pipeline: None, buffers: [None;3], stage: 0, offset: 0, written: 0 }
+    }
+    fn step(&mut self, device: trueos::vgpu::Device) -> Result<Option<Mesh>, i32> {
+        use trueos::vgpu::*;
+        if self.stage == 0 && (self.geometry.vertices.is_empty()
+            || self.geometry.vertices.len() % 3 != 0 || self.geometry.vertices.len() > crate::terrain_preview::MAX_VERTICES
+            || self.geometry.atlas.len() != (ATLAS_SIZE * ATLAS_SIZE) as usize) { return Err(ERR_UNSUPPORTED); }
+        if self.offset == 0 { tracing::info!(stage = self.stage, "terrain-upload: stage entered; owner=presentation"); }
+        match self.stage {
+            0 => self.shader = Some(device.create_shader_module(SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64)?),
+            1 => self.pipeline = Some(device.create_render_pipeline(self.shader.unwrap(),32,0)?),
+            2 => self.buffers[0] = Some(device.create_buffer(80+self.geometry.vertices.len()*32, BUFFER_USAGE_MAP_WRITE|BUFFER_USAGE_VERTEX)?),
+            3 => self.buffers[1] = Some(device.create_buffer(self.geometry.vertices.len()*4, BUFFER_USAGE_MAP_WRITE|BUFFER_USAGE_INDEX)?),
+            4 => self.buffers[2] = Some(device.create_buffer(self.geometry.atlas.len()*4, BUFFER_USAGE_MAP_WRITE)?),
+            5..=7 => {
+                let slot = (self.stage-5) as usize;
+                let index_bytes;
+                let bytes: &[u8] = match slot {
+                    0 => bytemuck::cast_slice(self.geometry.vertices.as_ref()),
+                    1 => {
+                        let first = self.offset/4;
+                        let count = (self.geometry.vertices.len()-first).min(UPLOAD_SLICE/4);
+                        index_bytes = (first..first+count).map(|v| v as u32).collect::<Vec<_>>();
+                        bytemuck::cast_slice(index_bytes.as_slice())
+                    }
+                    _ => bytemuck::cast_slice(self.geometry.atlas.as_ref()),
+                };
+                let total = match slot { 0 => self.geometry.vertices.len()*32, 1 => self.geometry.vertices.len()*4, _ => self.geometry.atlas.len()*4 };
+                let part = if slot == 1 { bytes } else { &bytes[self.offset..(self.offset+UPLOAD_SLICE).min(total)] };
+                let destination = self.offset + if slot == 0 {80} else {0};
+                if device.write_buffer(self.buffers[slot].unwrap(),destination,part)? != part.len() { return Err(ERR_IO); }
+                self.offset += part.len(); self.written += part.len();
+                if self.offset < total { return Ok(None); }
+            }
+            _ => unreachable!(),
+        }
+        tracing::info!(stage = self.stage, "terrain-upload: stage complete");
+        self.stage += 1; self.offset = 0;
+        if self.stage == 8 {
+            Ok(Some(Mesh { geometry: self.geometry.clone(), shader: self.shader.take().unwrap(),
+                pipeline: self.pipeline.take().unwrap(), vertices: self.buffers[0].take().unwrap(),
+                indices: self.buffers[1].take().unwrap(), atlas: self.buffers[2].take().unwrap() }))
+        } else { Ok(None) }
+    }
+    fn destroy(mut self, device: trueos::vgpu::Device) {
+        for buffer in self.buffers.iter_mut().filter_map(Option::take) { let _ = device.destroy_buffer(buffer); }
+        if let Some(pipeline) = self.pipeline.take() { let _ = device.destroy_render_pipeline(pipeline); }
+        if let Some(shader) = self.shader.take() { let _ = device.destroy_shader_module(shader); }
+    }
 }
 #[cfg(target_os = "trueos")]
 struct Mesh {

@@ -631,3 +631,6 @@ pub(crate) mod terrain_layers;
 pub(crate) mod terrain_composition;
 #[cfg(target_os = "trueos")]
 pub(crate) mod terrain_heartbeat;
+
+#[cfg(target_os = "trueos")]
+pub(crate) mod world_animation;
