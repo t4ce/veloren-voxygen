@@ -4,7 +4,6 @@ use crate::{
     render::terrain_feature::Geometry,
     terrain_preview::{ATLAS_SIZE, MAX_VERTICES, Vertex},
 };
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Instant;
 
 pub const FAR_CELL_GUESS: usize = 32_768;
@@ -12,32 +11,17 @@ pub const FAR_CELL_BUDGET: usize = FAR_CELL_GUESS / 2;
 // Near 3x3 tiles occupy at most 883 atlas rows at the 600k vertex cap.
 const FAR_ATLAS_ROW: usize = 896;
 const FAR_VERTEX_LIMIT: usize = 120_000;
-static MODE: AtomicU8 = AtomicU8::new(1);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Mode {
-    Near,
     #[default]
+    Near,
     Both,
     Far,
 }
 impl Mode {
     pub fn current() -> Self {
-        match MODE.load(Ordering::Relaxed) {
-            0 => Self::Near,
-            2 => Self::Far,
-            _ => Self::Both,
-        }
-    }
-    pub fn cycle_global() -> Self {
-        let old = MODE
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| Some((v + 1) % 3))
-            .unwrap();
-        match (old + 1) % 3 {
-            0 => Self::Near,
-            2 => Self::Far,
-            _ => Self::Both,
-        }
+        Self::Near
     }
     pub fn label(self) -> &'static str {
         match self {

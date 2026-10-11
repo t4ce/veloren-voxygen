@@ -57,6 +57,7 @@ pub(crate) struct NativeTerrain {
     device: trueos::vgpu::Device,
     queue: trueos::vgpu::Queue,
     mesh: Option<Mesh>,
+    figures: Vec<Option<super::minimal_sky::NativeFigure>>,
     unknown_completion: bool,
     heartbeat: super::terrain_heartbeat::Heartbeat,
 }
@@ -77,6 +78,7 @@ impl NativeTerrain {
                 device,
                 queue,
                 mesh: None,
+                figures: Vec::new(),
                 unknown_completion: false,
                 heartbeat: super::terrain_heartbeat::Heartbeat::new(),
             }),
@@ -91,6 +93,19 @@ impl NativeTerrain {
     pub fn busy(&mut self) { self.heartbeat.busy(); }
     pub fn published(&mut self, frame: &Frame) {
         self.heartbeat.published(frame.metrics, frame.prepared_at.elapsed().as_micros() as u64);
+    }
+
+    pub fn draw_entities(&mut self, target: u32, frames: &[Arc<super::figure_preview::Frame>]) -> Result<(), i32> {
+        while self.figures.len() > frames.len() {
+            if let Some(figure) = self.figures.pop().flatten() { figure.destroy(self.device); }
+        }
+        self.figures.resize_with(frames.len(), || None);
+        for (cache, frame) in self.figures.iter_mut().zip(frames) {
+            self.unknown_completion = true;
+            super::minimal_sky::NativeSky::draw_figure_on(self.device, self.queue, cache, target, 0, frame, true, true)?;
+            self.unknown_completion = false;
+        }
+        Ok(())
     }
 
     /// Caller has leased the paired background and publishes after completion.
@@ -111,7 +126,7 @@ impl NativeTerrain {
                 previous.destroy(self.device);
             }
             tracing::info!(target: "voxy_scene_contract", vertices = frame.geometry.vertices.len(),
-                "Native terrain palette and mesh ready; avatar and entity proxies guarded");
+                "Native terrain palette and mesh ready; near terrain and world entities enabled");
         }
         let mesh = self.mesh.as_ref().unwrap();
         let state = bytemuck::cast_slice(&frame.camera);
@@ -163,6 +178,7 @@ impl Drop for NativeTerrain {
         if self.unknown_completion {
             return;
         }
+        for figure in self.figures.drain(..).flatten() { figure.destroy(self.device); }
         if let Some(mesh) = self.mesh.take() {
             mesh.destroy(self.device);
         }

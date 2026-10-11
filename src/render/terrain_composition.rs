@@ -76,7 +76,7 @@ impl Composition {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
-        if self.far.is_none() && self.pending_far.is_none() && now >= self.far_retry {
+        if mode != Mode::Near && self.far.is_none() && self.pending_far.is_none() && now >= self.far_retry {
             let started = Instant::now();
             match snapshot(client) {
                 Some(map) => {

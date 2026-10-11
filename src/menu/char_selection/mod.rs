@@ -30,6 +30,10 @@ pub struct CharSelectionState {
     logging_out: bool,
     #[cfg(target_os = "trueos")]
     logout_revision: Option<u64>,
+    #[cfg(target_os = "trueos")]
+    character_preview: crate::render::figure_preview::Preview,
+    #[cfg(target_os = "trueos")]
+    character_preview_started: std::time::Instant,
     client: Rc<RefCell<Client>>,
     persisted_state: Rc<RefCell<hud::PersistedHudState>>,
     #[cfg(not(target_os = "trueos"))]
@@ -63,6 +67,10 @@ impl CharSelectionState {
             logging_out: false,
             #[cfg(target_os = "trueos")]
             logout_revision: None,
+            #[cfg(target_os = "trueos")]
+            character_preview: Default::default(),
+            #[cfg(target_os = "trueos")]
+            character_preview_started: std::time::Instant::now(),
             client,
             persisted_state,
             #[cfg(not(target_os = "trueos"))]
@@ -313,7 +321,7 @@ impl PlayState for CharSelectionState {
                     .ecs()
                     .read_resource::<common::resources::TimeOfDay>();
                 let _sky_progress = crate::selection_progress::stage(crate::selection_progress::Stage::SkyMailbox);
-                // Avatar preparation and drawing stay guarded during terrain bring-up.
+                // Restore the selected char mesh and its animated idle pose.
                 let extent = global_state.window.window().surface_size();
                 let center = client.world_data().chunk_size().map(|v| f32::from(v) * 16.0);
                 let camera = crate::render::terrain_feature::camera(
@@ -324,7 +332,15 @@ impl PlayState for CharSelectionState {
                 let clouds = crate::render::flat_cloud_native::from_client(
                     &client, camera, global_state.settings.graphics.ambiance, false,
                 ).map(std::sync::Arc::new);
-                let result = global_state.window.present_terrain_scene(time.get_sun_dir().z, None, clouds);
+                let (body, inventory) = Self::get_humanoid_body_inventory(&self.char_selection_ui, &client);
+                let figure = match body {
+                    Some(body) => self.character_preview.frame(body, inventory,
+                        vek::Vec2::new(extent.width, extent.height), self.character_preview_started.elapsed().as_secs_f32(),
+                        time.get_sun_dir().z),
+                    None => Ok(None),
+                };
+                let result = figure.and_then(|figure|
+                    global_state.window.present_character_scene(time.get_sun_dir().z, figure, clouds));
                 if let Err(error) = result {
                     self.char_selection_ui.display_error(error);
                 }

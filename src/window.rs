@@ -509,25 +509,25 @@ impl Window {
     }
 
     #[cfg(target_os = "trueos")]
-    pub(crate) fn present_character_scene(&mut self, sun_z: f32, figure: Option<std::sync::Arc<crate::render::figure_preview::Frame>>) -> Result<(), String> {
+    pub(crate) fn present_character_scene(&mut self, sun_z: f32, figure: Option<std::sync::Arc<crate::render::figure_preview::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>) -> Result<(), String> {
         self.menu_presenter.check()?;
         self.menu_revision += 1;
         let size = self.window.surface_size();
         if size.width != 0 && size.height != 0 {
             self.menu_presenter.submit_figure(self.menu_revision, Vec2::new(size.width, size.height),
-                crate::render::minimal_sky::rgba8(sun_z), figure);
+                crate::render::minimal_sky::rgba8(sun_z), figure, clouds);
         }
         Ok(())
     }
 
     #[cfg(target_os = "trueos")]
-    pub(crate) fn present_terrain_scene(&mut self, sun_z: f32, terrain: Option<Arc<crate::render::terrain_feature::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>) -> Result<(), String> {
+    pub(crate) fn present_terrain_scene(&mut self, sun_z: f32, terrain: Option<Arc<crate::render::terrain_feature::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>, entities: Vec<Arc<crate::render::figure_preview::Frame>>) -> Result<(), String> {
         self.menu_presenter.check()?;
         self.menu_revision += 1;
         let size = self.window.surface_size();
         if size.width != 0 && size.height != 0 {
             self.menu_presenter.submit_terrain(self.menu_revision, Vec2::new(size.width, size.height),
-                crate::render::minimal_sky::rgba8(sun_z), terrain, clouds);
+                crate::render::minimal_sky::rgba8(sun_z), terrain, clouds, entities);
         }
         Ok(())
     }
@@ -1045,18 +1045,6 @@ impl Window {
                     }
                 ) && self.modifiers.alt_key()
                 {
-                    return;
-                }
-
-                // Global native terrain comparison: consume F1 before menu or
-                // gameplay bindings. Repeat/synthetic keydown were rejected above.
-                #[cfg(target_os = "trueos")]
-                if event.logical_key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::F1) {
-                    if event.state == winit::event::ElementState::Pressed {
-                        let mode = crate::render::terrain_layers::Mode::cycle_global();
-                        crate::render::terrain_heartbeat::record(format_args!(
-                            "terrain-mode: requested={} key=F1 cycle=near,both,far\n", mode.label()));
-                    }
                     return;
                 }
 

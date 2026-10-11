@@ -23,6 +23,14 @@ mod terrain_composition;
 mod terrain_prefetch;
 #[path = "../target/server_prefetch_rule.rs"]
 mod server_prefetch_rule;
+#[cfg(target_os = "trueos")]
+#[path = "../../../src/render/minimal_sky.rs"]
+mod minimal_sky;
+#[cfg(target_os = "trueos")]
+mod figure_preview {
+    pub struct Geometry { pub vertices: Vec<[u32;2]>, pub indices: Vec<u32>, pub atlas_size: [u32;2], pub atlas: Vec<[u8;4]> }
+    pub struct Frame { pub geometry: std::sync::Arc<Geometry>, pub state: [u8; crate::vgpu::VOXY_FIGURE_STATE_BYTES] }
+}
 mod terrain_feature {pub(crate) use crate::terrain::Geometry;}
 mod client {
     pub struct Client {pub world:WorldData}
@@ -53,6 +61,8 @@ pub mod vsys { pub const LOG_LEVEL_IMPORTANT:u32=1; pub fn log_record(_:u32,_:&s
 #[cfg(target_os = "trueos")]
 pub mod vgpu {
     use std::sync::Mutex;
+    pub const VOXY_FIGURE_STATE_BYTES: usize = 2720;
+    pub const SHADER_PACKAGE_VOXY_FIGURE_FNV1A64: u64 = 0x7FC293E6AD8FF894;
     pub const ERR_IO: i32 = -5;
     pub const ERR_BUSY: i32 = -16;
     pub const ERR_UNSUPPORTED: i32 = -95;
@@ -139,7 +149,7 @@ pub mod vgpu {
             Ok(Queue)
         }
         pub fn create_shader_module(self, digest: u64) -> Result<ShaderModule, i32> {
-            assert!(digest == SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64 || digest == SHADER_PACKAGE_VOXY_FLAT_CLOUD_FNV1A64);
+            assert!(digest == SHADER_PACKAGE_VOXY_HEADLESS_TEXTURE_FNV1A64 || digest == SHADER_PACKAGE_VOXY_FLAT_CLOUD_FNV1A64 || digest == SHADER_PACKAGE_VOXY_FIGURE_FNV1A64);
             Ok(ShaderModule)
         }
         pub fn create_render_pipeline(
@@ -148,7 +158,7 @@ pub mod vgpu {
             stride: u32,
             flags: u32,
         ) -> Result<RenderPipeline, i32> {
-            assert!(stride==32 || stride==20);
+            assert!(stride==32 || stride==20 || stride==8);
             assert_eq!(flags, 0);
             Ok(RenderPipeline)
         }
@@ -183,6 +193,7 @@ pub mod vgpu {
                 Ok(Surface)
             })
         }
+        pub fn submit_ui4_clear(self, _:Queue, _:Surface, _:u32) -> Result<Timeline,i32> { Ok(Timeline {value:17}) }
         pub fn submit_ui4_indexed(
             self,
             _: Queue,
@@ -309,7 +320,7 @@ mod tests {
         }
     }
     #[test]
-    fn background_composition_keeps_valid_near_when_far_fails_and_rejects_stale_results() {
+    fn near_only_composition_skips_far_warmup_and_rejects_stale_results() {
         use std::time::{Duration,Instant};
         let client=client::Client{world:client::WorldData{size:vek::Vec2::zero(),lod_base:client::Colors(0)}};
         let near=frame().geometry;
@@ -326,7 +337,9 @@ mod tests {
             assert!(Instant::now()<deadline,"far retry must not block valid near");
             std::thread::sleep(Duration::from_millis(1));
         };
-        assert_eq!(metrics.near_chunks,1);assert!(!metrics.far_ready);assert_eq!(metrics.warm_failures,1);
+        assert_eq!(metrics.near_chunks,1);assert!(!metrics.far_ready);assert_eq!(metrics.warm_failures,0);
+        assert_eq!(metrics.mode,terrain_layers::Mode::Near);
+        assert_eq!(metrics.far_vertices,0);
         assert_eq!(complete.vertices.len(),near.vertices.len());
         let retained=composition.prepare(&client,Some(near),3,coverage,
             terrain_layers::Metrics{near_warm_us:900,..Default::default()}).unwrap();
@@ -338,6 +351,31 @@ mod tests {
     fn uploads_are_reused_and_gpu_ownership_survives_busy_and_failure() {
         use vgpu::*;
         *RECORD.lock().unwrap() = Some(Recorder::default());
+        let entity_frame = std::sync::Arc::new(figure_preview::Frame {
+            geometry: std::sync::Arc::new(figure_preview::Geometry {
+                vertices: vec![[0,0];4], indices: vec![0,1,2,2,1,3], atlas_size:[1,1], atlas:vec![[255;4]],
+            }), state: [0;vgpu::VOXY_FIGURE_STATE_BYTES],
+        });
+        {
+            let mut renderer=terrain::NativeTerrain::open().unwrap();
+            renderer.draw(5, &frame(), false).unwrap();
+            renderer.draw_entities(5, &[entity_frame.clone()]).unwrap();
+            let record=RECORD.lock().unwrap();
+            let draw=record.as_ref().unwrap().draws.last().unwrap();
+            assert_ne!(draw.texture_reserved & INDEXED_DRAW_LOAD_COLOR,0);
+            assert_eq!(draw.texture_reserved & INDEXED_DRAW_CLEAR_DEPTH,0);
+            assert_eq!(draw.texture_reserved >> INDEXED_DRAW_DEPTH_COMPARE_SHIFT,3);
+        }
+        {
+            let mut selection=minimal_sky::NativeSky::open().unwrap();
+            selection.draw_figure(5, 0, &entity_frame, true).unwrap();
+            let record=RECORD.lock().unwrap();
+            let draw=record.as_ref().unwrap().draws.last().unwrap();
+            assert_ne!(draw.texture_reserved & INDEXED_DRAW_LOAD_COLOR,0,"selection must retain the sky/cloud color");
+            assert_ne!(draw.texture_reserved & INDEXED_DRAW_CLEAR_DEPTH,0);
+            assert_eq!(draw.texture_reserved >> INDEXED_DRAW_DEPTH_COMPARE_SHIFT,6);
+        }
+        *RECORD.lock().unwrap()=Some(Recorder::default());
         let cloud_frame=clouds::Frame {pixels: vec![0u8;32*3*4].into(),width:32,height:3,camera: frame().camera,in_world:false};
         let mut cloud_renderer=clouds::NativeClouds::open().unwrap();
         cloud_renderer.draw(123,&cloud_frame).unwrap();

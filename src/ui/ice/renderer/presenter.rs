@@ -34,6 +34,8 @@ struct Job {
     terrain: Option<Arc<crate::render::terrain_feature::Frame>>,
     #[cfg(target_os = "trueos")]
     clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>,
+    #[cfg(target_os = "trueos")]
+    entities: Vec<Arc<crate::render::figure_preview::Frame>>,
 }
 struct Mailbox {
     latest: ArrayQueue<Job>,
@@ -125,6 +127,8 @@ impl LayeredPresenter {
             #[cfg(target_os = "trueos")]
             terrain: None,
             #[cfg(target_os = "trueos")]
+            entities: Vec::new(),
+            #[cfg(target_os = "trueos")]
             clouds: None,
         });
         self.foreground.mailbox.submit(Job {
@@ -137,6 +141,8 @@ impl LayeredPresenter {
             figure: None,
             #[cfg(target_os = "trueos")]
             terrain: None,
+            #[cfg(target_os = "trueos")]
+            entities: Vec::new(),
             #[cfg(target_os = "trueos")]
             clouds: None,
         });
@@ -155,16 +161,18 @@ impl LayeredPresenter {
             #[cfg(target_os = "trueos")]
             terrain: None,
             #[cfg(target_os = "trueos")]
+            entities: Vec::new(),
+            #[cfg(target_os = "trueos")]
             clouds: None,
         });
     }
     #[cfg(target_os = "trueos")]
-    pub fn submit_figure(&self, revision: u64, size: Vec2<u32>, rgba: u32, figure: Option<Arc<crate::render::figure_preview::Frame>>) {
-        self.scene.mailbox.submit(Job { revision, force_publication: false, size, plan: LayerPlan::default(), sky: Some(rgba), figure, terrain: None, clouds: None });
+    pub fn submit_figure(&self, revision: u64, size: Vec2<u32>, rgba: u32, figure: Option<Arc<crate::render::figure_preview::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>) {
+        self.scene.mailbox.submit(Job { revision, force_publication: false, size, plan: LayerPlan::default(), sky: Some(rgba), figure, terrain: None, clouds, entities: Vec::new() });
     }
     #[cfg(target_os = "trueos")]
-    pub fn submit_terrain(&self, revision: u64, size: Vec2<u32>, rgba: u32, terrain: Option<Arc<crate::render::terrain_feature::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>) {
-        self.scene.mailbox.submit(Job { revision, force_publication: false, size, plan: LayerPlan::default(), sky: Some(rgba), figure: None, terrain, clouds });
+    pub fn submit_terrain(&self, revision: u64, size: Vec2<u32>, rgba: u32, terrain: Option<Arc<crate::render::terrain_feature::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>, entities: Vec<Arc<crate::render::figure_preview::Frame>>) {
+        self.scene.mailbox.submit(Job { revision, force_publication: false, size, plan: LayerPlan::default(), sky: Some(rgba), figure: None, terrain, clouds, entities });
     }
     pub fn submit_sky(&self, revision: u64, size: Vec2<u32>, rgba: u32) {
         self.scene.mailbox.submit(Job {
@@ -177,6 +185,8 @@ impl LayeredPresenter {
             figure: None,
             #[cfg(target_os = "trueos")]
             terrain: None,
+            #[cfg(target_os = "trueos")]
+            entities: Vec::new(),
             #[cfg(target_os = "trueos")]
             clouds: None,
         });
@@ -192,6 +202,8 @@ impl LayeredPresenter {
             figure: None,
             #[cfg(target_os = "trueos")]
             terrain: None,
+            #[cfg(target_os = "trueos")]
+            entities: Vec::new(),
             #[cfg(target_os = "trueos")]
             clouds: None,
         });
@@ -474,9 +486,11 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                                 }
                             }
                             if let Some(terrain) = current.terrain.as_deref() {
-                                terrain_renderer.as_mut().unwrap().draw(target.render_target(), terrain, clouds_drawn)
+                                let renderer = terrain_renderer.as_mut().unwrap();
+                                renderer.draw(target.render_target(), terrain, clouds_drawn)?;
+                                renderer.draw_entities(target.render_target(), &current.entities)
                             } else if let Some(figure) = current.figure.as_deref() {
-                                renderer.draw_figure(target.render_target(), 0, figure)
+                                renderer.draw_figure(target.render_target(), 0, figure, clouds_drawn)
                             } else if clouds_drawn {
                                 Ok(())
                             } else {

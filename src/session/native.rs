@@ -13,7 +13,7 @@ use crate::{
     window::Event,
 };
 use common::{comp, event::UpdateCharacterMetadata, util::Dir};
-use specs::WorldExt;
+use specs::{Join, WorldExt};
 use std::{cell::RefCell, rc::Rc};
 use vek::*;
 
@@ -29,6 +29,7 @@ pub struct SessionState {
         u64,
         std::sync::Arc<crate::render::terrain_feature::Geometry>,
     )>,
+    figures: std::collections::HashMap<specs::Entity, crate::render::figure_preview::Preview>,
     frames: u64,
 }
 impl SessionState {
@@ -54,7 +55,7 @@ impl SessionState {
             global.settings.networking.lossy_terrain_compression,
         );
         tracing::info!(
-            "Native world session entered; renderer=flat-clouds+terrain avatar=guarded conrod=guarded camera=voxy controls=client-controller"
+            "Native world session entered; renderer=flat-clouds+near-terrain+humanoid-entities avatar=enabled conrod=guarded camera=voxy controls=client-controller"
         );
         Self {
             client,
@@ -65,6 +66,7 @@ impl SessionState {
             terrain: crate::terrain_preview::Scene::new(),
             composition: crate::render::terrain_composition::Composition::new(),
             geometry: None,
+            figures: std::collections::HashMap::new(),
             frames: 0,
         }
     }
@@ -282,7 +284,37 @@ impl PlayState for SessionState {
             let clouds = crate::render::flat_cloud_native::from_client(
                 &client, cloud_camera, global.settings.graphics.ambiance, true,
             ).map(std::sync::Arc::new);
-            if let Err(error) = global.window.present_terrain_scene(sun_z, terrain, clouds) {
+            let mut entities = Vec::new();
+            if terrain.is_some() {
+                let focus = self.camera.get_focus_pos();
+                let projection = crate::scene::camera::perspective_rh_zo_general(
+                    self.camera.get_effective_fov(), size.width as f32 / size.height.max(1) as f32,
+                    1.0 / 0.1, 1.0 / self.zoom.far_plane(),
+                );
+                let ecs = client.state().ecs();
+                let positions = ecs.read_storage::<comp::Pos>();
+                let bodies = ecs.read_storage::<comp::Body>();
+                let inventories = ecs.read_storage::<comp::Inventory>();
+                let orientations = ecs.read_storage::<comp::Ori>();
+                let mut visible = std::collections::HashSet::new();
+                for (entity, pos, body) in (&ecs.entities(), &positions, &bodies).join() {
+                    if (pos.0 - position).magnitude_squared() > 128.0 * 128.0 { continue; }
+                    let comp::Body::Humanoid(body) = body else { continue; };
+                    if visible.len() >= 128 { break; }
+                    visible.insert(entity);
+                    let preview = self.figures.entry(entity).or_default();
+                    match preview.world_frame(*body, inventories.get(entity),
+                        Vec2::new(size.width, size.height), client.state().get_time() as f32, sun_z,
+                        pos.0, orientations.get(entity).map_or(Quaternion::identity(), |ori| ori.to_quat()),
+                        projection * deps.view_mat, focus) {
+                        Ok(Some(frame)) => entities.push(frame),
+                        Ok(None) => {},
+                        Err(error) => tracing::warn!(%error, "World avatar preparation failed"),
+                    }
+                }
+                self.figures.retain(|entity, _| visible.contains(entity));
+            }
+            if let Err(error) = global.window.present_terrain_scene(sun_z, terrain, clouds, entities) {
                 tracing::error!(%error, "Native world presentation failed");
             }
         }

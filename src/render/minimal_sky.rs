@@ -51,30 +51,37 @@ impl NativeSky {
         target: u32,
         rgba: u32,
         frame: &super::figure_preview::Frame,
+        load_color: bool,
     ) -> Result<(), i32> {
-        if self
-            .figure
+        Self::draw_figure_on(self.device, self.queue, &mut self.figure, target, rgba, frame, load_color, false)
+    }
+
+    pub(crate) fn draw_figure_on(
+        device: trueos::vgpu::Device, queue: trueos::vgpu::Queue,
+        cache: &mut Option<NativeFigure>, target: u32, rgba: u32,
+        frame: &super::figure_preview::Frame, load_color: bool, world_depth: bool,
+    ) -> Result<(), i32> {
+        if cache
             .as_ref()
             .is_none_or(|figure| !std::sync::Arc::ptr_eq(&figure.geometry, &frame.geometry))
         {
             tracing::info!("Figure preview: native buffers and pipeline preparation entered");
             // The previous submission is retired before these buffers are replaced.
-            if let Some(previous) = self.figure.take() {
-                previous.destroy(self.device);
+            if let Some(previous) = cache.take() {
+                previous.destroy(device);
             }
-            self.figure = Some(NativeFigure::new(self.device, frame.geometry.clone())?);
+            *cache = Some(NativeFigure::new(device, frame.geometry.clone())?);
             tracing::info!("Figure preview: native buffers and pipeline ready");
         }
-        let figure = self.figure.as_ref().unwrap();
-        if self.device.write_buffer(figure.vertices, 0, &frame.state)? != frame.state.len() {
+        let figure = cache.as_ref().unwrap();
+        if device.write_buffer(figure.vertices, 0, &frame.state)? != frame.state.len() {
             return Err(trueos::vgpu::ERR_IO);
         }
-        let surface = self.device.acquire_ui4_surface(target)?;
+        let surface = device.acquire_ui4_surface(target)?;
         use trueos::vgpu::*;
-        let point = self
-            .device
+        let point = device
             .submit_ui4_indexed(
-                self.queue,
+                queue,
                 surface,
                 figure.pipeline,
                 figure.vertices,
@@ -88,16 +95,16 @@ impl NativeSky {
                     texture_width: figure.geometry.atlas_size[0],
                     texture_height: figure.geometry.atlas_size[1],
                     texture_pitch: figure.geometry.atlas_size[0] * 4,
-                    texture_reserved: INDEXED_DRAW_DRAWABLE_DEPTH
+                    texture_reserved: (if load_color { INDEXED_DRAW_LOAD_COLOR } else { 0 }) | INDEXED_DRAW_DRAWABLE_DEPTH
                         | INDEXED_DRAW_DEPTH_TEST
                         | INDEXED_DRAW_DEPTH_WRITE
-                        | INDEXED_DRAW_CLEAR_DEPTH
-                        | (6 << INDEXED_DRAW_DEPTH_COMPARE_SHIFT),
+                        | (if world_depth { 0 } else { INDEXED_DRAW_CLEAR_DEPTH })
+                        | ((if world_depth { 3 } else { 6 }) << INDEXED_DRAW_DEPTH_COMPARE_SHIFT),
                     ..Default::default()
                 },
             )
             .map_err(|e| if e == ERR_BUSY { ERR_IO } else { e })?;
-        self.device.wait(self.queue, point.value)
+        device.wait(queue, point.value)
     }
 
     /// Caller owns the acquired UI4 lease and publishes after this returns.
@@ -132,7 +139,7 @@ impl Drop for NativeSky {
 }
 
 #[cfg(target_os = "trueos")]
-struct NativeFigure {
+pub(crate) struct NativeFigure {
     geometry: std::sync::Arc<super::figure_preview::Geometry>,
     shader: trueos::vgpu::ShaderModule,
     pipeline: trueos::vgpu::RenderPipeline,
@@ -202,7 +209,7 @@ impl NativeFigure {
         }
         result
     }
-    fn destroy(self, device: trueos::vgpu::Device) {
+    pub(crate) fn destroy(self, device: trueos::vgpu::Device) {
         let _ = device.destroy_buffer(self.vertices);
         let _ = device.destroy_buffer(self.indices);
         let _ = device.destroy_buffer(self.atlas);

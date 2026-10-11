@@ -80,7 +80,7 @@ impl Heartbeat {
             if metrics.stream_run_us != self.metrics.stream_run_us {
                 self.last_near = None;
             }
-            // Begin a fresh two-second window; F1 cannot flood heartbeat logs.
+            // Begin a fresh two-second window when the measured stream changes.
             self.reset(Instant::now());
         }
         self.metrics = metrics;
