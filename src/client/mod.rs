@@ -93,6 +93,8 @@ use vek::*;
 
 #[cfg(target_os = "trueos")]
 mod terrain_prefetch;
+#[cfg(target_os = "trueos")]
+mod terrain_snapshot;
 
 pub const MAX_SELECTABLE_VIEW_DISTANCE: u32 = 65;
 
@@ -362,6 +364,8 @@ pub struct Client {
     terrain_received_at: HashMap<Vec2<i32>, Instant>,
     #[cfg(target_os = "trueos")]
     terrain_prefetch: terrain_prefetch::WarmState,
+    #[cfg(target_os = "trueos")]
+    terrain_snapshot: terrain_snapshot::Snapshot,
     target_time_of_day: Option<TimeOfDay>,
     dt_adjustment: f64,
 
@@ -1189,6 +1193,8 @@ impl Client {
             terrain_received_at: HashMap::new(),
             #[cfg(target_os = "trueos")]
             terrain_prefetch: terrain_prefetch::WarmState::new(),
+            #[cfg(target_os = "trueos")]
+            terrain_snapshot: terrain_snapshot::Snapshot::new(),
             target_time_of_day: None,
             dt_adjustment: 1.0,
 
@@ -1467,9 +1473,12 @@ impl Client {
         view_distances: common::ViewDistances,
     ) -> common::ViewDistances {
         let view_distances = common::ViewDistances {
-            terrain: view_distances
-                .terrain
-                .clamp(1, MAX_SELECTABLE_VIEW_DISTANCE),
+            terrain: {
+                #[cfg(target_os = "trueos")]
+                { terrain_snapshot::VIEW_DISTANCE }
+                #[cfg(not(target_os = "trueos"))]
+                { view_distances.terrain.clamp(1, MAX_SELECTABLE_VIEW_DISTANCE) }
+            },
             entity: view_distances.entity.max(1),
         };
         self.view_distance = Some(view_distances.terrain);
@@ -2324,6 +2333,7 @@ impl Client {
             self.terrain_decode_pending = None;
             self.terrain_received_at.clear();
             self.terrain_prefetch = terrain_prefetch::WarmState::new();
+            self.terrain_snapshot = terrain_snapshot::Snapshot::new();
         }
     }
 
@@ -2642,6 +2652,78 @@ impl Client {
                 matches!(msg, ServerGeneral::TerrainChunkUpdate {key: pending, chunk: Ok(_)} if *pending == key))
     }
 
+    /// Native render tests consume a single 9x9 capture, then pin it for the session.
+    #[cfg(target_os = "trueos")]
+    pub(crate) fn terrain_snapshot_ready(&self) -> bool { self.terrain_snapshot.frozen }
+
+    #[cfg(target_os = "trueos")]
+    fn accept_snapshot_message(&self, msg: &ServerGeneral) -> bool {
+        if self.terrain_snapshot.frozen { return false; }
+        if self.terrain_snapshot.capture.is_none() { return true; }
+        match msg {
+            ServerGeneral::TerrainChunkUpdate { key, .. } => self.terrain_snapshot.accepts_chunk(
+                key.into_array(), self.state.terrain().contains_key_real(*key)),
+            // Capture initial chunks only: edits and LoD are deliberately excluded.
+            _ => false,
+        }
+    }
+
+    #[cfg(target_os = "trueos")]
+    fn tick_terrain_snapshot(&mut self) -> Result<bool, Error> {
+        if self.terrain_snapshot.frozen { return Ok(true); }
+        if self.terrain_snapshot.capture.is_none() {
+            let Some(position) = self.position().filter(|p| p.into_array().iter().all(|v| v.is_finite())) else {
+                return Ok(false);
+            };
+            let key = TerrainGrid::chunk_key(position.map(|v| v.floor() as i32));
+            // Wait for the entry chunk rather than anchoring to an uninitialized spawn.
+            if !self.state.terrain().contains_key_real(key) { return Ok(false); }
+            self.terrain_snapshot.capture = terrain_snapshot::Capture::new(
+                position.xy().into_array(), TerrainGrid::chunk_size().into_array());
+            if let Some(capture) = &self.terrain_snapshot.capture {
+                tracing::info!(center = ?capture.center, chunks = capture.keys.len(),
+                    "terrain-snapshot: loading fixed 9x9 area; movement must remain inside capture");
+            } else { return Ok(false); }
+        }
+        let keys = self.terrain_snapshot.capture.as_ref().unwrap().keys.clone();
+        // Outside-map defaults are complete local data and need no request.
+        for key in &keys {
+            let key = Vec2::from(*key);
+            let terrain = self.state.terrain();
+            let default = (!terrain.contains_key_real(key)).then(|| terrain.get_key_arc(key).cloned()).flatten();
+            drop(terrain);
+            if let Some(chunk) = default { self.state.insert_chunk(key, chunk); }
+        }
+        let ready = keys.iter().filter(|key| self.state.terrain().contains_key_real(Vec2::from(**key))).count();
+        if self.terrain_snapshot.finish(ready) {
+            // Dropping old deliveries prevents any outstanding decode from mutating the capture.
+            self.terrain_decode_queue.clear();
+            self.terrain_decode_pending = None;
+            self.pending_chunks.clear();
+            self.terrain_received_at.clear();
+            tracing::info!(chunks = ready, "terrain-snapshot: frozen; requests=off decode=off updates=discard unload=off");
+            return Ok(true);
+        }
+        let now = Instant::now();
+        self.pending_chunks.retain(|_, sent| now.duration_since(*sent) < Duration::from_secs(3));
+        if now >= self.terrain_snapshot.next_report {
+            tracing::info!(ready, target = keys.len(), pending = self.pending_chunks.len(),
+                negotiated_vd = ?self.view_distance, "terrain-snapshot: loading; terrain rendering waits for complete capture");
+            self.terrain_snapshot.next_report = now + Duration::from_secs(2);
+        }
+        if self.pending_chunks.len() < 8 && self.terrain_decode_queue.len() < 8
+            && now >= self.terrain_snapshot.next_request {
+            if let Some(key) = keys.into_iter().map(Vec2::from).find(|key|
+                !self.state.terrain().contains_key_real(*key) && !self.pending_chunks.contains_key(key)
+                    && !self.terrain_chunk_in_decode(*key)) {
+                self.send_msg_err(ClientGeneral::TerrainChunkRequest { key })?;
+                self.pending_chunks.insert(key, now);
+                self.terrain_snapshot.next_request = now + terrain_snapshot::REQUEST_INTERVAL;
+            }
+        }
+        Ok(true)
+    }
+
     /// Extra resident data only. Render radius, VD negotiation, entity syncing
     /// and message types stay the same. Existing unload hysteresis retains ±2.
     #[cfg(target_os = "trueos")]
@@ -2760,6 +2842,8 @@ impl Client {
     /// Removes old terrain chunks outside the view distance.
     /// Sends requests for missing chunks within the view distance.
     fn tick_terrain(&mut self) -> Result<(), Error> {
+        #[cfg(target_os = "trueos")]
+        if self.tick_terrain_snapshot()? { return Ok(()); }
         let pos = self
             .state
             .read_storage::<comp::Pos>()
@@ -3358,6 +3442,7 @@ impl Client {
     fn handle_server_terrain_msg(&mut self, msg: ServerGeneral) -> Result<(), Error> {
         #[cfg(target_os = "trueos")]
         {
+            if !self.accept_snapshot_message(&msg) { return Ok(()); }
             self.terrain_decode_queue.push_back((msg, Instant::now()));
             Ok(())
         }
@@ -3382,7 +3467,8 @@ impl Client {
                 let key = *key;
                 let received_at = *received_at;
                 self.terrain_decode_pending = None;
-                if let Some(chunk) = chunk {
+                if let Some(chunk) = chunk.filter(|_| self.terrain_snapshot.accepts_chunk(
+                    key.into_array(), self.state.terrain().contains_key_real(key))) {
                     self.state.insert_chunk(key, Arc::new(chunk));
                     self.terrain_received_at.insert(key, received_at);
                     if let Some(sent) = self.pending_chunks.get(&key) {
@@ -3392,6 +3478,7 @@ impl Client {
                 self.pending_chunks.remove(&key);
             }
             let Some((msg, received_at)) = self.terrain_decode_queue.pop_front() else { return Ok(()); };
+            if !self.accept_snapshot_message(&msg) { continue; }
             match msg {
                 ServerGeneral::TerrainChunkUpdate { key, chunk: Ok(chunk) } => {
                     let (sender, receiver) = std::sync::mpsc::channel();

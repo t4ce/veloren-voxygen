@@ -21,7 +21,6 @@ pub struct SessionState {
     client: Rc<RefCell<Client>>,
     camera: Camera,
     zoom: zoom::Zoom,
-    terrain_height: Option<(f32, f32)>,
     keys: KeyState,
     terrain: crate::terrain_preview::Scene,
     composition: crate::render::terrain_composition::Composition,
@@ -60,8 +59,7 @@ impl SessionState {
         Self {
             client,
             camera,
-            zoom: zoom::Zoom::new(10.0),
-            terrain_height: None,
+            zoom: zoom::Zoom::new(),
             keys: Default::default(),
             terrain: crate::terrain_preview::Scene::new(),
             composition: crate::render::terrain_composition::Composition::new(),
@@ -70,15 +68,6 @@ impl SessionState {
             frames: 0,
         }
     }
-    fn refresh_zoom_limit(&mut self) {
-        let size = common::terrain::TerrainGrid::chunk_size();
-        self.zoom.set_limit(zoom::fit_distance(
-            [size.x as f32, size.y as f32],
-            self.terrain_height, self.camera.get_effective_fov(),
-            self.camera.get_aspect_ratio(),
-        ));
-    }
-
 }
 impl PlayState for SessionState {
     fn enter(&mut self, global: &mut GlobalState, _: Direction) {
@@ -88,7 +77,6 @@ impl PlayState for SessionState {
     }
     fn tick(&mut self, global: &mut GlobalState, events: Vec<Event>) -> PlayStateResult {
         let frame_started = std::time::Instant::now();
-        self.refresh_zoom_limit();
         for event in events {
             match event {
                 Event::Close => return PlayStateResult::Shutdown,
@@ -96,7 +84,6 @@ impl PlayState for SessionState {
                 Event::Focused(true) => global.window.grab_cursor(true),
                 Event::Resize(size) => {
                     self.camera.set_aspect_ratio(size.x as f32 / size.y.max(1) as f32);
-                    self.refresh_zoom_limit();
                     // UI4 commits a paired resize only after both producers
                     // publish new backing frames. The guarded HUD must still
                     // publish its transparent foreground at the new extent.
@@ -195,8 +182,25 @@ impl PlayState for SessionState {
         let position = client
             .current::<comp::Pos>()
             .map_or(Vec3::zero(), |pos| pos.0);
-        self.camera.set_focus_pos(position + Vec3::unit_z() * 1.5);
-        let zoom_distance = self.zoom.advance(global.clock.real_dt().as_secs_f32());
+        let height = client.current::<comp::Body>().map_or(2.0, |body| match body {
+            comp::Body::Humanoid(body) => body.height(),
+            _ => 2.0,
+        });
+        let chunk = common::terrain::TerrainGrid::chunk_size().map(|v| v as f32);
+        let world = client.world_data();
+        let world_size = world.chunk_size().map(|v| v as f32) * chunk;
+        self.zoom.set_overviews(chunk.into_array(), world_size.into_array(),
+            world.max_chunk_alt().abs(), self.camera.get_effective_fov(), self.camera.get_aspect_ratio());
+        let zoom_distance = self.zoom.distance();
+        let focus = match self.zoom.stop() {
+            zoom::ZoomStop::World => Vec3::new(world_size.x * 0.5, world_size.y * 0.5, world.max_chunk_alt() * 0.5),
+            zoom::ZoomStop::Far | zoom::ZoomStop::VeryFar => Vec3::new(
+                (position.x / chunk.x).floor() * chunk.x + chunk.x * 0.5,
+                (position.y / chunk.y).floor() * chunk.y + chunk.y * 0.5,
+                position.z + self.zoom.focus_height(height)),
+            _ => position + Vec3::unit_z() * self.zoom.focus_height(height),
+        };
+        self.camera.set_focus_pos(focus);
         self.camera.set_distance_continuous(zoom_distance);
         self.camera.update(
             client.state().get_time(),
@@ -221,7 +225,7 @@ impl PlayState for SessionState {
                 .z;
             // World position and its containing chunk must have arrived before
             // requesting a mesh; waiting frames retain just the sky.
-            let synced = client
+            let synced = client.terrain_snapshot_ready() && client
                 .position()
                 .filter(|position| {
                     position.into_array().iter().all(|value| value.is_finite())
@@ -238,9 +242,6 @@ impl PlayState for SessionState {
                 size.height.max(1),
             );
             if self.geometry.as_ref().is_none_or(|(revision, _)| *revision != prepared.revision) {
-                self.terrain_height = prepared.terrain.iter().map(|v| v.position[2])
-                    .fold(None, |range, z| Some(range.map_or((z, z),
-                        |(low, high): (f32, f32)| (low.min(z), high.max(z)))));
                 self.geometry = Some((prepared.revision, std::sync::Arc::new(
                     crate::render::terrain_feature::Geometry {
                         vertices: prepared.terrain.into(), atlas: prepared.atlas.into(),
@@ -302,11 +303,15 @@ impl PlayState for SessionState {
                     let comp::Body::Humanoid(body) = body else { continue; };
                     if visible.len() >= 128 { break; }
                     visible.insert(entity);
+                    let first_person = entity == client.entity() && self.zoom.hide_body();
+                    // An unsynced inventory cannot identify a separate equipment
+                    // mesh yet; omit the local body until equipment arrives.
+                    if first_person && inventories.get(entity).is_none() { continue; }
                     let preview = self.figures.entry(entity).or_default();
                     match preview.world_frame(*body, inventories.get(entity),
                         Vec2::new(size.width, size.height), client.state().get_time() as f32, sun_z,
                         pos.0, orientations.get(entity).map_or(Quaternion::identity(), |ori| ori.to_quat()),
-                        projection * deps.view_mat, focus) {
+                        projection * deps.view_mat, focus, first_person) {
                         Ok(Some(frame)) => entities.push(frame),
                         Ok(None) => {},
                         Err(error) => tracing::warn!(%error, "World avatar preparation failed"),

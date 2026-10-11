@@ -21,6 +21,8 @@ mod camera_zoom;
 mod terrain_composition;
 #[path = "../../../src/client/terrain_prefetch.rs"]
 mod terrain_prefetch;
+#[path = "../../../src/client/terrain_snapshot.rs"]
+mod terrain_snapshot;
 #[path = "../target/server_prefetch_rule.rs"]
 mod server_prefetch_rule;
 #[cfg(target_os = "trueos")]

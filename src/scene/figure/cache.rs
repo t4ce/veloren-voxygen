@@ -220,6 +220,14 @@ pub struct CharacterCacheKey {
 }
 
 impl CharacterCacheKey {
+    #[cfg(target_os = "trueos")]
+    pub fn native_equipment(inventory: &Inventory, first_person: bool) -> Self {
+        // Retain tools and hands even without the full animation state machine.
+        let mut key = Self::from(None, CameraMode::ThirdPerson, inventory);
+        if first_person { key.third_person = None; }
+        key
+    }
+
     pub fn from(
         cs: Option<&CharacterState>,
         camera_mode: CameraMode,

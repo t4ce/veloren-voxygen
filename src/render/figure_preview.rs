@@ -7,7 +7,7 @@ use crate::{
         pipelines::figure::{FigureModel, Locals},
     },
     scene::{
-        camera::{CameraMode, perspective_rh_zo_general},
+        camera::perspective_rh_zo_general,
         figure::{
             cache::{CharacterCacheKey, FigureKey},
             load::BodySpec,
@@ -41,9 +41,9 @@ impl Preview {
     pub fn world_frame(
         &mut self, body: Body, inventory: Option<&Inventory>, size: Vec2<u32>,
         time: f32, sun_z: f32, position: Vec3<f32>, orientation: Quaternion<f32>,
-        view_projection: Mat4<f32>, focus: Vec3<f32>,
+        view_projection: Mat4<f32>, focus: Vec3<f32>, first_person: bool,
     ) -> Result<Option<Arc<Frame>>, String> {
-        let Some(preview) = self.frame(body, inventory, size, time, sun_z)? else { return Ok(None); };
+        let Some(preview) = self.frame_with_mode(body, inventory, size, time, sun_z, first_person)? else { return Ok(None); };
         let mut state = preview.state;
         state[128..192].copy_from_slice(bytemuck::bytes_of(&view_projection.into_col_arrays()));
         state[208..220].copy_from_slice(bytemuck::bytes_of(&focus.map(f32::trunc).into_array()));
@@ -67,24 +67,29 @@ impl Preview {
         time: f32,
         sun_z: f32,
     ) -> Result<Option<Arc<Frame>>, String> {
+        self.frame_with_mode(body, inventory, size, time, sun_z, false)
+    }
+
+    fn frame_with_mode(
+        &mut self, body: Body, inventory: Option<&Inventory>, size: Vec2<u32>,
+        time: f32, sun_z: f32, first_person: bool,
+    ) -> Result<Option<Arc<Frame>>, String> {
         let key = FigureKey {
             body,
             item_key: None,
             extra: inventory.map(|inventory| {
-                Arc::new(CharacterCacheKey::from(
-                    None,
-                    CameraMode::ThirdPerson,
-                    inventory,
-                ))
+                Arc::new(CharacterCacheKey::native_equipment(inventory, first_person))
             }),
         };
-        let geometry = self.loader.get_or_start(key, |key| {
+        let geometry = self.loader.get_or_start(key, move |key| {
             tracing::info!("Figure preview: selected mesh preparation entered");
             let manifests = Body::load_spec().map_err(|e| format!("figure manifests: {e}"))?;
             let meshes = Body::bone_meshes(&key, &manifests, ());
             let mut greedy = FigureModel::make_greedy();
             let mut mesh = Mesh::<TerrainVertex>::new();
             for (bone, part) in meshes.iter().enumerate() {
+                // Authored character bone slots: hands, glider and both tools.
+                if first_person && !matches!(bone, 5 | 6 | 11 | 12 | 13) { continue; }
                 if let Some((segment, offset)) = part {
                     generate_mesh_base_vol_figure(
                         segment,

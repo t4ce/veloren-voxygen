@@ -1,196 +1,116 @@
-//! Continuous wheel zoom bounded by the complete nine-chunk terrain view.
-const MIN_DISTANCE: f32 = 0.1;
-const EASE_SECONDS: f32 = 0.12;
+//! Named camera stops. One wheel event selects one adjacent stop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ZoomStop {
+    Firstperson,
+    Portrait,
+    ThirdPerson1,
+    ThirdPerson2,
+    ThirdPerson3,
+    Far,
+    VeryFar,
+    World,
+}
+const STOPS: [ZoomStop; 8] = [
+    ZoomStop::Firstperson, ZoomStop::Portrait,
+    ZoomStop::ThirdPerson1, ZoomStop::ThirdPerson2, ZoomStop::ThirdPerson3,
+    ZoomStop::Far, ZoomStop::VeryFar, ZoomStop::World,
+];
+const FIRSTPERSON_DISTANCE: f32 = 0.1;
+const PORTRAIT_DISTANCE: f32 = 3.0;
+const THIRD_PERSON_DISTANCES: [f32; 3] = [5.0, 8.0, 12.0];
+const VERY_FAR_CHUNKS_PER_SIDE: f32 = 9.0;
 
 pub(super) struct Zoom {
-    target: f32,
-    distance: f32,
-    limit: f32,
+    index: usize,
+    overview_distances: [f32; 3],
 }
-
 impl Zoom {
-    pub(super) fn new(distance: f32) -> Self {
-        Self {
-            target: distance,
-            distance,
-            limit: 256.0,
-        }
+    pub(super) fn new() -> Self {
+        Self { index: 0, overview_distances: [48.0, 432.0, 4096.0] }
     }
-
-    pub(super) fn set_limit(&mut self, limit: f32) {
-        if !limit.is_finite() || limit < MIN_DISTANCE {
-            return;
-        }
-        // Keep the full-area endpoint anchored when resizing or changing FoV.
-        let at_limit = (self.target - self.limit).abs() < 0.001;
-        self.limit = limit;
-        self.target = if at_limit {
-            limit
-        } else {
-            self.target.min(limit)
-        };
-    }
-
+    pub(super) fn stop(&self) -> ZoomStop { STOPS[self.index] }
     pub(super) fn scroll(&mut self, raw: f32) {
-        if !raw.is_finite() {
-            return;
-        }
-        // Window input already includes sensitivity and the +/-15 wheel scale.
-        // Limit coalesced input to one notch. An offset exponential gives gentle
-        // motion near the player and faster travel at overview distances, with
-        // equal-and-opposite wheel input returning to exactly the same target.
-        let factor = (1.15_f32.ln() * raw.clamp(-15.0, 15.0) / 15.0).exp();
-        self.target = ((self.target + 5.0) * factor - 5.0).clamp(MIN_DISTANCE, self.limit);
+        if !raw.is_finite() || raw == 0.0 { return; }
+        self.index = if raw > 0.0 { (self.index + 1).min(STOPS.len() - 1) }
+                     else { self.index.saturating_sub(1) };
     }
-
     pub(super) fn toggle(&mut self) {
-        self.target = if self.target > MIN_DISTANCE + 0.001 {
-            MIN_DISTANCE
-        } else {
-            10.0_f32.min(self.limit)
-        };
+        self.index = if self.index == 0 { 1 } else { 0 };
     }
-
-    pub(super) fn advance(&mut self, dt: f32) -> f32 {
-        if dt.is_finite() && dt > 0.0 {
-            let blend = 1.0 - (-dt / EASE_SECONDS).exp();
-            self.distance += (self.target - self.distance) * blend;
-            if (self.distance - self.target).abs() < 0.0001 {
-                self.distance = self.target;
-            }
+    pub(super) fn hide_body(&self) -> bool { self.stop() == ZoomStop::Firstperson }
+    pub(super) fn focus_height(&self, height: f32) -> f32 { height * 0.9 }
+    pub(super) fn set_overviews(
+        &mut self, chunk: [f32; 2], world: [f32; 2], world_height: f32,
+        fov: f32, aspect: f32,
+    ) {
+        let far = fit_footprint(chunk, 0.0, fov, aspect).max(THIRD_PERSON_DISTANCES[2] + 1.0);
+        let very_far = fit_footprint(chunk.map(|v| v * VERY_FAR_CHUNKS_PER_SIDE), 0.0, fov, aspect).max(far);
+        let world = fit_footprint(world, world_height, fov, aspect).max(very_far);
+        self.overview_distances = [far, very_far, world];
+    }
+    pub(super) fn distance(&self) -> f32 {
+        match self.stop() {
+            ZoomStop::Firstperson => FIRSTPERSON_DISTANCE,
+            ZoomStop::Portrait => PORTRAIT_DISTANCE,
+            ZoomStop::ThirdPerson1 => THIRD_PERSON_DISTANCES[0],
+            ZoomStop::ThirdPerson2 => THIRD_PERSON_DISTANCES[1],
+            ZoomStop::ThirdPerson3 => THIRD_PERSON_DISTANCES[2],
+            ZoomStop::Far => self.overview_distances[0],
+            ZoomStop::VeryFar => self.overview_distances[1],
+            ZoomStop::World => self.overview_distances[2],
         }
-        self.distance
     }
-
-    pub(super) fn far_plane(&self) -> f32 {
-        (self.limit.max(self.distance) * 2.0 + 32.0).max(256.0)
-    }
+    pub(super) fn far_plane(&self) -> f32 { (self.distance() * 4.0 + 256.0).max(256.0) }
 }
 
-pub(super) fn fit_distance(
-    chunk_size: [f32; 2],
-    terrain_height: Option<(f32, f32)>,
-    fov: f32,
-    aspect: f32,
-) -> f32 {
-    // A player can be half a chunk away from the 3x3 area's center. Two
-    // chunk widths per axis therefore enclose every corner about the player.
-    // Use the terrain's full vertical span, with head/jump clearance, instead
-    // of live player Z. At maximum zoom, a live-height fit would retarget the
-    // distance on every jump or block step and make the view pump in and out.
-    let height = terrain_height.map_or(0.0, |(low, high)| (high - low).abs() + 4.0);
-    let radius = (chunk_size[0] * 2.0)
-        .hypot(chunk_size[1] * 2.0)
-        .hypot(height);
-    let vertical_half = fov.clamp(15.0_f32.to_radians(), 120.0_f32.to_radians()) * 0.5;
-    let horizontal_half = (vertical_half.tan() * aspect.max(0.01)).atan();
-    // A sphere fits at radius/sin(half-angle), regardless of orbit direction.
-    // Leave 15% breathing room in the narrower screen dimension.
-    let distance = radius / vertical_half.min(horizontal_half).sin() * 1.15;
-    if distance.is_finite() {
-        distance.max(10.0)
-    } else {
-        160.0
-    }
+fn fit_footprint(size: [f32; 2], height: f32, fov: f32, aspect: f32) -> f32 {
+    let half_vertical = fov.clamp(15.0_f32.to_radians(), 120.0_f32.to_radians()) * 0.5;
+    let half_horizontal = (half_vertical.tan() * aspect.max(0.01)).atan();
+    let radius = (size[0] * 0.5).hypot(size[1] * 0.5).hypot(height * 0.5);
+    radius / half_vertical.min(half_horizontal).sin() * 1.1
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
-    fn wheel_flow_has_no_first_person_step_and_reverses_exactly() {
-        let mut zoom = Zoom::new(0.1);
-        zoom.set_limit(160.0);
-        zoom.scroll(1.0);
-        assert!(zoom.target > 0.1 && zoom.target < 0.2);
-        let target = zoom.target;
-        let distance = zoom.advance(1.0 / 30.0);
-        assert!(distance > 0.1 && distance < target);
-        zoom.scroll(-1.0);
-        assert!((zoom.target - 0.1).abs() < 0.00001);
-        let mut zoom = Zoom::new(10.0);
-        zoom.scroll(15.0);
-        assert!((zoom.target - 12.25).abs() < 0.00001);
-        zoom.scroll(-15.0);
-        assert!((zoom.target - 10.0).abs() < 0.00001);
-    }
-
-    #[test]
-    fn easing_is_frame_rate_independent_and_never_overshoots_after_stalls() {
-        fn run(fps: usize) -> f32 {
-            let mut zoom = Zoom::new(10.0);
-            zoom.scroll(15.0);
-            for _ in 0..fps {
-                zoom.advance(1.0 / fps as f32);
-            }
-            zoom.distance
+    fn wheel_walks_named_stops_and_clamps_at_endpoints() {
+        let mut zoom = Zoom::new();
+        for expected in STOPS {
+            assert_eq!(zoom.stop(), expected);
+            assert_eq!(zoom.hide_body(), expected == ZoomStop::Firstperson);
+            zoom.scroll(15000.0);
         }
-        assert!((run(30) - run(60)).abs() < 0.00001);
-        let mut zoom = Zoom::new(10.0);
-        zoom.scroll(15.0);
-        assert!(zoom.advance(5.0) <= zoom.target);
-    }
-
-    #[test]
-    fn footprint_height_and_portrait_aspect_fit_with_margin() {
-        let radius = 64.0_f32.hypot(64.0);
-        let fov = 65.0_f32.to_radians();
-        let wide = fit_distance([32., 32.], None, fov, 16. / 9.);
-        assert!((wide * (fov * 0.5).sin() / radius - 1.15).abs() < 0.00001);
-        let portrait = fit_distance([32., 32.], None, fov, 0.5);
-        assert!(portrait > wide);
-        assert!(fit_distance([32., 32.], Some((-100., 150.)), fov, 16. / 9.) > wide);
-        assert!(fit_distance([32., 32.], None, 30.0_f32.to_radians(), 16. / 9.) > wide);
-    }
-
-    #[test]
-    fn maximum_zoom_stays_fixed_when_focus_moves_up_and_down() {
-        let height = Some((-100.0, 150.0));
-        let fit = || fit_distance([32., 32.], height, 65.0_f32.to_radians(), 16. / 9.);
-        let mut zoom = Zoom::new(10.0);
-        zoom.set_limit(fit());
-        for _ in 0..100 {
-            zoom.scroll(15.0);
+        assert_eq!(zoom.stop(), ZoomStop::World);
+        for expected in STOPS.into_iter().rev() {
+            assert_eq!(zoom.stop(), expected);
+            zoom.scroll(-15.0);
         }
-        zoom.advance(5.0);
-        let chosen = zoom.distance;
-        // Session refresh has no player-position input: jumps, landings and
-        // ascending/descending blocks keep the same terrain-derived endpoint.
-        for _ in 0..120 {
-            zoom.set_limit(fit());
-            assert_eq!(zoom.advance(1.0 / 30.0), chosen);
-        }
+        assert_eq!(zoom.stop(), ZoomStop::Firstperson);
     }
-
     #[test]
-    fn limits_coalesced_events_and_keyboard_toggle_keep_the_same_flow() {
-        let mut zoom = Zoom::new(10.0);
-        zoom.set_limit(160.0);
-        zoom.scroll(15000.0);
-        assert!((zoom.target - 12.25).abs() < 0.00001);
-        for _ in 0..100 {
-            zoom.scroll(15.0);
-        }
-        assert_eq!(zoom.target, 160.0);
-        zoom.set_limit(200.0);
-        assert_eq!(zoom.target, 200.0);
+    fn framing_uses_server_dimensions_and_viewport_shape() {
+        let mut zoom = Zoom::new();
+        zoom.set_overviews([32.0; 2], [16384.0; 2], 1024.0, 1.0, 1.0);
+        let [far, very_far, world] = zoom.overview_distances;
+        assert!((very_far / far - 9.0).abs() < 0.0001);
+        assert!(world > very_far);
+        zoom.set_overviews([32.0; 2], [32768.0; 2], 1024.0, 1.0, 0.5);
+        assert!(zoom.overview_distances[2] > world * 2.0);
+        zoom.index = 7;
+        assert!(zoom.far_plane() > zoom.distance() * 2.0);
+    }
+    #[test]
+    fn portrait_stays_at_three_metres_and_invalid_input_does_nothing() {
+        let mut zoom = Zoom::new();
+        zoom.scroll(0.01);
+        assert_eq!(zoom.stop(), ZoomStop::Portrait);
+        assert_eq!(zoom.distance(), 3.0);
+        for raw in [0.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] { zoom.scroll(raw); }
+        assert_eq!(zoom.stop(), ZoomStop::Portrait);
         zoom.toggle();
-        assert_eq!(zoom.target, 0.1);
-        assert!(zoom.advance(1. / 30.) > 0.1);
-        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
-            zoom.scroll(invalid);
-            zoom.set_limit(invalid);
-            zoom.advance(invalid);
-            assert_eq!(zoom.target, 0.1);
-        }
-        for _ in 0..100 {
-            zoom.advance(1. / 30.);
-        }
-        assert_eq!(zoom.distance, 0.1);
+        assert_eq!(zoom.distance(), 0.1);
         zoom.toggle();
-        assert_eq!(zoom.target, 10.0);
-        assert!(zoom.advance(1. / 120.) < 2.35);
-        assert!(zoom.far_plane() > zoom.limit);
+        assert_eq!(zoom.stop(), ZoomStop::Portrait);
     }
 }
