@@ -57,6 +57,11 @@ pub(crate) struct NativeTerrain {
     device: trueos::vgpu::Device,
     queue: trueos::vgpu::Queue,
     mesh: Option<Mesh>,
+    pending_upload: Option<Upload>,
+    retired_mesh: Option<Mesh>,
+    resident_metrics: Option<super::terrain_layers::Metrics>,
+    next_upload: std::time::Instant,
+    buffered_upload_bytes: u64,
     figures: Vec<Option<super::minimal_sky::NativeFigure>>,
     unknown_completion: bool,
     heartbeat: super::terrain_heartbeat::Heartbeat,
@@ -78,6 +83,11 @@ impl NativeTerrain {
                 device,
                 queue,
                 mesh: None,
+                pending_upload: None,
+                retired_mesh: None,
+                resident_metrics: None,
+                next_upload: std::time::Instant::now(),
+                buffered_upload_bytes: 0,
                 figures: Vec::new(),
                 unknown_completion: false,
                 heartbeat: super::terrain_heartbeat::Heartbeat::new(),
@@ -92,7 +102,7 @@ impl NativeTerrain {
     pub fn heartbeat(&mut self) { self.heartbeat.tick(); }
     pub fn busy(&mut self) { self.heartbeat.busy(); }
     pub fn published(&mut self, frame: &Frame) {
-        self.heartbeat.published(frame.metrics, frame.prepared_at.elapsed().as_micros() as u64);
+        self.heartbeat.published(self.resident_metrics.unwrap_or(frame.metrics), frame.prepared_at.elapsed().as_micros() as u64);
     }
 
     pub fn draw_entities(&mut self, target: u32, frames: &[Arc<super::figure_preview::Frame>]) -> Result<(), i32> {
@@ -108,11 +118,73 @@ impl NativeTerrain {
         Ok(())
     }
 
+    /// Never prepare a replacement on the presentation thread. A single worker
+    /// fills a back buffer while the front buffer remains complete and drawable.
+    pub fn draw_buffered(&mut self, target: u32, frame: &Frame, load_color: bool) -> Result<(), i32> {
+        use std::sync::mpsc::TryRecvError;
+        if let Some(upload) = &self.pending_upload {
+            let result = match upload.receiver.try_recv() {
+                Ok(result) => Some(result),
+                Err(TryRecvError::Empty) => None,
+                Err(TryRecvError::Disconnected) => Some(Err(trueos::vgpu::ERR_IO)),
+            };
+            if let Some(result) = result {
+                let upload = self.pending_upload.take().unwrap();
+                // Completion was sent after all buffer writes; joining occurs
+                // only on shutdown, never on the steady-state draw path.
+                match result {
+                    Ok(mesh) => {
+                        self.buffered_upload_bytes = (mesh.geometry.vertices.len() * 36 + mesh.geometry.atlas.len() * 4) as u64;
+                        // The previous draw fence has retired. Hand reclamation
+                        // to the next preparation worker rather than freeing a
+                        // large buffer set on the presentation thread.
+                        self.retired_mesh = self.mesh.replace(mesh);
+                        self.resident_metrics = Some(upload.metrics);
+                    }
+                    Err(code) => {
+                        self.next_upload = std::time::Instant::now() + std::time::Duration::from_secs(1);
+                        tracing::warn!(code, "Terrain back-buffer preparation failed; retaining front buffer");
+                    },
+                }
+            }
+        }
+        if self.pending_upload.is_none() && std::time::Instant::now() >= self.next_upload
+            && self.mesh.as_ref().is_none_or(|mesh|
+            !Arc::ptr_eq(&mesh.geometry, &frame.geometry)) {
+            let geometry = frame.geometry.clone();
+            let device = self.device;
+            let retired = self.retired_mesh.take().map(|mesh| Retired { device, mesh: Some(mesh) });
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let worker = std::thread::Builder::new().name("terrain-upload".into()).spawn(move || {
+                drop(retired);
+                let result = Mesh::new(device, geometry);
+                if let Err(error) = sender.send(result) {
+                    if let Ok(mesh) = error.0 { mesh.destroy(device); }
+                }
+            });
+            match worker {
+                Ok(thread) => self.pending_upload = Some(Upload { receiver, thread, metrics: frame.metrics }),
+                Err(error) => {
+                    self.next_upload = std::time::Instant::now() + std::time::Duration::from_secs(1);
+                    tracing::warn!(%error, "Terrain upload worker unavailable; retaining front buffer");
+                },
+            }
+        }
+        let Some(mesh) = self.mesh.as_ref() else { return Err(trueos::vgpu::ERR_BUSY); };
+        let mut metrics = self.resident_metrics.unwrap_or(frame.metrics);
+        metrics.width = frame.metrics.width; metrics.height = frame.metrics.height;
+        metrics.loaded_chunks = frame.metrics.loaded_chunks;
+        let resident = Frame { geometry: mesh.geometry.clone(), camera: frame.camera,
+            metrics, prepared_at: frame.prepared_at };
+        // Arc identity now matches the front buffer, so draw performs no mesh creation.
+        self.draw(target, &resident, load_color)
+    }
+
     /// Caller has leased the paired background and publishes after completion.
     pub fn draw(&mut self, target: u32, frame: &Frame, load_color: bool) -> Result<(), i32> {
         use trueos::vgpu::*;
         let started = std::time::Instant::now();
-        let mut uploaded = 80u64;
+        let mut uploaded = 80u64 + std::mem::take(&mut self.buffered_upload_bytes);
         if self
             .mesh
             .as_ref()
@@ -178,6 +250,11 @@ impl Drop for NativeTerrain {
         if self.unknown_completion {
             return;
         }
+        if let Some(upload) = self.pending_upload.take() {
+            let _ = upload.thread.join();
+            if let Ok(Ok(mesh)) = upload.receiver.try_recv() { mesh.destroy(self.device); }
+        }
+        if let Some(mesh) = self.retired_mesh.take() { mesh.destroy(self.device); }
         for figure in self.figures.drain(..).flatten() { figure.destroy(self.device); }
         if let Some(mesh) = self.mesh.take() {
             mesh.destroy(self.device);
@@ -185,6 +262,23 @@ impl Drop for NativeTerrain {
         let _ = self.device.destroy_queue(self.queue);
         let _ = self.device.close();
     }
+}
+#[cfg(target_os = "trueos")]
+struct Retired {
+    device: trueos::vgpu::Device,
+    mesh: Option<Mesh>,
+}
+#[cfg(target_os = "trueos")]
+impl Drop for Retired {
+    fn drop(&mut self) {
+        if let Some(mesh) = self.mesh.take() { mesh.destroy(self.device); }
+    }
+}
+#[cfg(target_os = "trueos")]
+struct Upload {
+    receiver: std::sync::mpsc::Receiver<Result<Mesh, i32>>,
+    thread: std::thread::JoinHandle<()>,
+    metrics: super::terrain_layers::Metrics,
 }
 #[cfg(target_os = "trueos")]
 struct Mesh {

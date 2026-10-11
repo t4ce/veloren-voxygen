@@ -1,5 +1,7 @@
 //! Mesh and camera preparation shared by Ubuntu and TRUEOS.
 use crate::client::Client;
+#[cfg(target_os = "trueos")]
+pub(crate) mod radial;
 use common::{comp, terrain::TerrainGrid, vol::ReadVol};
 #[cfg(not(feature = "terrain-bringup"))]
 use specs::{Join, WorldExt};

@@ -511,6 +511,34 @@ mod tests {
                 .contains(&"close")
         );
 
+        // Replacement preparation must leave the old complete front buffer drawable.
+        *RECORD.lock().unwrap() = Some(Recorder::default());
+        let mut renderer = terrain::NativeTerrain::open().unwrap();
+        let old = self::frame();
+        renderer.draw(123, &old, false).unwrap();
+        let mut new = self::frame();
+        let mut vertices = new.geometry.vertices.to_vec();
+        vertices.extend_from_slice(old.geometry.vertices.as_ref());
+        new.geometry = std::sync::Arc::new(terrain::Geometry {
+            vertices: vertices.into(), atlas: old.geometry.atlas.clone(),
+        });
+        renderer.draw_buffered(123, &new, false).unwrap();
+        assert_eq!(RECORD.lock().unwrap().as_ref().unwrap().draws.last().unwrap().index_count,3);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        loop {
+            renderer.draw_buffered(123, &new, false).unwrap();
+            if RECORD.lock().unwrap().as_ref().unwrap().draws.last().unwrap().index_count == 6 { break; }
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        // A failed back buffer never removes the drawable front buffer.
+        RECORD.lock().unwrap().as_mut().unwrap().fail_buffer = true;
+        renderer.draw_buffered(123, &old, false).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        renderer.draw_buffered(123, &old, false).unwrap();
+        assert_eq!(RECORD.lock().unwrap().as_ref().unwrap().draws.last().unwrap().index_count,6);
+        drop(renderer);
+
         *RECORD.lock().unwrap() = Some(Recorder {
             fail_buffer: true,
             ..Default::default()

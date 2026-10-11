@@ -487,7 +487,7 @@ fn produce(target: &mut SceneTarget, mailbox: &Mailbox, name: &str) -> Result<()
                             }
                             if let Some(terrain) = current.terrain.as_deref() {
                                 let renderer = terrain_renderer.as_mut().unwrap();
-                                renderer.draw(target.render_target(), terrain, clouds_drawn)?;
+                                renderer.draw_buffered(target.render_target(), terrain, clouds_drawn)?;
                                 renderer.draw_entities(target.render_target(), &current.entities)
                             } else if let Some(figure) = current.figure.as_deref() {
                                 renderer.draw_figure(target.render_target(), 0, figure, clouds_drawn)

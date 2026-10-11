@@ -22,12 +22,8 @@ pub struct SessionState {
     camera: Camera,
     zoom: zoom::Zoom,
     keys: KeyState,
-    terrain: crate::terrain_preview::Scene,
+    terrain: crate::terrain_preview::radial::Window,
     composition: crate::render::terrain_composition::Composition,
-    geometry: Option<(
-        u64,
-        std::sync::Arc<crate::render::terrain_feature::Geometry>,
-    )>,
     figures: std::collections::HashMap<specs::Entity, crate::render::figure_preview::Preview>,
     frames: u64,
 }
@@ -61,9 +57,8 @@ impl SessionState {
             camera,
             zoom: zoom::Zoom::new(),
             keys: Default::default(),
-            terrain: crate::terrain_preview::Scene::new(),
+            terrain: crate::terrain_preview::radial::Window::new(),
             composition: crate::render::terrain_composition::Composition::new(),
-            geometry: None,
             figures: std::collections::HashMap::new(),
             frames: 0,
         }
@@ -236,32 +231,22 @@ impl PlayState for SessionState {
                         )
                 })
                 .is_some();
-            let prepared = self.terrain.prepare_terrain(
-                synced.then_some(&*client),
-                size.width.max(1),
-                size.height.max(1),
-            );
-            if self.geometry.as_ref().is_none_or(|(revision, _)| *revision != prepared.revision) {
-                self.geometry = Some((prepared.revision, std::sync::Arc::new(
-                    crate::render::terrain_feature::Geometry {
-                        vertices: prepared.terrain.into(), atlas: prepared.atlas.into(),
-                    })));
-            }
-            let coverage = prepared.coverage.and_then(|[min, end]|
-                crate::render::terrain_layers::Coverage::new(min, end));
-            let chunks = common::terrain::TerrainGrid::chunk_size();
+            let prepared = self.terrain.prepare(synced.then_some(&*client));
             let metrics = crate::render::terrain_layers::Metrics {
                 near_warm_us: prepared.warm_us,
                 stream_run_us: client.terrain_stream_run_us(),
-                received_at: prepared.received_at, width: size.width, height: size.height,
-                warm_failures: prepared.worker_failures,
-                near_chunks: coverage.map_or(0, |c| c.chunks(chunks.into_array())),
+                received_at: None, width: size.width, height: size.height,
+                warm_failures: prepared.failures,
+                near_chunks: prepared.chunks,
                 loaded_chunks: client.state().terrain().iter().filter(|(key, _)|
                     client.state().terrain().contains_key_real(*key)).count() as u32,
                 ..Default::default()
             };
-            let near = self.geometry.as_ref().map(|(_, geometry)| geometry.clone());
-            let composed = self.composition.prepare(&client, near, prepared.revision, coverage, metrics);
+            // Near-only needs no composition copy: the worker publishes an immutable Arc.
+            let mut metrics = metrics;
+            metrics.near_revision = prepared.revision;
+            metrics.near_vertices = prepared.geometry.as_ref().map_or(0, |g| g.vertices.len() as u32);
+            let composed = prepared.geometry.map(|geometry| (geometry, metrics));
             let terrain = composed.and_then(|(geometry, metrics)| {
                 if geometry.vertices.is_empty() { return None; }
                 if client.position().is_none_or(|pos|

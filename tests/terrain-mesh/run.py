@@ -52,7 +52,30 @@ fn grid() -> TerrainGrid {
   bounds: Arc::new(ChunkBounds {min:-48,max:128}) }
 }
 '''
+radial = (root / 'src/headless/radial.rs').read_text()
+# Compile the production sphere mesher against the same loaded/unknown facade.
+mesh += '\n' + radial[radial.index('fn desired_center'):]
+facade += r'''
+struct Geometry { vertices: Arc<[Vertex]>, atlas: Arc<[[u8;4]]> }
+struct Complete { geometry: Arc<Geometry>, center: Vec3<f32>, height:Option<(f32,f32)>, build_us:u64, chunks:u32 }
+const RADIUS:f32=40.; const REVEAL_BAND:f32=8.; const LEAD_SECONDS:f32=0.20; const MAX_LEAD:f32=6.;
+'''
 tests = r'''
+#[test] fn spherical_mesh_follows_player_with_local_data_and_keeps_unknown_cells_empty() {
+ let mut terrain=grid();
+ for y in -4..=4 {for x in -4..=4 {terrain.loaded.insert(Vec2::new(x,y));}}
+ terrain.blocks.insert(Vec3::new(31,0,0),Block(Some(Rgb::new(31,140,47))));
+ terrain.blocks.insert(Vec3::new(41,0,0),Block(Some(Rgb::new(31,140,47))));
+ let first=build(&terrain,Vec3::zero());
+ assert!(!first.geometry.vertices.is_empty());
+ assert!(first.geometry.vertices.iter().all(|v|v.position[0]<=32.));
+ let next=build(&terrain,Vec3::new(12.,0.,0.));
+ assert!(next.geometry.vertices.iter().any(|v|v.position[0]>=41.));
+ assert!(next.geometry.vertices.len()<=MAX_VERTICES);
+ terrain.loaded.clear();
+ assert!(build(&terrain,Vec3::zero()).geometry.vertices.is_empty());
+}
+
 #[test] fn drawable_rectangle_never_includes_missing_diagonals_and_handles_negative_chunks() {
  let mut terrain=grid();
  terrain.loaded.extend([Vec2::new(-1,0),Vec2::new(1,0),Vec2::new(0,-1),Vec2::new(0,1)]);
