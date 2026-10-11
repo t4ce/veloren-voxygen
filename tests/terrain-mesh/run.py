@@ -118,8 +118,7 @@ tests = r'''
  assert_eq!(rebuilt[&(0,0)],vec![73,105,35]);
  assert_eq!(rebuilt[&(1,1)],vec![73,105,35]);
  assert_eq!(rebuilt[&(3,0)],color.to_vec());
- let mut full=vec![Vertex{position:[0.;4],atlas_uv:[0.;4]};MAX_OPAQUE_VERTICES];
- assert!(merge_plane(&mut full,5,0,vec![(0,0,color)]).is_err());
+
 }
 #[test] fn movement_reuses_capture_without_remeshing_or_voxel_reads() {
  let mut client=Client {terrain:capture(),center:Vec2::zero()};

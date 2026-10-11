@@ -102,10 +102,6 @@ impl Window {
     }
 }
 
-// Match the already admitted native stream capacity. Exceeding it is an
-// explicit preparation error, never a silently cropped view around the player.
-const MAX_OPAQUE_VERTICES: usize = 6_000_000;
-
 fn build(terrain: &TerrainGrid, center: Vec2<i32>) -> Result<Complete, String> {
     let started = Instant::now();
     let mut vertices = Vec::new();
@@ -228,11 +224,6 @@ fn merge_plane(
             }
             let area = (w * h) as u64;
             let color = sum.map(|value| ((value + area / 2) / area) as u8);
-            if vertices.len() + 6 > MAX_OPAQUE_VERTICES {
-                return Err(format!(
-                    "complete opaque capture exceeds {MAX_OPAQUE_VERTICES} vertices"
-                ));
-            }
             let u0 = min_u as f32 + u as f32;
             let v0 = min_v as f32 + v as f32;
             let u1 = u0 + w as f32;

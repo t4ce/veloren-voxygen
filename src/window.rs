@@ -299,7 +299,7 @@ impl Window {
             use winit::platform::trueos::ActiveEventLoopExtTrueOS;
             Arc::from(
                 event_loop
-                    .create_layered_window(attributes, 60)
+                    .create_layered_window_with_scene_divisor(attributes, 60, 2)
                     .map_err(|error| Error::BackendError(Box::new(error)))?,
             )
         };

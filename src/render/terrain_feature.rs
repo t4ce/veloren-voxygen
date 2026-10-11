@@ -287,7 +287,7 @@ impl Upload {
     fn step(&mut self, device: trueos::vgpu::Device) -> Result<Option<Mesh>, i32> {
         use trueos::vgpu::*;
         if self.stage == 0 && (self.geometry.vertices.is_empty()
-            || self.geometry.vertices.len() % 3 != 0 || self.geometry.vertices.len() > if self.geometry.atlas.is_empty() {6_000_000} else {crate::terrain_preview::MAX_VERTICES}
+            || self.geometry.vertices.len() % 3 != 0 || self.geometry.vertices.len() > if self.geometry.atlas.is_empty() {((u32::MAX as usize - 96) / 32) / 3 * 3} else {crate::terrain_preview::MAX_VERTICES}
             || !self.geometry.atlas.is_empty() && self.geometry.atlas.len() != (ATLAS_SIZE * ATLAS_SIZE) as usize) { return Err(ERR_UNSUPPORTED); }
         if self.offset == 0 { tracing::info!(stage = self.stage, "terrain-upload: stage entered; owner=presentation"); }
         match self.stage {
@@ -348,7 +348,7 @@ impl Mesh {
         use trueos::vgpu::*;
         if geometry.vertices.is_empty()
             || geometry.vertices.len() % 3 != 0
-            || geometry.vertices.len() > if geometry.atlas.is_empty() {6_000_000} else {crate::terrain_preview::MAX_VERTICES}
+            || geometry.vertices.len() > if geometry.atlas.is_empty() {((u32::MAX as usize - 96) / 32) / 3 * 3} else {crate::terrain_preview::MAX_VERTICES}
             || (!geometry.atlas.is_empty() && geometry.atlas.len() != (ATLAS_SIZE * ATLAS_SIZE) as usize)
         {
             return Err(ERR_UNSUPPORTED);
