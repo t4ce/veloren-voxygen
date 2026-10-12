@@ -570,6 +570,15 @@ impl Window {
                 self.menu_presenter
                     .submit_foreground(self.menu_revision, size, plan.foreground);
             } else {
+                // Menus remain physical-resolution UI. The background surface
+                // is reserved for the half-resolution 3D scene; submitting
+                // physical-size BCS copies there would exceed its bounds.
+                let mut commands = std::mem::take(&mut plan.background.commands);
+                commands.append(&mut plan.foreground.commands);
+                plan.foreground.commands = commands;
+                plan.foreground.uploads.append(&mut plan.background.uploads);
+                plan.foreground.viewport = plan.foreground.viewport.or(plan.background.viewport);
+                plan.background = Default::default();
                 self.menu_presenter.submit(self.menu_revision, size, plan);
             }
         }

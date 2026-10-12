@@ -63,7 +63,8 @@ use std::sync::mpsc;
 struct Geometry { vertices: Arc<[Vertex]>, atlas: Arc<[[u8;4]]> }
 #[macro_export] macro_rules! info {($($t:tt)*)=>{}}
 #[macro_export] macro_rules! error {($($t:tt)*)=>{}}
-mod tracing {pub(crate) use super::{info,error};}
+#[macro_export] macro_rules! warn {($($t:tt)*)=>{}}
+mod tracing {pub(crate) use super::{info,error,warn};}
 struct Client { terrain: TerrainGrid, center: Vec2<i32> }
 impl Client {
  fn terrain_snapshot_ready(&self)->bool {true}

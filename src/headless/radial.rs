@@ -2,6 +2,10 @@
 use super::*;
 use crate::render::terrain_feature::Geometry;
 
+// Diagnostic budget for the opaque baseline. Measure the entire capture;
+// exceeding this threshold does not crop terrain or force another build.
+const OPAQUE_VERTEX_SOFTCAP: usize = 1_000_000;
+
 struct Complete {
     geometry: Arc<Geometry>,
     height: Option<(f32, f32)>,
@@ -51,8 +55,17 @@ impl Window {
                 self.pending = None;
                 match result {
                     Ok(done) => {
+                        if done.geometry.vertices.len() > OPAQUE_VERTEX_SOFTCAP {
+                            tracing::warn!(
+                                vertices = done.geometry.vertices.len(),
+                                softcap = OPAQUE_VERTEX_SOFTCAP,
+                                chunks = done.chunks,
+                                "terrain-static: vertex softcap exceeded; retaining complete capture"
+                            );
+                        }
                         tracing::info!(
                             vertices = done.geometry.vertices.len(),
+                            softcap = OPAQUE_VERTEX_SOFTCAP,
                             rectangles = done.geometry.vertices.len() / 6,
                             vertex_bytes = done.geometry.vertices.len() * 32,
                             index_bytes = done.geometry.vertices.len() * 4,
