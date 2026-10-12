@@ -17,6 +17,10 @@ use specs::{Join, WorldExt};
 use std::{cell::RefCell, rc::Rc};
 use vek::*;
 
+// Temporary isolation run: retain terrain and animate sky without in-world
+// figure preparation/submission. Character selection has its own render path.
+const DRAW_WORLD_FIGURES: bool = false;
+
 pub struct SessionState {
     client: Rc<RefCell<Client>>,
     camera: Camera,
@@ -50,7 +54,8 @@ impl SessionState {
             global.settings.networking.lossy_terrain_compression,
         );
         tracing::info!(
-            "Native world session entered; renderer=flat-clouds+near-terrain+humanoid-entities avatar=enabled conrod=guarded camera=voxy controls=client-controller"
+            world_figures = DRAW_WORLD_FIGURES,
+            "Native world session entered; renderer=flat-clouds+near-terrain conrod=guarded camera=voxy controls=client-controller"
         );
         Self {
             client,
@@ -267,7 +272,7 @@ impl PlayState for SessionState {
             ).map(std::sync::Arc::new);
             let mut entities = Vec::new();
             if observe { tracing::info!(frame = self.frames, "Native world phase=figures"); }
-            if terrain.is_some() {
+            if terrain.is_some() && DRAW_WORLD_FIGURES {
                 let focus = self.camera.get_focus_pos();
                 let projection = crate::scene::camera::perspective_rh_zo_general(
                     self.camera.get_effective_fov(), size.width as f32 / size.height.max(1) as f32,
