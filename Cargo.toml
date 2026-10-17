@@ -31,6 +31,8 @@ conrod-ui = []
 
 # Full client dependencies are available to TRUEOS, rather than desktop-gated.
 [dependencies]
+# Match the resolver-cache version compatible with TRUEOS crossbeam overlays.
+moka = { version = "=0.12.15", default-features = false }
 anim = { package = "veloren-voxygen-anim", path = "anim" }
 authc = { git = "https://gitlab.com/veloren/auth.git", rev = "ae0e16783a9f9041951296885f082308e155db79" }
 bitflags = { version = "^2.2.1", features = ["serde"] }

@@ -1,6 +1,8 @@
 //! One opaque surface for the frozen 9x9 capture. Movement only changes camera.
 use super::*;
 use crate::render::terrain_feature::Geometry;
+#[path = "watertight.rs"]
+mod watertight;
 
 // Diagnostic budget for the opaque baseline. Measure the entire capture;
 // exceeding this threshold does not crop terrain or force another build.
@@ -66,7 +68,7 @@ impl Window {
                         tracing::info!(
                             vertices = done.geometry.vertices.len(),
                             softcap = OPAQUE_VERTEX_SOFTCAP,
-                            rectangles = done.geometry.vertices.len() / 6,
+                            triangles = done.geometry.vertices.len() / 3,
                             vertex_bytes = done.geometry.vertices.len() * 32,
                             index_bytes = done.geometry.vertices.len() * 4,
                             chunks = done.chunks,
@@ -184,6 +186,9 @@ fn build(terrain: &TerrainGrid, center: Vec2<i32>) -> Result<Complete, String> {
             );
         }
     }
+    let input_vertices = vertices.len();
+    let vertices = watertight::stitch(&vertices)?;
+    tracing::info!(input_vertices, vertices = vertices.len(), "terrain-static: matched shared rectangle edges");
     Ok(Complete {
         geometry: Arc::new(Geometry {
             vertices: vertices.into(),
