@@ -57,7 +57,7 @@ fn grid() -> TerrainGrid {
 '''
 radial = (root / 'src/headless/radial.rs').read_text()
 # Compile the fixed-capture mesher and lifecycle against the loaded/unknown facade.
-mesh += '\n' + radial.replace('//!','//').replace('use super::*;','').replace('use crate::render::terrain_feature::Geometry;','').replace('#[path = "watertight.rs"]\nmod watertight;','')
+mesh += '\n' + radial.replace('//!','//').replace('use super::*;','').replace('use crate::render::terrain_feature::Geometry;','').replace('#[path = "watertight.rs"]\npub(crate) mod watertight;','')
 mesh += '\nmod watertight {\n' + (root / 'src/headless/watertight.rs').read_text().replace('//!','//') + '\n}\n'
 facade += r'''
 use std::sync::mpsc;

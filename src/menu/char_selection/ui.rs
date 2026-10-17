@@ -2031,6 +2031,8 @@ impl CharSelectionUi {
         self.controls.display_body_inventory(characters)
     }
 
+    pub fn scene_mouse_over(&self) -> bool { self.controls.mouse_detector.mouse_over() }
+
     pub fn handle_event(&mut self, event: window::Event) -> bool {
         match event {
             window::Event::IcedUi(event) => {

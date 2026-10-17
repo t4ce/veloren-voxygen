@@ -14,7 +14,7 @@ fn rectangle(vertices: &[Vertex]) -> [Point; 4] {
     [0, 1, 2, 5].map(|i| std::array::from_fn(|axis| vertices[i].position[axis] as i32))
 }
 
-pub(super) fn stitch(vertices: &[Vertex]) -> Result<Vec<Vertex>, String> {
+pub(crate) fn stitch(vertices: &[Vertex]) -> Result<Vec<Vertex>, String> {
     if vertices.len() % 6 != 0 {
         return Err("terrain rectangles are incomplete".into());
     }

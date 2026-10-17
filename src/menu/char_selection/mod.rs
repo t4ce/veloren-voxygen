@@ -34,6 +34,10 @@ pub struct CharSelectionState {
     character_preview: crate::render::figure_preview::Preview,
     #[cfg(target_os = "trueos")]
     character_preview_started: std::time::Instant,
+    #[cfg(target_os = "trueos")]
+    selection_camera: crate::render::selection_camera::Camera,
+    #[cfg(target_os = "trueos")]
+    selection_platform: crate::render::selection_platform::Platform,
     client: Rc<RefCell<Client>>,
     persisted_state: Rc<RefCell<hud::PersistedHudState>>,
     #[cfg(not(target_os = "trueos"))]
@@ -71,6 +75,10 @@ impl CharSelectionState {
             character_preview: Default::default(),
             #[cfg(target_os = "trueos")]
             character_preview_started: std::time::Instant::now(),
+            #[cfg(target_os = "trueos")]
+            selection_camera: Default::default(),
+            #[cfg(target_os = "trueos")]
+            selection_platform: Default::default(),
             client,
             persisted_state,
             #[cfg(not(target_os = "trueos"))]
@@ -154,6 +162,17 @@ impl PlayState for CharSelectionState {
         if client_registered {
             // Handle window events
             for event in events {
+                #[cfg(target_os = "trueos")]
+                if self.char_selection_ui.scene_mouse_over() {
+                    if let WinEvent::IcedUi(iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta })) = &event {
+                        let lines = match delta {
+                            iced::mouse::ScrollDelta::Lines { y, .. } => *y,
+                            iced::mouse::ScrollDelta::Pixels { y, .. } => *y / 16.0,
+                        };
+                        self.selection_camera.scroll(lines);
+                        continue;
+                    }
+                }
                 if self.char_selection_ui.handle_event(event.clone()) {
                     continue;
                 }
@@ -323,24 +342,32 @@ impl PlayState for CharSelectionState {
                 let _sky_progress = crate::selection_progress::stage(crate::selection_progress::Stage::SkyMailbox);
                 // Restore the selected char mesh and its animated idle pose.
                 let extent = global_state.window.window().surface_size();
-                let center = client.world_data().chunk_size().map(|v| f32::from(v) * 16.0);
-                let camera = crate::render::terrain_feature::camera(
-                    [center.x, center.y, 0.0], [1.0,0.0,0.0], [0.0,0.0,1.0], [0.0,1.0,0.0],
-                    (global_state.settings.graphics.fov as f32).to_radians(),
-                    extent.width as f32 / extent.height.max(1) as f32,
-                );
+                let size = vek::Vec2::new(extent.width, extent.height);
+                let camera = self.selection_camera.terrain_camera(size);
+                let center = client.world_data().chunk_size().map(|v| i32::from(v) / 2);
+                let origin = center.map(|v| v as f32 * 32.0)
+                    .with_z(client.world_data().alt_at(center).unwrap_or(0.0) + 200.0);
+                let mut cloud_camera = camera;
+                for axis in 0..3 { cloud_camera[0][axis] += origin[axis]; }
                 let clouds = crate::render::flat_cloud_native::from_client(
-                    &client, camera, global_state.settings.graphics.ambiance, false,
+                    &client, cloud_camera, global_state.settings.graphics.ambiance, false,
                 ).map(std::sync::Arc::new);
+                let platform = self.selection_platform.frame(camera, size);
                 let (body, inventory) = Self::get_humanoid_body_inventory(&self.char_selection_ui, &client);
                 let figure = match body {
-                    Some(body) => self.character_preview.frame(body, inventory,
-                        vek::Vec2::new(extent.width, extent.height), self.character_preview_started.elapsed().as_secs_f32(),
-                        time.get_sun_dir().z),
+                    Some(body) => self.character_preview.frame(body, inventory, size,
+                        self.character_preview_started.elapsed().as_secs_f32(), time.get_sun_dir().z),
                     None => Ok(None),
                 };
-                let result = figure.and_then(|figure|
-                    global_state.window.present_character_scene(time.get_sun_dir().z, figure, clouds));
+                let result = platform.and_then(|platform| figure.and_then(|figure| {
+                    let projection = self.selection_camera.view_projection(size, platform.is_none());
+                    let figure = figure.map(|frame| {
+                        let mut state = frame.state;
+                        state[128..192].copy_from_slice(bytemuck::bytes_of(&projection.into_col_arrays()));
+                        std::sync::Arc::new(crate::render::figure_preview::Frame { geometry: frame.geometry.clone(), state })
+                    });
+                    global_state.window.present_character_scene(time.get_sun_dir().z, figure, clouds, platform)
+                }));
                 if let Err(error) = result {
                     self.char_selection_ui.display_error(error);
                 }

@@ -321,11 +321,17 @@ pub mod figuredata {
     }
 
     impl Asset for ShipSpec {
-        fn load(cache: &AssetCache, _: &SharedString) -> Result<Self, BoxedError> {
+        fn load(cache: &AssetCache, id: &SharedString) -> Result<Self, BoxedError> {
             let manifest: AssetHandle<Ron<ShipCentralSpec>> =
                 AssetExt::load("common.manifests.ship_manifest")?;
             let mut colliders = HashMap::new();
-            for (_, spec) in (manifest.read().0).0.iter() {
+            let mut matched = false;
+            // Native ids preserve the full ship collection. Only explicit
+            // preview.<Body> ids restrict decoding to one body.
+            let preview_body = id.strip_prefix("preview.");
+            for (body, spec) in (manifest.read().0).0.iter() {
+                if preview_body.is_some_and(|name| name != format!("{body:?}")) { continue; }
+                matched = true;
                 for (index, bone) in [&spec.bone0, &spec.bone1, &spec.bone2, &spec.bone3]
                     .iter()
                     .enumerate()
@@ -358,6 +364,7 @@ pub mod figuredata {
                     colliders.insert(bone.central.0.clone(), collider);
                 }
             }
+            if !matched { return Err(format!("Unknown ship body asset: {id}").into()); }
             Ok(ShipSpec {
                 central: manifest,
                 colliders,

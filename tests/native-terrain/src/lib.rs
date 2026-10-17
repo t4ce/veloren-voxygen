@@ -5,6 +5,8 @@ extern crate self as trueos;
 mod terrain;
 #[path = "../../../src/render/terrain_layers.rs"]
 mod terrain_layers;
+#[path = "../../../src/render/selection_camera.rs"]
+mod selection_camera;
 #[path = "../../../src/render/terrain_heartbeat.rs"]
 mod terrain_heartbeat;
 #[cfg(target_os = "trueos")]
@@ -33,7 +35,7 @@ mod figure_preview {
     pub struct Geometry { pub vertices: Vec<[u32;2]>, pub indices: Vec<u32>, pub atlas_size: [u32;2], pub atlas: Vec<[u8;4]> }
     pub struct Frame { pub geometry: std::sync::Arc<Geometry>, pub state: [u8; crate::vgpu::VOXY_FIGURE_STATE_BYTES] }
 }
-mod terrain_feature {pub(crate) use crate::terrain::Geometry;}
+mod terrain_feature {pub(crate) use crate::terrain::{Geometry, camera_from_view};}
 mod client {
     pub struct Client {pub world:WorldData}
     pub struct WorldData {pub size:vek::Vec2<u16>,pub lod_base:Colors}

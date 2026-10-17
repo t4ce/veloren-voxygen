@@ -509,13 +509,19 @@ impl Window {
     }
 
     #[cfg(target_os = "trueos")]
-    pub(crate) fn present_character_scene(&mut self, sun_z: f32, figure: Option<std::sync::Arc<crate::render::figure_preview::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>) -> Result<(), String> {
+    pub(crate) fn present_character_scene(&mut self, sun_z: f32, figure: Option<std::sync::Arc<crate::render::figure_preview::Frame>>, clouds: Option<Arc<crate::render::flat_cloud_native::Frame>>, platform: Option<Arc<crate::render::terrain_feature::Frame>>) -> Result<(), String> {
         self.menu_presenter.check()?;
         self.menu_revision += 1;
         let size = self.window.surface_size();
         if size.width != 0 && size.height != 0 {
-            self.menu_presenter.submit_figure(self.menu_revision, Vec2::new(size.width, size.height),
-                crate::render::minimal_sky::rgba8(sun_z), figure, clouds);
+            let size = Vec2::new(size.width, size.height);
+            if platform.is_some() {
+                self.menu_presenter.submit_terrain(self.menu_revision, size,
+                    crate::render::minimal_sky::rgba8(sun_z), platform, clouds, figure.into_iter().collect());
+            } else {
+                self.menu_presenter.submit_figure(self.menu_revision, size,
+                    crate::render::minimal_sky::rgba8(sun_z), figure, clouds);
+            }
         }
         Ok(())
     }

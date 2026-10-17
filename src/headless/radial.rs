@@ -2,7 +2,7 @@
 use super::*;
 use crate::render::terrain_feature::Geometry;
 #[path = "watertight.rs"]
-mod watertight;
+pub(crate) mod watertight;
 
 // Diagnostic budget for the opaque baseline. Measure the entire capture;
 // exceeding this threshold does not crop terrain or force another build.
@@ -200,7 +200,7 @@ fn build(terrain: &TerrainGrid, center: Vec2<i32>) -> Result<Complete, String> {
     })
 }
 
-fn merge_plane(
+pub(crate) fn merge_plane(
     vertices: &mut Vec<Vertex>,
     side: usize,
     plane: i32,
