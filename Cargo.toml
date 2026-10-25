@@ -159,8 +159,9 @@ futures-util = { path = "../TRUEOS/vendor/futures-util-0.3.32" }
 getrandom = { path = "../TRUEOS-Blueprints/vendor/getrandom-0.2.17" }
 getrandom_03 = { package = "getrandom", path = "../TRUEOS-Blueprints/vendor/getrandom-0.3.4" }
 getrandom_04 = { package = "getrandom", path = "../TRUEOS-Blueprints/vendor/getrandom-0.4.2" }
-hickory-proto = { path = "../TRUEOS-Blueprints/vendor/hickory-proto-0.25.2" }
-hickory-resolver = { path = "../TRUEOS-Blueprints/vendor/hickory-resolver-0.25.2" }
+hickory-net = { path = "../TRUEOS-Blueprints/vendor/hickory-net-0.26.3" }
+hickory-proto = { path = "../TRUEOS-Blueprints/vendor/hickory-proto-0.26.3" }
+hickory-resolver = { path = "../TRUEOS-Blueprints/vendor/hickory-resolver-0.26.3" }
 http = { path = "../TRUEOS-Blueprints/vendor/http-1.4.0" }
 http-body = { path = "../TRUEOS-Blueprints/vendor/http-body-1.0.1" }
 http-body-util = { path = "../TRUEOS-Blueprints/vendor/http-body-util-0.1.3" }

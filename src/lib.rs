@@ -190,3 +190,5 @@ pub mod headless;
 // Shared voxel preparation; menus do not enable the headless app feature.
 #[path = "headless/scene.rs"]
 pub(crate) mod terrain_preview;
+
+mod app_shader_packages;

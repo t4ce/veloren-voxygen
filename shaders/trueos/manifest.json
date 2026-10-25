@@ -1,0 +1,56 @@
+[
+  {
+    "id": 1,
+    "name": "voxy-headless",
+    "bytes": 740,
+    "sha256": "8d676b711d2963efe3aeecb5b21893da623f80743d5d42a208584b8ed4467be5",
+    "stages": [
+      {
+        "kind": 1,
+        "bytes": 528,
+        "sha256": "3f12e447eb4afb6197938b5e8f676ffe714639dedd66e3d03c2c11f43da537d2"
+      },
+      {
+        "kind": 1,
+        "bytes": 176,
+        "sha256": "12c24b2afccf9dda46550d69ebc9d80cd354f93b12b923de1bf0307ed5b10c70"
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "voxy-figure",
+    "bytes": 2356,
+    "sha256": "e2dd9d9d740cbba33c3e4fc4adfec70e28bf86a76d4f9226caab4a76e52e935b",
+    "stages": [
+      {
+        "kind": 1,
+        "bytes": 776,
+        "sha256": "6d8b189ecd7b48a9a2ad3e0ee695a828fd3c1093526f502539306af706fba0cc"
+      },
+      {
+        "kind": 1,
+        "bytes": 1544,
+        "sha256": "a7223b7db82bd7317458d58a8214fe92f1f7019c3410bde842fe26856128fe52"
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "voxy-cloud",
+    "bytes": 14084,
+    "sha256": "3ccb4e54127f882aadec20c6e18bfaf6f9dc8a6cf73505235bb9d7ec1d85f92d",
+    "stages": [
+      {
+        "kind": 1,
+        "bytes": 176,
+        "sha256": "6b1d2431178ce6c181082b829396c571868e6bdb1819b9ce0e32076570a7563e"
+      },
+      {
+        "kind": 1,
+        "bytes": 13872,
+        "sha256": "89d30aa4ad982295edf24d2125675a9ed1df3c0f778159f89c054794b712d1eb"
+      }
+    ]
+  }
+]
