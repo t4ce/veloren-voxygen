@@ -25,7 +25,7 @@ serde = { version = "1.0.118", features = ["derive"] }
 socket2 = "0.6"
 #sending
 crossbeam-channel = "0.5.15"
-tokio = { version = "=1.52.3", default-features = false, features = ["rt", "io-util", "macros", "net", "time"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt", "io-util", "macros", "net", "time"] }
 tokio-stream = { version = "0.1.2", default-features = false }
 #tracing and metrics
 tracing = "0.1"

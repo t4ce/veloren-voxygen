@@ -15,7 +15,7 @@ common-ecs = { package = "veloren-common-ecs", path = "../ecs" }
 common-base = { package = "veloren-common-base", path = "../base" }
 
 tokio-parallel = { package = "veloren-tokio-parallel", path = "../tokio-parallel" }
-tokio = { version = "=1.52.3", default-features = false, features = ["rt"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt"] }
 tracing = "0.1"
 vek = { version = "0.17.0", features = ["serde", "mint"] }
 

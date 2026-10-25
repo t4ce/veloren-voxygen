@@ -99,7 +99,7 @@ sha2 = { version = "^0.11" }
 slab = { version = "^0.4.2" }
 specs = { version = "^0.20", features = ["nightly", "serde", "storage-event-control", "derive"] }
 strum = { version = "^0.28", features = ["derive"] }
-tokio = { version = "=1.52.3", default-features = false, features = ["rt", "rt-multi-thread"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt", "rt-multi-thread"] }
 tokio-parallel = { package = "veloren-tokio-parallel", path = "common/tokio-parallel" }
 tracing = { version = "^0.1" }
 treeculler = { version = "^0.4" }
@@ -181,8 +181,7 @@ rustix = { path = "../TRUEOS-Blueprints/vendor/rustix-1.1.4-trueos" }
 simd-adler32 = { path = "../TRUEOS/vendor/simd-adler32-0.3.8" }
 socket2 = { path = "../TRUEOS-Blueprints/vendor/socket2-0.6.3" }
 symphonia-core = { path = "../TRUEOS/vendor/symphonia-core-0.5.5-trueos" }
-tokio = { path = "../TRUEOS-Blueprints/vendor/tokio-1.52.3" }
-tokio-macros = { path = "../TRUEOS-Blueprints/vendor/tokio-macros-2.7.0" }
+tokio = { path = "../TRUEOS-Blueprints/vendor/tokio-1.54.1" }
 tokio-rustls = { path = "../TRUEOS-Blueprints/vendor/tokio-rustls-0.26.4" }
 tower-service = { path = "../TRUEOS-Blueprints/vendor/tower-service-0.3.3" }
 want = { path = "../TRUEOS-Blueprints/vendor/want-0.3.1" }
